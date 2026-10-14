@@ -2,6 +2,15 @@
 
 local opt = vim.opt
 
+-- Resolve the Windows shell explicitly when it is available.
+if vim.fn.has("win32") == 1 then
+  local windows_shell = vim.env.ComSpec
+
+  if windows_shell and vim.fn.executable(windows_shell) == 1 then
+    opt.shell = windows_shell
+  end
+end
+
 -- Editor behavior.
 opt.number = true
 opt.relativenumber = true

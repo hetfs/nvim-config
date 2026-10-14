@@ -1,5 +1,5 @@
 local function fail(message)
-  io.stderr:write("FAIL nvim-config Stage 03: " .. message .. "\n")
+  io.stderr:write("FAIL nvim-config Stage 04: " .. message .. "\n")
   vim.cmd("cquit 1")
 end
 
@@ -24,10 +24,10 @@ local function check_module_failure_contract(root)
   -- Keep the injected Lua chunk syntactically valid by using one
   -- function definition per Ex command.
   local preload_options =
-    [[lua package.preload["config.options"] = function() error("STAGE03_INTENTIONAL_MODULE_FAILURE") end]]
+    [[lua package.preload["config.options"] = function() error("STAGE04_INTENTIONAL_MODULE_FAILURE") end]]
 
   local preload_keymaps =
-    [[lua package.preload["config.keymaps"] = function() print("STAGE03_UNEXPECTED_KEYMAPS_LOADED"); return true end]]
+    [[lua package.preload["config.keymaps"] = function() print("STAGE04_UNEXPECTED_KEYMAPS_LOADED"); return true end]]
 
   local result = vim
     .system({
@@ -57,7 +57,7 @@ local function check_module_failure_contract(root)
   check(result.code ~= 124, "failure-test subprocess timed out\n" .. output)
 
   check(
-    output:find("STAGE03_INTENTIONAL_MODULE_FAILURE", 1, true) ~= nil,
+    output:find("STAGE04_INTENTIONAL_MODULE_FAILURE", 1, true) ~= nil,
     table.concat({
       "required-module error is visible in subprocess output",
       "Subprocess exit code: " .. tostring(result.code),
@@ -70,7 +70,7 @@ local function check_module_failure_contract(root)
   )
 
   check(
-    output:find("STAGE03_UNEXPECTED_KEYMAPS_LOADED", 1, true) == nil,
+    output:find("STAGE04_UNEXPECTED_KEYMAPS_LOADED", 1, true) == nil,
     "keymaps module does not load after options module fails\n" .. output
   )
 end
@@ -111,6 +111,15 @@ local function main()
   check_equal(vim.o.updatetime, 250, "updatetime")
   check_equal(vim.o.timeoutlen, 400, "timeoutlen")
   check_equal(vim.o.undofile, true, "undofile")
+
+  -- Windows shell resolution.
+  if vim.fn.has("win32") == 1 then
+    local windows_shell = vim.env.ComSpec
+
+    if windows_shell and vim.fn.executable(windows_shell) == 1 then
+      check_equal(vim.o.shell, windows_shell, "Windows shell path")
+    end
+  end
 
   -- Native keymap contract.
   local keymaps = {
@@ -170,7 +179,7 @@ local function main()
 
   print(
     string.format(
-      "PASS nvim-config Stage 03 smoke test on Neovim %d.%d.%d",
+      "PASS nvim-config Stage 04 smoke test on Neovim %d.%d.%d",
       version.major,
       version.minor,
       version.patch
