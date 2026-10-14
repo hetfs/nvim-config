@@ -7,10 +7,7 @@ local function collect(directory, files)
 
   if not stat then
     if err_name ~= "ENOENT" then
-      error(
-        string.format("Unable to inspect '%s': %s", directory, stat_err),
-        0
-      )
+      error(string.format("Unable to inspect '%s': %s", directory, stat_err), 0)
     end
 
     return
@@ -47,21 +44,12 @@ for _, path in ipairs(files) do
     print("PASS " .. path)
   else
     failures = failures + 1
-
-    io.stderr:write(
-      string.format("FAIL %s: %s\n", path, err)
-    )
+    io.stderr:write(string.format("FAIL %s: %s\n", path, err))
   end
 end
 
 if failures > 0 then
-  io.stderr:write(
-    string.format(
-      "\nSyntax check failed: %d of %d files.\n",
-      failures,
-      #files
-    )
-  )
+  io.stderr:write(string.format("\nSyntax check failed: %d of %d files.\n", failures, #files))
 
   os.exit(1)
 end
