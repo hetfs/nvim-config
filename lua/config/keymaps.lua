@@ -1,15 +1,9 @@
 -- Native keymaps.
--- Stage 02: Keymaps and Autocommands.
+-- Leader keys are set in init.lua before this module loads.
 
 local map = vim.keymap.set
 
-local opts = { noremap = true, silent = true }
-
--- Leader keys
-vim.g.mapleader = " "
-vim.g.maplocalleader = "\\"
-
--- Saving and basic editing
+-- Saving and basic editing.
 map("n", "<C-s>", "<cmd>write<cr>", {
   desc = "Save file",
   silent = true,
@@ -25,7 +19,7 @@ map("n", "<Esc>", "<cmd>nohlsearch<cr>", {
   silent = true,
 })
 
--- Window navigation
+-- Window navigation.
 map("n", "<C-h>", "<C-w>h", {
   desc = "Focus left window",
   silent = true,
@@ -46,7 +40,7 @@ map("n", "<C-l>", "<C-w>l", {
   silent = true,
 })
 
--- Window management
+-- Window management.
 map("n", "<leader>sv", "<cmd>vsplit<cr>", {
   desc = "Split window vertically",
   silent = true,
@@ -67,7 +61,7 @@ map("n", "<leader>sx", "<cmd>close<cr>", {
   silent = true,
 })
 
--- Basic window resizing
+-- Basic window resizing.
 map("n", "<C-Up>", "<cmd>resize +2<cr>", {
   desc = "Increase window height",
   silent = true,
@@ -98,6 +92,3 @@ map("n", "N", "Nzzzv", {
   desc = "Previous search result",
   silent = true,
 })
-
--- Keep the options table available for any later local mappings.
--- Do not use this table to override unrelated global mappings.

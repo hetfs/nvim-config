@@ -1,5 +1,4 @@
 -- Native autocommands.
--- Stage 02: Keymaps and Autocommands.
 
 local group = vim.api.nvim_create_augroup("nvim_config", {
   clear = true,
@@ -10,7 +9,9 @@ vim.api.nvim_create_autocmd("TextYankPost", {
   group = group,
   desc = "Highlight yanked text",
   callback = function()
-    vim.highlight.on_yank({ timeout = 200 })
+    vim.hl.on_yank({
+      timeout = 200,
+    })
   end,
 })
 

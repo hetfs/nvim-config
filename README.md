@@ -1,4 +1,3 @@
-
 # nvim-config
 
 A native-first, modular Neovim configuration built incrementally around Neovim's built-in capabilities.
@@ -28,15 +27,14 @@ Additional external tools will be documented as the stages that require them are
 
 ## Current Stage
 
-**Stage 02 — Keymaps and Autocommands: Complete**
+**Stage 03 — Modules: In Progress**
 
-This stage establishes:
+This stage establishes the module contract:
 
-- Native editor options.
-- Centralized keymaps with descriptive `desc` values.
-- A focused set of native autocommands.
-- Direct loading of configuration modules.
-- Syntax, formatting, and startup validation.
+- Leader keys are set in `init.lua` before any module loads.
+- Required modules load directly from `init.lua` in a fixed order: options, keymaps, autocommands.
+- A failing required module is reported visibly and stops the rest of startup; the configuration is never silently half-loaded.
+- Smoke tests verify leader keys, module loading, mappings, autocommands, and the failure contract.
 
 No plugins or additional external runtime dependencies are required at this stage.
 
@@ -66,7 +64,7 @@ Run the following commands from the repository root.
 ### Check Lua syntax
 
 ```sh
-nvim -l scripts/check-syntax.lua
+nvim --headless -l scripts/check-syntax.lua
 ```
 
 The checker compiles discovered Lua files without executing their contents. It exits with status `0` if all files compile successfully and status `1` if syntax errors are found.
@@ -74,10 +72,10 @@ The checker compiles discovered Lua files without executing their contents. It e
 ### Run the smoke test
 
 ```sh
-nvim -u init.lua -l scripts/smoke.lua
+nvim --headless -u init.lua -l scripts/smoke.lua
 ```
 
-The smoke test verifies the Neovim version, representative native options, module loading, keymaps, and autocommand registration.
+The smoke test verifies the Neovim version, representative native options, leader keys, module loading, keymaps, autocommand registration, and that a failing required module is reported.
 
 ### Check formatting
 
