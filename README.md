@@ -1,12 +1,11 @@
+
 # nvim-config
 
-A native-first, modular Neovim configuration built incrementally around
-Neovim's built-in capabilities.
+A native-first, modular Neovim configuration built incrementally around Neovim's built-in capabilities.
 
-The project prioritizes a minimal installation, explicit plugin evaluation,
-reproducible setup, and stage-by-stage validation.
+> **Minimum installation. Compose the rest.**
 
-> Minimum installation. Compose the rest.
+The project prioritizes a minimal installation, explicit plugin evaluation, reproducible setup, and stage-by-stage validation.
 
 ## Requirements
 
@@ -14,8 +13,7 @@ reproducible setup, and stage-by-stage validation.
 - Git
 - A supported operating system and shell
 
-Additional external tools will be documented as the stages that require them
-are implemented.
+Additional external tools will be documented as the stages that require them are implemented.
 
 ## Design Principles
 
@@ -29,36 +27,8 @@ are implemented.
 - **Replaceability:** Retire or replace plugins when evidence justifies doing so.
 
 ## Current Stage
-# nvim-config
 
-A native-first, modular Neovim configuration built incrementally around Neovim's built-in capabilities.
-
-> **Minimum installation. Compose the rest.**
-
-The project prioritizes maintainability, explicit plugin evaluation, reproducible setup, and stage-by-stage validation.
-
-## Requirements
-
-- Neovim >= 0.12.0
-- Git
-- A supported operating system and shell
-
-Stage 02 introduces no plugins or additional external runtime dependencies.
-
-## Design Principles
-
-- **Native-first:** Prefer built-in Neovim capabilities before adding plugins.
-- **Native plugin management:** Use `vim.pack`, not `lazy.nvim`.
-- **Modularity:** Give each configuration module a clear responsibility.
-- **Explicit plugin admission:** Evaluate dependencies before accepting them.
-- **Stage-aware implementation:** Introduce features only at their assigned stage.
-- **Reproducibility:** Document requirements, dependencies, and decisions.
-- **Testability:** Validate each stage before advancing.
-- **Replaceability:** Retire or replace plugins when evidence justifies doing so.
-
-## Current Stage
-
-Stage 02 — Keymaps and Autocommands.
+**Stage 02 — Keymaps and Autocommands: Complete**
 
 This stage establishes:
 
@@ -66,7 +36,9 @@ This stage establishes:
 - Centralized keymaps with descriptive `desc` values.
 - A focused set of native autocommands.
 - Direct loading of configuration modules.
-- Syntax and startup validation.
+- Syntax, formatting, and startup validation.
+
+No plugins or additional external runtime dependencies are required at this stage.
 
 ## Repository Structure
 
@@ -107,18 +79,21 @@ nvim -u init.lua -l scripts/smoke.lua
 
 The smoke test verifies the Neovim version, representative native options, module loading, keymaps, and autocommand registration.
 
-### Format Lua files
+### Check formatting
 
 Install StyLua separately, then run:
 
 ```sh
-stylua .
 stylua --check .
 ```
 
-The second command checks formatting without modifying files.
+To apply formatting after making changes:
 
-Run the syntax check and smoke test after making changes.
+```sh
+stylua .
+```
+
+Run the syntax check, smoke test, and formatting check after making changes.
 
 ## Roadmap
 
