@@ -1,3 +1,6 @@
+-- Usage:
+-- nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
+
 local function fail(message)
   io.stderr:write("FAIL nvim-config Stage 04: " .. message .. "\n")
   vim.cmd("cquit 1")
@@ -10,10 +13,7 @@ local function check(condition, message)
 end
 
 local function check_equal(actual, expected, message)
-  check(
-    actual == expected,
-    message .. " (expected " .. vim.inspect(expected) .. ", got " .. vim.inspect(actual) .. ")"
-  )
+  check(actual == expected, message .. " (expected " .. vim.inspect(expected) .. ", got " .. vim.inspect(actual) .. ")")
 end
 
 local function check_module_failure_contract(root)
@@ -21,13 +21,11 @@ local function check_module_failure_contract(root)
 
   local init_path = root .. "/init.lua"
 
-  -- Keep the injected Lua chunk syntactically valid by using one
-  -- function definition per Ex command.
-  local preload_options =
-    [[lua package.preload["config.options"] = function() error("STAGE04_INTENTIONAL_MODULE_FAILURE") end]]
+  -- Inject an intentional failure in config.options.
+  local preload_options = [[lua package.preload["config.options"] = function() error("STAGE04_INTENTIONAL_MODULE_FAILURE") end]]
 
-  local preload_keymaps =
-    [[lua package.preload["config.keymaps"] = function() print("STAGE04_UNEXPECTED_KEYMAPS_LOADED"); return true end]]
+  -- This marker must never be printed because options fails first.
+  local preload_keymaps = [[lua package.preload["config.keymaps"] = function() print("STAGE04_UNEXPECTED_KEYMAPS_LOADED"); return true end]]
 
   local result = vim
     .system({
@@ -69,10 +67,30 @@ local function check_module_failure_contract(root)
     }, "\n")
   )
 
-  check(
-    output:find("STAGE04_UNEXPECTED_KEYMAPS_LOADED", 1, true) == nil,
-    "keymaps module does not load after options module fails\n" .. output
-  )
+  check(output:find("STAGE04_UNEXPECTED_KEYMAPS_LOADED", 1, true) == nil, "keymaps module does not load after options module fails\n" .. output)
+
+  print("PASS module failure contract")
+end
+
+local function check_native_grep()
+  check(vim.fn.executable("rg") == 1, "ripgrep (rg) must be available for the native grep workflow")
+
+  -- Exercise Neovim's native grep integration and quickfix population.
+  vim.cmd("silent grep! Stage scripts/smoke.lua")
+
+  local quickfix = vim.fn.getqflist()
+
+  check(#quickfix > 0, "native grep populates the quickfix list")
+
+  -- Every result must contain a usable location and matching text.
+  for _, item in ipairs(quickfix) do
+    check(item.valid == 1, "native grep produces valid quickfix entries")
+    check(item.lnum > 0, "quickfix result contains a valid line number")
+    check(item.col > 0, "quickfix result contains a valid column")
+    check(item.text ~= "", "quickfix result contains matching text")
+  end
+
+  print("PASS native grep and quickfix")
 end
 
 local function main()
@@ -81,10 +99,12 @@ local function main()
 
   check(version.major > 0 or version.minor >= 12, "Neovim 0.12 or newer is required")
 
+  -- Required configuration modules must have loaded.
   check(package.loaded["config.options"] ~= nil, "config.options was loaded")
   check(package.loaded["config.keymaps"] ~= nil, "config.keymaps was loaded")
   check(package.loaded["config.autocmds"] ~= nil, "config.autocmds was loaded")
 
+  -- Leader keys.
   check_equal(vim.g.mapleader, " ", "mapleader")
   check_equal(vim.g.maplocalleader, "\\", "maplocalleader")
 
@@ -139,16 +159,9 @@ local function main()
   for _, expected in ipairs(keymaps) do
     local mapping = vim.fn.maparg(expected.lhs, expected.mode, false, true)
 
-    check(
-      type(mapping) == "table" and next(mapping) ~= nil,
-      expected.mode .. " mapping exists: " .. expected.lhs
-    )
+    check(type(mapping) == "table" and next(mapping) ~= nil, expected.mode .. " mapping exists: " .. expected.lhs)
 
-    check_equal(
-      mapping.desc,
-      expected.desc,
-      expected.mode .. " mapping " .. expected.lhs .. " description"
-    )
+    check_equal(mapping.desc, expected.desc, expected.mode .. " mapping " .. expected.lhs .. " description")
   end
 
   -- Autocommand contract.
@@ -174,17 +187,20 @@ local function main()
     check(found, "autocommand event exists: " .. event)
   end
 
-  -- Required modules must fail visibly and stop later module loading.
+  -- Native search and quickfix contract.
+  check_native_grep()
+
+  -- Verify required-module failures are visible and stop later loading.
   check_module_failure_contract(root)
 
-  print(
-    string.format(
-      "PASS nvim-config Stage 04 smoke test on Neovim %d.%d.%d",
-      version.major,
-      version.minor,
-      version.patch
-    )
-  )
+  print(string.format("PASS nvim-config Stage 04 smoke test on Neovim %d.%d.%d", version.major, version.minor, version.patch))
 end
 
-main()
+local ok, err = pcall(main)
+
+if not ok then
+  io.stderr:write("FAIL nvim-config Stage 04: " .. tostring(err) .. "\n")
+  vim.cmd("cquit 1")
+end
+
+vim.cmd("qa!")
