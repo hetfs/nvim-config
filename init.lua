@@ -23,10 +23,10 @@ vim.g.have_nerd_font = true -- set true if a Nerd Font is active in your termina
 if vim.g.neovide then
   local neovide_font_size = 12
   local font_candidates = {
-    "MesloLGS NF",
-    "JetBrainsMono Nerd Font",
+    "JetBrainsMono Nerd Font"
     "JetBrainsMonoNL Nerd Font",
     "FiraCode Nerd Font",
+    "MesloLGS NF",
     "Hack Nerd Font",
     "Noto Sans Mono",
     "Monospace",

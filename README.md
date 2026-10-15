@@ -1,3 +1,4 @@
+
 # nvim-config
 
 A native-first, modular Neovim configuration built incrementally around Neovim's built-in capabilities.
@@ -17,51 +18,23 @@ Additional external tools will be documented as the stages that require them are
 
 ## Installation
 
-`nvim-config` requires **Neovim 0.12.0 or later**. The project is under active development. Windows instructions are provided below; Linux and macOS instructions will be added when their setup and validation procedures are ready.
+`nvim-config` requires **Neovim 0.12.0 or later**. The project is under active development.
+
+Windows installation is supported by the PowerShell installer described below. Linux and macOS instructions will be added when their setup and validation procedures are ready.
 
 ### Windows
 
-These instructions use PowerShell and Neovim's standard configuration directory.
+These instructions use PowerShell and Neovim's standard Windows configuration and data directories.
 
-#### 1. Back up your existing configuration
+#### 1. Install the required tools
 
-If you already have a Neovim configuration, back it up before installing this project.
+Install the following tools and ensure they are available on your `PATH`:
 
-```powershell
-$config = "$env:LOCALAPPDATA\nvim"
-$backup = "$env:LOCALAPPDATA\nvim.bak"
+- [Neovim](https://neovim.io/) 0.12.0 or later
+- [Git](https://git-scm.com/)
+- [ripgrep](https://github.com/BurntSushi/ripgrep)
 
-if (Test-Path $config) {
-    if (Test-Path $backup) {
-        throw "Backup already exists at $backup. Rename it or choose another backup location."
-    }
-
-    Move-Item $config $backup
-}
-```
-
-**Optional:** Back up your existing Neovim data directory if you want to preserve it separately before testing the new configuration.
-
-```powershell
-$data = "$env:LOCALAPPDATA\nvim-data"
-$dataBackup = "$env:LOCALAPPDATA\nvim-data.bak"
-
-if (Test-Path $data) {
-    if (Test-Path $dataBackup) {
-        throw "Backup already exists at $dataBackup. Rename it or choose another backup location."
-    }
-
-    Move-Item $data $dataBackup
-}
-```
-
-The data directory may contain plugin files, caches, and other application state. Moving it preserves the backup but gives the new configuration a clean data directory.
-
-#### 2. Install the required tools
-
-Ensure Git, Neovim 0.12.0 or later, and ripgrep are installed and available on your `PATH`.
-
-Verify the installations:
+Verify that PowerShell can find them:
 
 ```powershell
 git --version
@@ -69,27 +42,74 @@ nvim --version
 rg --version
 ```
 
-#### 3. Clone the repository
+The installer checks for these commands before proceeding.
 
-Clone `nvim-config` into Neovim's standard Windows configuration directory:
+#### 2. Download the installer
 
-```powershell
-git clone https://github.com/hetfs/nvim-config.git "$env:LOCALAPPDATA\nvim"
-```
-
-Keep the repository's Git history if you want to receive updates from the original project.
-
-**Optional:** If you want to manage the configuration independently, you can remove the cloned repository's Git metadata:
+Clone the repository into a temporary directory so you can review and run its Windows installer without modifying your existing Neovim configuration first.
 
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\nvim\.git" -Recurse -Force
+$installer = Join-Path $env:TEMP "nvim-config-installer"
+
+if (Test-Path -LiteralPath $installer) {
+    throw "Installer directory already exists at $installer. Remove or rename it before continuing."
+}
+
+git clone https://github.com/hetfs/nvim-config.git $installer
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to clone nvim-config."
+}
 ```
 
-This removes the cloned Git history and remote connection while leaving the configuration files intact. You will no longer be able to pull updates from the original repository using that clone.
+Review the installer before running it:
 
-#### 4. Start Neovim
+```powershell
+Get-Content (Join-Path $installer "scripts\winsetup.ps1")
+```
 
-Launch Neovim:
+#### 3. Run the installer
+
+Run the installation script:
+
+```powershell
+& (Join-Path $installer "scripts\winsetup.ps1")
+```
+
+The installer clones the repository into a staging directory under `%LOCALAPPDATA%`, validates the required files, and runs the configuration smoke test before switching the active configuration.
+
+If validation fails, the installer stops before replacing the active configuration or refreshing its backups.
+
+The installer retains the repository's `.git` directory in the installed configuration. You can therefore use Git to inspect changes and receive future updates.
+
+#### 4. Understand the backups
+
+The installer uses these standard locations:
+
+| Path | Purpose |
+| --- | --- |
+| `%LOCALAPPDATA%\nvim` | Active Neovim configuration |
+| `%LOCALAPPDATA%\nvim.bak` | Backup of the previously active configuration |
+| `%LOCALAPPDATA%\nvim-data` | Active Neovim runtime data |
+| `%LOCALAPPDATA%\nvim-data.bak` | Backup copy of the existing runtime data |
+
+When an existing configuration is present, the installer replaces the previous configuration backup with the configuration that was active immediately before the successful installation. An older backup is retained until the new configuration has been activated.
+
+If the runtime data directory exists, the installer **copies** it to prepare a backup rather than moving or deleting the live directory. The previous runtime-data backup is replaced only after the new copy has been prepared.
+
+Runtime data can contain plugin files, caches, logs, swap files, undo history, and other application state. Preserving a copy allows you to recover data if needed.
+
+To skip the runtime-data backup, run:
+
+```powershell
+& (Join-Path $installer "scripts\winsetup.ps1") -SkipRuntimeDataBackup
+```
+
+Use this option only if you intentionally do not want the installer to refresh the runtime-data backup.
+
+#### 5. Start Neovim
+
+After the installer reports success, launch Neovim:
 
 ```powershell
 nvim
@@ -97,11 +117,23 @@ nvim
 
 Check for startup errors and verify the configuration in an interactive session.
 
-The current stage focuses on native Neovim workflows. Plugin installation and configuration will be introduced in later stages; cloning the repository does not imply that all planned plugins are installed or configured.
+The current stage focuses on native Neovim workflows. Plugin installation and configuration will be introduced in later stages; installing the repository does not mean all planned plugins are already installed or configured.
 
-#### 5. Custom configuration directory (optional)
+#### 6. Remove the temporary installer checkout (optional)
 
-These instructions use Neovim's standard Windows configuration directory. If you use a custom `NVIM_APPNAME`, Neovim may use a different configuration and data directory. Adjust the installation path accordingly.
+After installation, you can remove the temporary checkout used to run the installer:
+
+```powershell
+Remove-Item -LiteralPath (Join-Path $env:TEMP "nvim-config-installer") -Recurse -Force
+```
+
+This removes only the temporary checkout. It does not remove the installed configuration or its Git history under `%LOCALAPPDATA%\nvim`.
+
+#### 7. Custom configuration directory (optional)
+
+These instructions use Neovim's standard Windows configuration directory.
+
+If you use a custom `NVIM_APPNAME`, Neovim may use a different configuration and data directory. The installer currently targets the standard `nvim` and `nvim-data` directories unless its `ConfigName` parameter is changed.
 
 ### Linux and macOS
 
@@ -151,7 +183,8 @@ nvim-config/
 │       └── autocmds.lua
 └── scripts/
     ├── check-syntax.lua
-    └── smoke.lua
+    ├── smoke.lua
+    └── winsetup.ps1
 ```
 
 The structure will expand as later stages introduce additional responsibilities.
@@ -245,4 +278,3 @@ Changes should be focused, documented, and validated before a stage is marked co
 ## License
 
 A license has not yet been established. Add a `LICENSE` file before distributing the project under an open-source license.
-
