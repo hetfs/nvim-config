@@ -45,46 +45,55 @@ The installer checks for these commands before proceeding.
 
 #### 2. Download the installer
 
-Clone the repository into a temporary directory so you can review the installation script before running it.
+The following PowerShell commands automatically remove an existing temporary installer checkout before cloning the repository again. You can repeat this step after a previous installation attempt without manually deleting the temporary directory.
 
 ```powershell
+$ErrorActionPreference = "Stop"
+
 $installer = Join-Path $env:TEMP "nvim-config-installer"
+$repository = "https://github.com/hetfs/nvim-config.git"
 
+# Remove the existing temporary installer checkout, if present.
 if (Test-Path -LiteralPath $installer) {
-    throw "Installer directory already exists at $installer. Remove it or choose another directory before continuing."
-}
-
-git clone https://github.com/hetfs/nvim-config.git $installer
-
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to clone nvim-config."
-}
-```
-
-Run this block once. A successful clone creates the temporary directory. Do not run the block again while that directory exists.
-
-If a previous attempt left the directory behind and you want to start with a fresh checkout, remove the temporary checkout first:
-
-```powershell
-if (Test-Path -LiteralPath $installer) {
+    Write-Host "Removing existing installer checkout: $installer"
     Remove-Item -LiteralPath $installer -Recurse -Force
 }
+
+# Clone a fresh copy of the repository.
+Write-Host "Cloning the latest nvim-config repository..."
+git clone $repository $installer
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to clone nvim-config. Check your network connection and Git installation."
+}
+
+# Verify that the installer script exists.
+$installerScript = Join-Path $installer "scripts\winsetup.ps1"
+
+if (-not (Test-Path -LiteralPath $installerScript -PathType Leaf)) {
+    throw "Installer script not found: $installerScript"
+}
+
+Write-Host "`nRepository cloned successfully."
+Write-Host "Installer script: $installerScript"
 ```
 
-Then repeat the clone step.
+This step removes **only** the temporary checkout at `%TEMP%\nvim-config-installer`. It does not directly remove your active Neovim configuration, runtime data, or backups.
 
-Review the installer before running it:
+If cloning fails, PowerShell stops and reports the error. Resolve the problem before continuing.
+
+#### 3. Review and run the installer
+
+Before executing the installer, review its contents:
 
 ```powershell
-Get-Content (Join-Path $installer "scripts\winsetup.ps1")
+Get-Content -LiteralPath $installerScript
 ```
 
-#### 3. Run the installer
-
-Run the installation script:
+After reviewing the script, run it:
 
 ```powershell
-& (Join-Path $installer "scripts\winsetup.ps1")
+& $installerScript
 ```
 
 The installer performs the following operations:
@@ -98,9 +107,11 @@ The installer performs the following operations:
 
 The installer validates the staged configuration before replacing the active configuration or refreshing the existing backups.
 
-If cloning or the smoke test fails, the installer stops before making those changes. A failed staging clone is retained for diagnosis; inspect the error output before retrying.
+If cloning or the smoke test fails, the installer stops before making those changes. A failed staging clone is retained for diagnosis; inspect the error output and resolve the underlying problem before retrying.
 
 The installer retains the repository's `.git` directory in the installed configuration. You can therefore use Git to inspect changes and receive future updates.
+
+**Important:** A fresh temporary checkout does not fix errors in the repository itself. The installer can only pass its smoke test when the committed configuration is syntactically valid and meets the test's requirements.
 
 #### 4. Understand the backup locations
 
@@ -122,7 +133,7 @@ Runtime data can contain plugin files, caches, logs, swap files, undo history, a
 To skip the runtime-data backup, run:
 
 ```powershell
-& (Join-Path $installer "scripts\winsetup.ps1") -SkipRuntimeDataBackup
+& $installerScript -SkipRuntimeDataBackup
 ```
 
 Use this option only if you intentionally do not want the installer to refresh the runtime-data backup.
@@ -144,14 +155,14 @@ The current stage focuses on native Neovim workflows. Plugin installation and co
 After installation, you can remove the temporary checkout used to run the installer:
 
 ```powershell
-$installer = Join-Path $env:TEMP "nvim-config-installer"
-
 if (Test-Path -LiteralPath $installer) {
     Remove-Item -LiteralPath $installer -Recurse -Force
 }
 ```
 
 This removes only the temporary checkout. It does not remove the installed configuration, its Git history, or the configuration and runtime-data backups.
+
+You do not need to perform this cleanup manually before a future installation. Step 2 handles an existing temporary checkout automatically.
 
 #### 7. Custom configuration directory (optional)
 
@@ -160,7 +171,7 @@ These instructions use Neovim's standard Windows configuration directory.
 If you use a custom `NVIM_APPNAME`, Neovim may use a different configuration and data directory. The installer defaults to `nvim` and `nvim-data` under `%LOCALAPPDATA%`. Its `ConfigName` parameter can change the directory name used by the installer:
 
 ```powershell
-& (Join-Path $installer "scripts\winsetup.ps1") -ConfigName "nvim-work"
+& $installerScript -ConfigName "nvim-work"
 ```
 
 Choose a custom name only if you understand which configuration and data directories the installer will target. The installer does not automatically detect and migrate an existing custom `NVIM_APPNAME` setup.
