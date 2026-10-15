@@ -1,14 +1,9 @@
 -- Usage:
 -- nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 
-local function fail(message)
-  io.stderr:write("FAIL nvim-config Stage 04: " .. message .. "\n")
-  vim.cmd("cquit 1")
-end
-
 local function check(condition, message)
   if not condition then
-    fail(message)
+    error("FAIL nvim-config Stage 04: " .. message, 2)
   end
 end
 
@@ -24,7 +19,7 @@ local function check_module_failure_contract(root)
   -- Inject an intentional failure in config.options.
   local preload_options = [[lua package.preload["config.options"] = function() error("STAGE04_INTENTIONAL_MODULE_FAILURE") end]]
 
-  -- This marker must never be printed because options fails first.
+  -- This marker must never appear because options fails first.
   local preload_keymaps = [[lua package.preload["config.keymaps"] = function() print("STAGE04_UNEXPECTED_KEYMAPS_LOADED"); return true end]]
 
   local result = vim
@@ -82,7 +77,6 @@ local function check_native_grep()
 
   check(#quickfix > 0, "native grep populates the quickfix list")
 
-  -- Every result must contain a usable location and matching text.
   for _, item in ipairs(quickfix) do
     check(item.valid == 1, "native grep produces valid quickfix entries")
     check(item.lnum > 0, "quickfix result contains a valid line number")
@@ -93,13 +87,71 @@ local function check_native_grep()
   print("PASS native grep and quickfix")
 end
 
+local function check_native_commenting()
+  local original_buf = vim.api.nvim_get_current_buf()
+  local buf = vim.api.nvim_create_buf(false, true)
+
+  check(buf ~= 0, "create scratch buffer for native commenting")
+
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "lua"
+  vim.bo[buf].commentstring = "-- %s"
+
+  local original_lines = {
+    "local alpha = 1",
+    "local beta = 2",
+    "local gamma = 3",
+  }
+
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
+
+  -- Toggle the current line into a comment.
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  vim.cmd("normal gcc")
+
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+  check_equal(lines[1], "-- local alpha = 1", "gcc comments the current line")
+
+  -- Toggle the current line back into code.
+  vim.cmd("normal gcc")
+
+  lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+  check_equal(lines[1], "local alpha = 1", "gcc uncomments the current line")
+
+  -- Toggle three lines into comments.
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  vim.cmd("normal 3gcc")
+
+  lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+  for index, line in ipairs(original_lines) do
+    check_equal(lines[index], "-- " .. line, "3gcc comments line " .. index)
+  end
+
+  -- Toggle the three lines back into code.
+  vim.cmd("normal 3gcc")
+
+  lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+  for index, line in ipairs(original_lines) do
+    check_equal(lines[index], line, "3gcc uncomments line " .. index)
+  end
+
+  vim.api.nvim_set_current_buf(original_buf)
+  vim.api.nvim_buf_delete(buf, { force = true })
+
+  print("PASS native commenting")
+end
+
 local function main()
   local root = vim.fn.getcwd()
   local version = vim.version()
 
-  check(version.major > 0 or version.minor >= 12, "Neovim 0.12 or newer is required")
+  check(vim.fn.has("nvim-0.12") == 1, "Neovim 0.12 or newer is required")
 
-  -- Required configuration modules must have loaded.
+  -- Required configuration modules.
   check(package.loaded["config.options"] ~= nil, "config.options was loaded")
   check(package.loaded["config.keymaps"] ~= nil, "config.keymaps was loaded")
   check(package.loaded["config.autocmds"] ~= nil, "config.autocmds was loaded")
@@ -131,6 +183,10 @@ local function main()
   check_equal(vim.o.updatetime, 250, "updatetime")
   check_equal(vim.o.timeoutlen, 400, "timeoutlen")
   check_equal(vim.o.undofile, true, "undofile")
+
+  -- Native statusline.
+  check_equal(vim.o.laststatus, 3, "laststatus")
+  check_equal(vim.o.statusline, "%f %m%r%h%w %= %y %l:%c %p%%", "native statusline format")
 
   -- Windows shell resolution.
   if vim.fn.has("win32") == 1 then
@@ -187,10 +243,11 @@ local function main()
     check(found, "autocommand event exists: " .. event)
   end
 
-  -- Native search and quickfix contract.
+  -- Stage 04 native workflows.
   check_native_grep()
+  check_native_commenting()
 
-  -- Verify required-module failures are visible and stop later loading.
+  -- Required modules must fail visibly and stop later module loading.
   check_module_failure_contract(root)
 
   print(string.format("PASS nvim-config Stage 04 smoke test on Neovim %d.%d.%d", version.major, version.minor, version.patch))
@@ -199,7 +256,7 @@ end
 local ok, err = pcall(main)
 
 if not ok then
-  io.stderr:write("FAIL nvim-config Stage 04: " .. tostring(err) .. "\n")
+  io.stderr:write(tostring(err) .. "\n")
   vim.cmd("cquit 1")
 end
 

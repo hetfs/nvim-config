@@ -40,9 +40,7 @@ for _, file in ipairs(files) do
 end
 
 if #failures > 0 then
-  io.stderr:write(
-    string.format("\nSyntax check failed: %d of %d Lua files contain errors.\n", #failures, #files)
-  )
+  io.stderr:write(string.format("\nSyntax check failed: %d of %d Lua files contain errors.\n", #failures, #files))
 
   vim.cmd.cquit(1)
 end
