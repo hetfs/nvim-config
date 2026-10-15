@@ -1,4 +1,3 @@
-
 # nvim-config
 
 A native-first, modular Neovim configuration built incrementally around Neovim's built-in capabilities.
@@ -46,13 +45,13 @@ The installer checks for these commands before proceeding.
 
 #### 2. Download the installer
 
-Clone the repository into a temporary directory so you can review and run its Windows installer without modifying your existing Neovim configuration first.
+Clone the repository into a temporary directory so you can review the installation script before running it.
 
 ```powershell
 $installer = Join-Path $env:TEMP "nvim-config-installer"
 
 if (Test-Path -LiteralPath $installer) {
-    throw "Installer directory already exists at $installer. Remove or rename it before continuing."
+    throw "Installer directory already exists at $installer. Remove it or choose another directory before continuing."
 }
 
 git clone https://github.com/hetfs/nvim-config.git $installer
@@ -61,6 +60,18 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to clone nvim-config."
 }
 ```
+
+Run this block once. A successful clone creates the temporary directory. Do not run the block again while that directory exists.
+
+If a previous attempt left the directory behind and you want to start with a fresh checkout, remove the temporary checkout first:
+
+```powershell
+if (Test-Path -LiteralPath $installer) {
+    Remove-Item -LiteralPath $installer -Recurse -Force
+}
+```
+
+Then repeat the clone step.
 
 Review the installer before running it:
 
@@ -76,28 +87,37 @@ Run the installation script:
 & (Join-Path $installer "scripts\winsetup.ps1")
 ```
 
-The installer clones the repository into a staging directory under `%LOCALAPPDATA%`, validates the required files, and runs the configuration smoke test before switching the active configuration.
+The installer performs the following operations:
 
-If validation fails, the installer stops before replacing the active configuration or refreshing its backups.
+1. Checks that required commands and installation paths are available.
+2. Clones the repository into a separate staging directory.
+3. Verifies that `init.lua` and `scripts\smoke.lua` exist.
+4. Runs the configuration smoke test.
+5. Switches the validated configuration into the active configuration directory.
+6. Prepares and replaces the runtime-data backup when applicable.
+
+The installer validates the staged configuration before replacing the active configuration or refreshing the existing backups.
+
+If cloning or the smoke test fails, the installer stops before making those changes. A failed staging clone is retained for diagnosis; inspect the error output before retrying.
 
 The installer retains the repository's `.git` directory in the installed configuration. You can therefore use Git to inspect changes and receive future updates.
 
-#### 4. Understand the backups
+#### 4. Understand the backup locations
 
 The installer uses these standard locations:
 
 | Path | Purpose |
 | --- | --- |
 | `%LOCALAPPDATA%\nvim` | Active Neovim configuration |
-| `%LOCALAPPDATA%\nvim.bak` | Backup of the previously active configuration |
+| `%LOCALAPPDATA%\nvim.bak` | Backup of the configuration that was active before the latest successful installation |
 | `%LOCALAPPDATA%\nvim-data` | Active Neovim runtime data |
 | `%LOCALAPPDATA%\nvim-data.bak` | Backup copy of the existing runtime data |
 
-When an existing configuration is present, the installer replaces the previous configuration backup with the configuration that was active immediately before the successful installation. An older backup is retained until the new configuration has been activated.
+When an active configuration already exists, the installer preserves it as the new configuration backup. An older configuration backup is retained until the new configuration has been activated.
 
-If the runtime data directory exists, the installer **copies** it to prepare a backup rather than moving or deleting the live directory. The previous runtime-data backup is replaced only after the new copy has been prepared.
+If the runtime-data directory exists, the installer **copies** it to prepare a backup rather than moving or deleting the live directory. The previous runtime-data backup is replaced only after the new copy has been prepared.
 
-Runtime data can contain plugin files, caches, logs, swap files, undo history, and other application state. Preserving a copy allows you to recover data if needed.
+Runtime data can contain plugin files, caches, logs, swap files, undo history, and other application state. Keeping a backup provides a recovery option if you need it.
 
 To skip the runtime-data backup, run:
 
@@ -124,16 +144,26 @@ The current stage focuses on native Neovim workflows. Plugin installation and co
 After installation, you can remove the temporary checkout used to run the installer:
 
 ```powershell
-Remove-Item -LiteralPath (Join-Path $env:TEMP "nvim-config-installer") -Recurse -Force
+$installer = Join-Path $env:TEMP "nvim-config-installer"
+
+if (Test-Path -LiteralPath $installer) {
+    Remove-Item -LiteralPath $installer -Recurse -Force
+}
 ```
 
-This removes only the temporary checkout. It does not remove the installed configuration or its Git history under `%LOCALAPPDATA%\nvim`.
+This removes only the temporary checkout. It does not remove the installed configuration, its Git history, or the configuration and runtime-data backups.
 
 #### 7. Custom configuration directory (optional)
 
 These instructions use Neovim's standard Windows configuration directory.
 
-If you use a custom `NVIM_APPNAME`, Neovim may use a different configuration and data directory. The installer currently targets the standard `nvim` and `nvim-data` directories unless its `ConfigName` parameter is changed.
+If you use a custom `NVIM_APPNAME`, Neovim may use a different configuration and data directory. The installer defaults to `nvim` and `nvim-data` under `%LOCALAPPDATA%`. Its `ConfigName` parameter can change the directory name used by the installer:
+
+```powershell
+& (Join-Path $installer "scripts\winsetup.ps1") -ConfigName "nvim-work"
+```
+
+Choose a custom name only if you understand which configuration and data directories the installer will target. The installer does not automatically detect and migrate an existing custom `NVIM_APPNAME` setup.
 
 ### Linux and macOS
 
@@ -165,7 +195,7 @@ Current work includes:
 - A built-in terminal workflow.
 - Regression tests and documentation.
 
-The automated smoke test currently verifies native grep and quickfix behavior, native commenting, representative options and mappings, autocommand registration, and the required-module failure contract.
+The automated smoke test is intended to verify native grep and quickfix behavior, native commenting, representative options and mappings, autocommand registration, and the required-module failure contract.
 
 Stage 04 will not be considered complete until the relevant automated checks pass, the documentation is reviewed, and the configuration has been validated in a real interactive session.
 
@@ -278,3 +308,4 @@ Changes should be focused, documented, and validated before a stage is marked co
 ## License
 
 A license has not yet been established. Add a `LICENSE` file before distributing the project under an open-source license.
+
