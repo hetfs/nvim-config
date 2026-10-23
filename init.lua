@@ -2,6 +2,10 @@
 -- Native-first, modular Neovim configuration.
 -- Minimum supported version: Neovim 0.12.
 
+-- Disable unused remote providers.
+vim.g.loaded_perl_provider = 0
+vim.g.loaded_ruby_provider = 0
+
 if vim.fn.has("nvim-0.12") ~= 1 then
   error(string.format("nvim-config requires Neovim >= 0.12.0; detected %s.", tostring(vim.version())), 0)
 end
@@ -23,14 +27,14 @@ vim.g.have_nerd_font = true -- set true if a Nerd Font is active in your termina
 if vim.g.neovide then
   local neovide_font_size = 12
   local font_candidates = {
-  "JetBrainsMono Nerd Font",
-  "JetBrainsMonoNL Nerd Font",
-  "FiraCode Nerd Font",
-  "MesloLGS NF",
-  "Hack Nerd Font",
-  "Noto Sans Mono",
-  "Monospace",
-}
+    "JetBrainsMono Nerd Font",
+    "JetBrainsMonoNL Nerd Font",
+    "FiraCode Nerd Font",
+    "MesloLGS NF",
+    "Hack Nerd Font",
+    "Noto Sans Mono",
+    "Monospace",
+  }
   local selected_font = font_candidates[#font_candidates]
   if vim.fn.executable("fc-list") == 1 then
     local out = vim.fn.system({ "fc-list", ":", "family" })
