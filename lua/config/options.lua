@@ -82,6 +82,16 @@ opt.completeopt = {
   "noselect",
 }
 
+-- Diagnostics.
+-- Establish presentation defaults before diagnostic sources are introduced.
+vim.diagnostic.config({
+  virtual_text = true,
+  signs = true,
+  underline = true,
+  update_in_insert = false,
+  severity_sort = true,
+})
+
 -- Files and undo.
 opt.fileencoding = "utf-8"
 opt.undofile = true

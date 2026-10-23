@@ -260,4 +260,20 @@ if not ok then
   vim.cmd("cquit 1")
 end
 
+-- Native diagnostics baseline.
+local diagnostics = vim.diagnostic.config()
+
+check_equal(diagnostics.virtual_text, true, "diagnostic virtual_text")
+check_equal(diagnostics.signs, true, "diagnostic signs")
+check_equal(diagnostics.underline, true, "diagnostic underline")
+check_equal(diagnostics.update_in_insert, false, "diagnostic update_in_insert")
+check_equal(diagnostics.severity_sort, true, "diagnostic severity_sort")
+
+-- Native terminal workflow.
+local terminal_escape = vim.fn.maparg("<Esc><Esc>", "t", false, true)
+
+check(terminal_escape ~= nil and next(terminal_escape) ~= nil, "terminal escape mapping exists")
+check_equal(terminal_escape.rhs, "<C-\\><C-n>", "terminal escape mapping rhs")
+check_equal(terminal_escape.desc, "Exit terminal mode", "terminal escape mapping description")
+
 vim.cmd("qa!")

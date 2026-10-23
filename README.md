@@ -23,6 +23,8 @@ Additional external tools will be documented as the stages that require them are
 
 For the complete Windows installation procedure, including dependency setup, installer execution, backups, and optional configuration settings, see the [Windows installation guide](docs/win-install.md).
 
+The dependency setup script is documented in [Dependencies](docs/dependencies.md).
+
 ### Linux and macOS
 
 Installation instructions will be added when the setup and validation procedures are documented.
@@ -30,13 +32,13 @@ Installation instructions will be added when the setup and validation procedures
 ## Design Principles
 
 - **Native-first:** Prefer Neovim's built-in capabilities before adding plugins.
-- **Native plugin management:** Use Neovim's native `vim.pack` rather than `lazy.nvim` when plugin management is introduced.
-- **Modularity:** Keep modules and plugin specifications focused.
-- **Explicit plugin admission:** Evaluate dependencies before accepting them.
-- **Stage-aware implementation:** Introduce features only at their assigned stage.
-- **Reproducibility:** Document requirements, dependencies, and decisions.
+- **Native plugin management:** Use Neovim's built-in `vim.pack` rather than `lazy.nvim`.
+- **Modularity:** Keep configuration modules focused and maintainable.
+- **Explicit plugin admission:** Evaluate dependencies and alternatives before accepting a plugin.
+- **Stage-aware implementation:** Introduce features only at their assigned roadmap stage.
+- **Reproducibility:** Document requirements, dependencies, and architectural decisions.
 - **Testability:** Validate each stage before advancing.
-- **Replaceability:** Retire or replace plugins when evidence justifies doing so.
+- **Replaceability:** Retire or replace plugins when evidence justifies the change.
 
 ## Current Stage
 
@@ -53,9 +55,34 @@ Current work includes:
 - A built-in terminal workflow.
 - Regression tests and documentation.
 
-The automated smoke test is intended to verify native grep and quickfix behavior, native commenting, representative options and mappings, autocommand registration, and the required-module failure contract.
+The automated smoke test checks native grep and quickfix behavior, native commenting-related behavior, representative options and mappings, autocommand registration, and the required-module failure contract.
+
+Automated checks do not establish that a workflow works correctly during interactive use. The terminal-mode escape mapping and native commenting workflow still require interactive verification, as documented in [Native Keymap Testing](docs/Keymap-test.md).
 
 Stage 04 will not be considered complete until the relevant automated checks pass, the documentation is reviewed, and the configuration has been validated in a real interactive session.
+
+## Stage 05 — Native Plugin Management and Colorscheme
+
+Stage 05 introduces Neovim's native `vim.pack` plugin manager and Catppuccin as the first explicitly approved plugin.
+
+The implementation:
+
+- Uses `vim.pack.add()` to install Catppuccin from its official repository.
+- Configures the Catppuccin Mocha flavor.
+- Keeps plugin installation and colorscheme configuration together in `lua/plugins/colorscheme.lua`.
+- Loads the plugin module directly from `init.lua`, preserving the existing module-loading architecture.
+- Does not introduce `lazy.nvim` or lazy-loading infrastructure.
+
+Validation completed so far:
+
+- Catppuccin installation completed successfully.
+- Headless startup completed without errors.
+- The active colorscheme was verified as `catppuccin-mocha`.
+- The Catppuccin module was confirmed loaded.
+- StyLua formatting and Lua syntax checks passed.
+- The existing Stage 04 smoke test passed on Neovim 0.12.6.
+
+Stage 05 remains subject to final documentation review and regression validation before it is marked complete.
 
 ## Repository Structure
 
@@ -65,12 +92,16 @@ nvim-config/
 ├── stylua.toml
 ├── README.md
 ├── docs/
-│   └── win-install.md
+│   ├── win-install.md
+│   ├── dependencies.md
+│   └── Keymap-test.md
 ├── lua/
-│   └── config/
-│       ├── options.lua
-│       ├── keymaps.lua
-│       └── autocmds.lua
+│   ├── config/
+│   │   ├── options.lua
+│   │   ├── keymaps.lua
+│   │   └── autocmds.lua
+│   └── plugins/
+│       └── colorscheme.lua
 └── scripts/
     ├── check-syntax.lua
     ├── smoke.lua
@@ -78,7 +109,7 @@ nvim-config/
     └── winsetup.ps1
 ```
 
-The structure will expand as later stages introduce additional responsibilities.
+The structure will expand as later stages introduce additional responsibilities. Documentation records setup requirements, architectural decisions, and validation procedures alongside the implementation.
 
 ## Validation
 
@@ -87,7 +118,7 @@ Run the following commands from the repository root.
 ### Check Lua syntax
 
 ```powershell
-nvim --headless -l scripts/check-syntax.lua
+nvim --headless -u NONE -l scripts/check-syntax.lua
 ```
 
 The checker compiles discovered Lua files without executing their contents. It exits with status `0` if all files compile successfully and status `1` if syntax errors are found.
@@ -98,7 +129,20 @@ The checker compiles discovered Lua files without executing their contents. It e
 nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 ```
 
-The smoke test verifies the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, native commenting, and the required-module failure contract.
+The smoke test verifies the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, and the required-module failure contract. It also checks selected native commenting and terminal-mapping properties.
+
+A passing smoke test does not replace interactive testing.
+
+### Verify the colorscheme
+
+```powershell
+nvim --headless -u init.lua `
+  -c "lua print('colorscheme:', vim.g.colors_name)" `
+  -c "lua print('catppuccin module:', package.loaded['catppuccin'] ~= nil)" `
+  -c "qa!"
+```
+
+The expected values are `catppuccin-mocha` for the active colorscheme and `true` for the loaded Catppuccin module.
 
 ### Check formatting
 
@@ -116,13 +160,21 @@ stylua .
 
 ### Check the Git diff
 
-Before committing changes, review the staged diff:
+Before committing changes, review the working tree and inspect whitespace errors:
+
+```powershell
+git status --short
+git diff --check
+```
+
+To review changes that have already been staged:
 
 ```powershell
 git diff --cached --check
 git diff --cached --stat
-git status --short
 ```
+
+Remember that `git diff` does not include untracked files. Review new files separately before staging them.
 
 Run the syntax check, smoke test, formatting check, and Git diff check after making changes.
 
@@ -158,7 +210,7 @@ Candidates must be evaluated for necessity, maintenance, compatibility, dependen
 
 Accepted plugins may be deferred to their assigned stage. Plugins may also be retired or replaced when evidence justifies the change.
 
-The project plans to use Neovim's native `vim.pack` rather than `lazy.nvim`.
+The project uses Neovim's native `vim.pack` for plugin management. Lazy-loading is deferred to Stage 16 and must be validated against the minimum supported Neovim version before adoption.
 
 ## Contributing
 

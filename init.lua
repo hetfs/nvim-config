@@ -54,5 +54,6 @@ end
 -- Stage 03: required modules load directly, in a fixed order.
 -- A failing require aborts the remaining startup sequence.
 require("config.options")
+require("plugins.colorscheme")
 require("config.keymaps")
 require("config.autocmds")

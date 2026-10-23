@@ -84,6 +84,14 @@ map("n", "<leader>nh", "<cmd>nohlsearch<CR>", {
   desc = "Clear search highlights",
 })
 
+-- ===============================================
+-- Native terminal workflow.
+-- ===========================================================
+
+map("t", "<Esc><Esc>", "<C-\\><C-n>", {
+  desc = "Exit terminal mode",
+})
+
 -- ============================================================
 -- Editing
 -- ============================================================
@@ -115,10 +123,6 @@ map("n", "S", ":%s/<C-r>//g<Left><Left>", {
 -- ============================================================
 -- Native Commenting
 -- ============================================================
-
--- Keep Neovim's native gcc and gc mappings.
--- Stage 04 verifies the built-in commenting workflow.
--- Add a <leader>/ alias only if it is needed and tested.
 
 -- ============================================================
 -- Deferred: Custom URL Mouse Handling
