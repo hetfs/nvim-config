@@ -9,10 +9,12 @@ The project prioritizes a minimal installation, explicit plugin evaluation, repr
 ## Requirements
 
 - Neovim >= 0.12.0
-- Git
+- [Git](https://git-scm.com/) 'git'
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for native search workflows
 - [fd](https://github.com/sharkdp/fd) for file and directory discovery
 - [fzf](https://github.com/junegunn/fzf) for the independent `fzf-lua` fuzzy-finding workflow
+
+Stage 08 additionally requires the Tree-sitter CLI, GNU tar, and a compatible C compiler for parser installation and compilation. The Windows setup script verifies the Tree-sitter CLI and configures the WinLibs GCC/G++ toolchain.
 
 The Windows setup procedure also uses WinGet to install missing dependencies when available. See [Dependencies](docs/dependencies.md) for the dependency policy, setup script, and verification details.
 
@@ -47,7 +49,9 @@ Installation and validation instructions for Linux and macOS have not yet been d
 
 ## Current Status
 
-The project is progressing through its 17-stage roadmap. Stage 04 remains in progress, while later stages can be developed and validated independently without treating unfinished earlier work as complete.
+The project is progressing through its 17-stage roadmap. Stage 04 remains in progress. Stages 05 and 06 are complete, Stage 07 closeout is in progress, and Stage 08 implementation has been validated while final closeout remains pending.
+
+Later stages can be developed and validated independently without treating unfinished earlier work as complete.
 
 ### Stage 04 — Native Workflows
 
@@ -139,6 +143,43 @@ The reported interactive checks passed. Final documentation and staged-diff revi
 
 Plugins introduced before Stage 16 remain eagerly loaded under the current policy. Lazy-loading is not part of Stage 07.
 
+### Stage 08 — Tree-sitter
+
+**Status: Implementation validated; closeout in progress**
+
+Stage 08 introduces Tree-sitter-based syntax parsing and highlighting while keeping parser installation separate from plugin installation and configuration.
+
+The implementation:
+
+- Installs `nvim-treesitter` using Neovim's native `vim.pack` plugin manager.
+- Keeps plugin configuration in `lua/plugins/treesitter.lua`.
+- Loads the module directly from `init.lua`.
+- Configures the parser and query installation directory under Neovim's data directory.
+- Enables native Tree-sitter highlighting for Lua buffers through `vim.treesitter.start()`.
+- Uses an explicit `FileType` autocommand for Lua.
+- Preserves eager plugin loading and does not introduce lazy-loading infrastructure.
+
+The Windows dependency setup script checks the external prerequisites needed for parser installation and compilation:
+
+- GNU tar bundled with Git for Windows.
+- WinLibs GCC/G++ POSIX UCRT toolchain.
+- Tree-sitter CLI version 0.26.1 or later.
+- cURL for network transfers.
+
+The script places the verified compiler directory on the current process's `PATH` and sets `CC` to the selected GCC executable. These environment changes apply to the current PowerShell process and its child processes; they are not persisted as Windows environment settings.
+
+Validation confirmed:
+
+- Successful Windows dependency and provider checks.
+- Successful compiler and Tree-sitter CLI verification.
+- Successful parser installation and Lua highlighting.
+- Passing StyLua formatting checks.
+- Passing Lua syntax checks across 17 Lua files.
+
+The final whitespace check and staged-diff review must pass before Stage 08 is formally closed.
+
+Stage 08 does not automatically enable Tree-sitter-based indentation, folding, LSP, completion, formatting, or linting. These remain separate features for their assigned stages.
+
 ## Repository Structure
 
 ```text
@@ -168,7 +209,8 @@ nvim-config/
 │       ├── mini-ai.lua
 │       ├── mini-surround.lua
 │       ├── mini-move.lua
-│       └── dial.lua
+│       ├── dial.lua
+│       └── treesitter.lua
 └── scripts/
     ├── check-syntax.lua
     ├── smoke.lua
@@ -214,6 +256,26 @@ Expected values:
 - Active colorscheme: `catppuccin-mocha`
 - Loaded Catppuccin module: `true`
 
+### Verify Tree-sitter
+
+First, confirm that the external dependencies are available in the current PowerShell session:
+
+```powershell
+gcc --version
+g++ --version
+tree-sitter --version
+tar --version
+$env:CC
+```
+
+Then open a Lua file in Neovim and inspect a syntax token using:
+
+```vim
+:Inspect
+```
+
+Tree-sitter highlighting must be verified in a buffer with the Lua parser installed. The external dependency checks alone do not prove that parser installation, highlighting, or queries work correctly.
+
 ### Check formatting
 
 Install [StyLua](https://github.com/JohnnyMorganz/StyLua) separately, then run:
@@ -254,7 +316,7 @@ Run syntax, smoke, formatting, and diff checks after changes. Test new interacti
 5. `vim.pack` and Catppuccin — Complete
 6. which-key and `mini.icons` — Complete
 7. Navigation and Editing Workflows — **Closeout in progress**
-8. Treesitter
+8. Tree-sitter — **Implementation validated; closeout in progress**
 9. LSP
 10. Completion and Snippets
 11. Format and Lint

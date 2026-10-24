@@ -1,5 +1,5 @@
-# Provision core Windows dependencies, Neovim providers, navigation tools,
-# and development tools.
+# Provision core Windows dependencies, Neovim providers, navigation and
+# search tools, and development tools.
 #
 # Usage:
 #   .\scripts\win-depend.ps1
@@ -13,12 +13,16 @@
 #   - Node.js + the global `neovim` npm package
 #   - Python 3.14 + the `pynvim` Python package
 #
-# Navigation tools:
+# Navigation and search tools:
+#   - ripgrep (rg; fast content search for native search workflows)
 #   - fd (fast file and directory discovery)
 #   - fzf (required by the fzf-lua Neovim plugin)
 #
 # Development tools:
 #   - ShellCheck
+#   - WinLibs GCC/G++ POSIX UCRT toolchain
+#   - tree-sitter-cli >= 0.26.1
+#   - GNU tar bundled with Git for Windows
 #
 # Requirements:
 #   - Windows
@@ -34,11 +38,20 @@
 #   - Does not rewrite Neovim configuration files.
 #   - Does not remove existing Neovim configuration or data.
 #   - Refreshes PATH only for this PowerShell process and its children.
+#   - Sets CC to the verified WinLibs GCC executable for this process.
+#   - Uses Git for Windows' bundled tar.exe instead of a separate tar package.
 #
 # Optional providers:
 #   Perl and Ruby are not installed by this script. They are disabled
 #   separately in the Neovim configuration because they are not required
 #   by the current project.
+#
+# Notes:
+#   This script provisions Tree-sitter prerequisites. It does not install
+#   Neovim parsers or guarantee that every parser compiles successfully.
+#   Environment changes apply to this PowerShell process and its children.
+#   A new terminal session must run this script again before launching
+#   Neovim if it needs the configured compiler environment.
 
 [CmdletBinding()]
 param()
@@ -48,14 +61,14 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# Track whether any step failed, whether WinGet installed anything,
-# and the failure messages that will be summarized at the end.
+# Track failures, installations, and failure messages for the final summary.
 $script:Failed = $false
 $script:InstalledAnyPackage = $false
 $script:Failures = [System.Collections.Generic.List[string]]::new()
 
-# The minimum supported Neovim version for this configuration.
+# Minimum supported versions.
 $minimumNeovimVersion = [version]::new(0, 12, 0)
+$minimumTreeSitterVersion = [version]::new(0, 26, 1)
 
 # Official WinGet package identifiers used when an application is missing.
 $packages = @{
@@ -65,8 +78,11 @@ $packages = @{
     Node       = "OpenJS.NodeJS"
     Python     = "Python.Python.3.14"
     ShellCheck = "koalaman.shellcheck"
+    Ripgrep    = "BurntSushi.ripgrep.MSVC"
     Fd         = "sharkdp.fd"
     Fzf        = "junegunn.fzf"
+    WinLibs    = "BrechtSanders.WinLibs.POSIX.UCRT"
+    TreeSitter = "tree-sitter.tree-sitter-cli"
 }
 
 # Print a consistently formatted status message using a color associated
@@ -447,6 +463,69 @@ function Ensure-Curl {
     Write-Status -Status INFO -Message "cURL executable: $curlPath"
 }
 
+# Ensure Git for Windows' bundled GNU tar is available.
+#
+# Put Git's usr\bin directory first on this process's PATH so Tree-sitter
+# resolves the verified GNU tar rather than an unrelated tar executable.
+function Ensure-GitTar {
+    $git = Get-Application -Names @("git.exe", "git")
+
+    if (-not $git) {
+        throw "Git is required before configuring the bundled tar executable."
+    }
+
+    $gitRoot = Split-Path (Split-Path $git.Source -Parent) -Parent
+    $gitUsrBin = Join-Path $gitRoot "usr\bin"
+    $gitTar = Join-Path $gitUsrBin "tar.exe"
+
+    if (-not (Test-Path -LiteralPath $gitTar -PathType Leaf)) {
+        throw "Git's bundled tar.exe was not found: $gitTar"
+    }
+
+    $remainingEntries = @(
+        $env:Path -split ";" |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                -not [string]::Equals(
+                    $_.Trim().TrimEnd("\"),
+                    $gitUsrBin.TrimEnd("\"),
+                    [StringComparison]::OrdinalIgnoreCase
+                )
+            }
+    )
+
+    $env:Path = (@($gitUsrBin) + $remainingEntries) -join ";"
+
+    $output = & $gitTar --version 2>&1
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        throw "Git's bundled tar.exe verification failed (exit code $exitCode)."
+    }
+
+    $firstLine = $output | Select-Object -First 1
+
+    if ("$firstLine" -notmatch '^tar \(GNU tar\)') {
+        throw "Git's bundled tar.exe returned an unexpected version response: $firstLine"
+    }
+
+    $tarCommand = Get-Application -Names @("tar.exe", "tar")
+
+    if (
+        -not $tarCommand -or
+        -not [string]::Equals(
+            $tarCommand.Source,
+            $gitTar,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    ) {
+        throw "tar was not resolved to Git's bundled executable after PATH update."
+    }
+
+    Write-Status -Status PASS -Message "GNU tar verified: $firstLine"
+    Write-Status -Status INFO -Message "Tar executable: $gitTar"
+}
+
 # Ensure Node.js and Neovim's Node.js provider package are available.
 #
 # Reuse an existing Node.js runtime instead of asking WinGet to install an
@@ -672,6 +751,18 @@ function Ensure-ShellCheck {
     Write-Status -Status PASS -Message "ShellCheck verified: $versionLine"
 }
 
+# Ensure ripgrep is installed and available for native search workflows.
+#
+# Reuse an existing rg executable when available. Otherwise, install
+# ripgrep through WinGet and verify its version output.
+function Ensure-Ripgrep {
+    Ensure-Command `
+        -Name "ripgrep (rg)" `
+        -Commands @("rg.exe", "rg") `
+        -PackageId $packages.Ripgrep `
+        -VerifyArguments @("--version")
+}
+
 # Ensure fd is installed and available for file discovery workflows.
 #
 # Reuse an existing executable when available. Otherwise, install fd through
@@ -697,11 +788,192 @@ function Ensure-Fzf {
         -VerifyArguments @("--version")
 }
 
+# Ensure the selected WinLibs GCC/G++ toolchain is available.
+#
+# WinGet may report an error when asked to install a package that is already
+# installed. Therefore, locate the existing package before attempting an
+# installation, and explicitly add its compiler directory to this process's
+# PATH. Prefer WinLibs over another GCC installation found elsewhere on PATH.
+#
+# Set CC to the exact GCC executable. Tree-sitter parser builds can otherwise
+# select cl.exe on Windows, even when GCC is installed and available on PATH.
+# This setting affects this PowerShell process and its child processes only.
+function Ensure-Compiler {
+    Write-Status -Status INFO -Message "Locating the installed WinLibs toolchain..."
+
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        throw "LOCALAPPDATA is missing; cannot locate the WinLibs package."
+    }
+
+    $wingetPackagesRoot = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+
+    if (-not (Test-Path -LiteralPath $wingetPackagesRoot -PathType Container)) {
+        throw "WinGet's package directory was not found: $wingetPackagesRoot"
+    }
+
+    $packageDirectories = @(
+        Get-ChildItem -LiteralPath $wingetPackagesRoot -Directory -ErrorAction Stop |
+            Where-Object { $_.Name -like "BrechtSanders.WinLibs.POSIX.UCRT_*" }
+    )
+
+    if ($packageDirectories.Count -eq 0) {
+        Invoke-WingetInstall -PackageId $packages.WinLibs
+
+        $packageDirectories = @(
+            Get-ChildItem -LiteralPath $wingetPackagesRoot -Directory -ErrorAction Stop |
+                Where-Object { $_.Name -like "BrechtSanders.WinLibs.POSIX.UCRT_*" }
+        )
+    }
+
+    if ($packageDirectories.Count -eq 0) {
+        throw "WinLibs was not found in '$wingetPackagesRoot' after installation."
+    }
+
+    $compilerBin = $null
+
+    foreach ($packageDirectory in $packageDirectories) {
+        $candidate = Join-Path $packageDirectory.FullName "mingw64\bin"
+        $gccCandidate = Join-Path $candidate "gcc.exe"
+        $gxxCandidate = Join-Path $candidate "g++.exe"
+
+        if (
+            (Test-Path -LiteralPath $gccCandidate -PathType Leaf) -and
+            (Test-Path -LiteralPath $gxxCandidate -PathType Leaf)
+        ) {
+            $compilerBin = $candidate
+            break
+        }
+    }
+
+    if (-not $compilerBin) {
+        throw "WinLibs is installed, but gcc.exe and g++.exe could not be found together under its mingw64\bin directory."
+    }
+
+    $gccPath = Join-Path $compilerBin "gcc.exe"
+    $gxxPath = Join-Path $compilerBin "g++.exe"
+
+    # Put the selected WinLibs directory first and remove duplicate entries.
+    $remainingEntries = @(
+        $env:Path -split ";" |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                -not [string]::Equals(
+                    $_.Trim().TrimEnd("\"),
+                    $compilerBin.TrimEnd("\"),
+                    [StringComparison]::OrdinalIgnoreCase
+                )
+            }
+    )
+
+    $env:Path = (@($compilerBin) + $remainingEntries) -join ";"
+
+    # Verify that PATH resolves to the exact WinLibs executables.
+    $gcc = Get-Application -Names @("gcc.exe", "gcc")
+    $gxx = Get-Application -Names @("g++.exe", "g++")
+
+    if (-not $gcc -or -not $gxx) {
+        throw "WinLibs compiler executables exist, but GCC and G++ could not be resolved from PATH."
+    }
+
+    if (
+        -not [string]::Equals(
+            $gcc.Source,
+            $gccPath,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    ) {
+        throw "GCC resolved to an unexpected executable: $($gcc.Source)"
+    }
+
+    if (
+        -not [string]::Equals(
+            $gxx.Source,
+            $gxxPath,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    ) {
+        throw "G++ resolved to an unexpected executable: $($gxx.Source)"
+    }
+
+    $gccOutput = & $gcc.Source --version 2>&1
+    $gccExitCode = $LASTEXITCODE
+
+    if ($gccExitCode -ne 0) {
+        throw "GCC verification failed (exit code $gccExitCode)."
+    }
+
+    $gccFirstLine = "$($gccOutput | Select-Object -First 1)"
+
+    if ($gccFirstLine -notmatch 'GCC') {
+        throw "GCC returned an unexpected version response: $gccFirstLine"
+    }
+
+    $gxxOutput = & $gxx.Source --version 2>&1
+    $gxxExitCode = $LASTEXITCODE
+
+    if ($gxxExitCode -ne 0) {
+        throw "G++ verification failed (exit code $gxxExitCode)."
+    }
+
+    $gxxFirstLine = "$($gxxOutput | Select-Object -First 1)"
+
+    if ($gxxFirstLine -notmatch 'G\+\+') {
+        throw "G++ returned an unexpected version response: $gxxFirstLine"
+    }
+
+    # Configure the compiler explicitly for Tree-sitter child processes.
+    $env:CC = $gccPath
+
+    Write-Status -Status PASS -Message "GCC verified: $gccFirstLine"
+    Write-Status -Status PASS -Message "G++ verified: $gxxFirstLine"
+    Write-Status -Status INFO -Message "WinLibs compiler directory: $compilerBin"
+    Write-Status -Status INFO -Message "CC configured for this process: $env:CC"
+}
+
+# Ensure the Tree-sitter CLI is available and meets the minimum version.
+#
+# The CLI is installed separately from the Neovim plugin and is required
+# for building parser binaries.
+function Ensure-TreeSitterCLI {
+    $command = Get-Application -Names @("tree-sitter.exe", "tree-sitter")
+
+    if (-not $command) {
+        Invoke-WingetInstall -PackageId $packages.TreeSitter
+        $command = Get-Application -Names @("tree-sitter.exe", "tree-sitter")
+    }
+
+    if (-not $command) {
+        throw "tree-sitter was not found after installing $($packages.TreeSitter)."
+    }
+
+    $output = & $command.Source --version 2>&1
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        throw "Tree-sitter CLI verification failed (exit code $exitCode)."
+    }
+
+    $versionLine = "$($output | Select-Object -First 1)"
+
+    if ($versionLine -notmatch '^tree-sitter\s+(\d+\.\d+\.\d+)') {
+        throw "Could not parse the Tree-sitter CLI version: $versionLine"
+    }
+
+    $version = [version]$Matches[1]
+
+    if ($version -lt $minimumTreeSitterVersion) {
+        throw "Tree-sitter CLI $version is too old; version $minimumTreeSitterVersion or later is required."
+    }
+
+    Write-Status -Status PASS -Message "Tree-sitter CLI $version meets the minimum requirement."
+}
+
 # Main entry point.
 #
 # Check platform and prerequisites first, then run core dependencies,
-# providers, navigation tools, and development tools as independent steps.
-# A failure in one step does not prevent the remaining steps from running.
+# providers, navigation and search tools, and development tools as independent
+# steps. A failure in one step does not prevent the remaining independent
+# steps from being checked.
 try {
     Write-Host ""
     Write-Host "nvim-config — Windows dependency setup" -ForegroundColor Cyan
@@ -731,6 +1003,7 @@ try {
             -VerifyArguments @("--version")
 
         Ensure-Curl
+        Ensure-GitTar
     }
 
     # Set up the Node.js runtime and Neovim's npm provider package.
@@ -743,6 +1016,11 @@ try {
         Ensure-PythonProvider
     }
 
+    # Verify the external content-search tool used by native search workflows.
+    Invoke-Step -Name "Checking ripgrep..." -Action {
+        Ensure-Ripgrep
+    }
+
     # Verify the external file-discovery tool used by navigation workflows.
     Invoke-Step -Name "Checking fd..." -Action {
         Ensure-Fd
@@ -751,6 +1029,14 @@ try {
     # Verify the external fuzzy finder required by fzf-lua.
     Invoke-Step -Name "Checking fzf..." -Action {
         Ensure-Fzf
+    }
+
+    Invoke-Step -Name "Checking the WinLibs compiler toolchain..." -Action {
+        Ensure-Compiler
+    }
+
+    Invoke-Step -Name "Checking the Tree-sitter CLI..." -Action {
+        Ensure-TreeSitterCLI
     }
 
     # Verify the independent shell-script analysis tool.
@@ -769,10 +1055,10 @@ try {
         }
     }
     else {
-        Write-Status -Status PASS -Message "All dependencies and provider packages were verified."
+        Write-Status -Status PASS -Message "All dependencies, providers, navigation and search tools, and development tools were verified."
     }
 
-    # Explain the scope of PATH updates if WinGet installed a package.
+    # Explain the scope of PATH and compiler updates if applicable.
     if ($script:InstalledAnyPackage) {
         Write-Host "One or more WinGet packages were installed."
         Write-Host "PATH was refreshed for this PowerShell process."

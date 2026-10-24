@@ -88,6 +88,9 @@ require("plugins.mini-surround")
 require("plugins.mini-move")
 require("plugins.dial")
 
+-- Syntax parsing and highlighting.
+require("plugins.treesitter")
+
 -- General configuration.
 require("config.keymaps")
 require("config.autocmds")
