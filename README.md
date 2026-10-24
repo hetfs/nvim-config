@@ -63,9 +63,13 @@ The terminal-mode escape mapping and native commenting workflow require interact
 
 Stage 04 will not be considered complete until the relevant automated checks pass, the documentation is reviewed, and the configuration has been validated in a real interactive session.
 
+Stage 04 may remain in progress while later stages are developed and validated independently.
+
 ## Stage 05 — Native Plugin Management and Colorscheme
 
-Stage 05 introduces Neovim's native `vim.pack` plugin manager and Catppuccin as the first explicitly approved plugin.
+**Status: Complete**
+
+Stage 05 introduced Neovim's native `vim.pack` plugin manager and Catppuccin as the first explicitly approved plugin.
 
 The implementation:
 
@@ -75,16 +79,63 @@ The implementation:
 - Loads the plugin module directly from `init.lua`, preserving the existing module-loading architecture.
 - Does not introduce `lazy.nvim` or lazy-loading infrastructure.
 
-Validation completed so far:
+Validation confirmed:
 
 - Catppuccin installation completed successfully.
 - Headless startup completed without errors.
 - The active colorscheme was verified as `catppuccin-mocha`.
 - The Catppuccin module was confirmed loaded.
 - StyLua formatting and Lua syntax checks passed.
-- The existing Stage 04 smoke test passed on Neovim 0.12.6.
+- The existing smoke test passed on Neovim 0.12.6.
 
-Stage 05 remains subject to final documentation review and regression validation before it is marked complete.
+Stage 05 is complete. Its implementation remains part of the regression test baseline for subsequent stages.
+
+## Stage 06 — Keymap Discovery and Icons
+
+**Status: Complete**
+
+Stage 06 introduced `which-key.nvim` for keymap discovery and `mini.icons` for icon support.
+
+The implementation:
+
+- Installs `which-key.nvim` using `vim.pack`.
+- Installs the shared `mini.nvim` repository once.
+- Activates `mini.icons` explicitly without enabling unrelated `mini.nvim` modules.
+- Configures the existing window-management keymap group for discovery.
+- Keeps plugin configuration modular in `lua/plugins/which-key.lua` and `lua/plugins/icons.lua`.
+- Preserves direct module loading from `init.lua`.
+- Does not introduce lazy-loading infrastructure.
+
+Validation confirmed:
+
+- Both plugin modules load successfully.
+- The configuration passes the Lua syntax check and StyLua formatting check.
+- The Stage 06 smoke test passes on Neovim 0.12.6.
+- Existing native workflows continue to pass their automated checks.
+
+Stage 06 is complete. Additional `mini.nvim` modules will be activated explicitly at their assigned stages rather than enabled automatically.
+
+## Stage 07 — Snacks Navigation
+
+**Status: Next**
+
+Stage 07 introduces navigation tools while preserving Neovim's native capabilities and the project's explicit plugin admission policy.
+
+The planned scope is:
+
+- **Snacks.nvim:** Picker and Explorer for file discovery, content search, buffer selection, and directory navigation.
+- **fzf-lua:** An independent fuzzy-finding workflow, with its own configuration and keymaps.
+- **flash.nvim:** Enhanced motion and search navigation.
+- **Selected `mini.nvim` modules:** Introduced individually after the initial navigation workflows have been validated.
+- **dial.nvim:** Evaluated and integrated at its assigned point in the stage sequence.
+
+The initial implementation will focus on Snacks Picker and Explorer. Their acceptance tests must pass before additional navigation plugins are introduced.
+
+The Snacks dashboard remains deferred to Stage 15. Snacks Picker and `fzf-lua` must retain independent configuration and mappings.
+
+All plugins introduced before Stage 16 remain eagerly loaded under the current policy. Lazy-loading is not part of Stage 07.
+
+Stage 07 must preserve existing native search, quickfix, keymap, colorscheme, and which-key behavior. Each integration must pass syntax, formatting, regression, and relevant interactive checks before the next integration begins.
 
 ## Repository Structure
 
@@ -92,6 +143,7 @@ Stage 05 remains subject to final documentation review and regression validation
 nvim-config/
 ├── init.lua
 ├── stylua.toml
+├── .editorconfig
 ├── README.md
 ├── LICENSE
 ├── docs/
@@ -104,7 +156,9 @@ nvim-config/
 │   │   ├── keymaps.lua
 │   │   └── autocmds.lua
 │   └── plugins/
-│       └── colorscheme.lua
+│       ├── colorscheme.lua
+│       ├── icons.lua
+│       └── which-key.lua
 └── scripts/
     ├── check-syntax.lua
     ├── smoke.lua
@@ -112,7 +166,9 @@ nvim-config/
     └── winsetup.ps1
 ```
 
-The structure will expand as later stages introduce additional responsibilities. Documentation records setup requirements, architectural decisions, and validation procedures alongside the implementation.
+This tree reflects the current tracked repository structure. It will expand as subsequent stages introduce additional configuration modules, documentation, and tests.
+
+Documentation records setup requirements, architectural decisions, and validation procedures alongside the implementation.
 
 ## Validation
 
@@ -132,7 +188,7 @@ The checker compiles discovered Lua files without executing their contents. It e
 nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 ```
 
-The smoke test verifies the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, and the required-module failure contract.
+The smoke test verifies the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, and the required-module failure contract. It also checks additional plugin and workflow behavior explicitly implemented in the test suite.
 
 Additional workflow checks should be documented and included in the smoke test as their implementations become available.
 
@@ -190,10 +246,10 @@ Automated tests do not replace interactive validation. Test new workflows in a r
 1. First Init
 2. Keymaps and Autocommands
 3. Modules
-4. Native Workflows
-5. `vim.pack` and Catppuccin
-6. which-key and `mini.icons`
-7. Snacks Navigation
+4. Native Workflows — **In Progress**
+5. `vim.pack` and Catppuccin — **Complete**
+6. which-key and `mini.icons` — **Complete**
+7. Snacks Navigation — **Next**
 8. Treesitter
 9. LSP
 10. Completion and Snippets
@@ -205,7 +261,7 @@ Automated tests do not replace interactive validation. Test new workflows in a r
 16. Performance
 17. Hardening
 
-Each stage must meet its acceptance criteria before the project advances.
+Each stage must meet its acceptance criteria before the project advances to the next implementation task. A stage may remain in progress while independent later stages are developed, provided the established architecture and regression checks are preserved.
 
 ## Plugin Policy
 
@@ -216,6 +272,8 @@ Candidates must be evaluated for necessity, maintenance, compatibility, dependen
 Accepted plugins may be deferred to their assigned stage. Plugins may also be retired or replaced when evidence justifies the change.
 
 The project uses Neovim's native `vim.pack` for plugin management. Lazy-loading is deferred to Stage 16 and must be validated against the minimum supported Neovim version before adoption.
+
+Plugin installation, module activation, and feature configuration are explicit decisions. Installing a shared plugin repository does not automatically enable all modules it provides.
 
 ## Contributing
 
@@ -228,3 +286,4 @@ Changes should be focused, documented, and validated before a stage is marked co
 This project is licensed under the [MIT License](LICENSE).
 
 Copyright (c) 2025 HETFS LIMITED
+
