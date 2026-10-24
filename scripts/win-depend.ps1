@@ -1,4 +1,5 @@
-# Provision core Windows dependencies, Neovim providers, and development tools.
+# Provision core Windows dependencies, Neovim providers, navigation tools,
+# and development tools.
 #
 # Usage:
 #   .\scripts\win-depend.ps1
@@ -11,6 +12,10 @@
 # Neovim providers:
 #   - Node.js + the global `neovim` npm package
 #   - Python 3.14 + the `pynvim` Python package
+#
+# Navigation tools:
+#   - fd (fast file and directory discovery)
+#   - fzf (required by the fzf-lua Neovim plugin)
 #
 # Development tools:
 #   - ShellCheck
@@ -60,6 +65,8 @@ $packages = @{
     Node       = "OpenJS.NodeJS"
     Python     = "Python.Python.3.14"
     ShellCheck = "koalaman.shellcheck"
+    Fd         = "sharkdp.fd"
+    Fzf        = "junegunn.fzf"
 }
 
 # Print a consistently formatted status message using a color associated
@@ -88,7 +95,7 @@ function Write-Status {
 # Run an independent setup step.
 #
 # A failure is recorded instead of terminating the entire script, allowing
-# later steps such as Python and ShellCheck verification to continue.
+# later independent dependencies and providers to be checked.
 function Invoke-Step {
     param(
         [Parameter(Mandatory)]
@@ -115,7 +122,7 @@ function Invoke-Step {
 
 # Find the first executable command available on PATH.
 #
-# Restricting the result to applications avoids accidentally selecting
+# Restrict the result to applications to avoid accidentally selecting
 # aliases, functions, or cmdlets when an external executable is required.
 function Get-Application {
     param(
@@ -138,7 +145,6 @@ function Get-Application {
 
 # Ensure Windows System32 is available on PATH.
 #
-# Some Windows installations expose a System32 executable such as curl.exe.
 # Append System32 only when missing so it remains a fallback instead of
 # taking precedence over WinGet-managed tools.
 function Ensure-System32OnPath {
@@ -244,8 +250,8 @@ function Get-Winget {
 
 # Install a missing package using its exact WinGet package identifier.
 #
-# This function is for missing packages, not for checking whether an
-# already-installed package has an upgrade available.
+# This function handles missing packages, not upgrades to already-installed
+# packages.
 function Invoke-WingetInstall {
     param(
         [Parameter(Mandatory)]
@@ -317,7 +323,7 @@ function Ensure-Command {
     Write-Status -Status PASS -Message "$Name verified: $firstLine"
 }
 
-# Read the installed Neovim version from `nvim --version`.
+# Read the installed Neovim version from nvim --version.
 #
 # Return $null if Neovim is absent or its version cannot be parsed.
 function Get-NeovimVersion {
@@ -666,11 +672,36 @@ function Ensure-ShellCheck {
     Write-Status -Status PASS -Message "ShellCheck verified: $versionLine"
 }
 
+# Ensure fd is installed and available for file discovery workflows.
+#
+# Reuse an existing executable when available. Otherwise, install fd through
+# WinGet and verify its version output.
+function Ensure-Fd {
+    Ensure-Command `
+        -Name "fd" `
+        -Commands @("fd.exe", "fd") `
+        -PackageId $packages.Fd `
+        -VerifyArguments @("--version")
+}
+
+# Ensure fzf is installed and available for the fzf-lua Neovim plugin.
+#
+# The fzf executable is an external dependency; installing the Neovim plugin
+# does not install fzf itself. Reuse an existing executable when available,
+# otherwise install it through WinGet and verify its version.
+function Ensure-Fzf {
+    Ensure-Command `
+        -Name "fzf" `
+        -Commands @("fzf.exe", "fzf") `
+        -PackageId $packages.Fzf `
+        -VerifyArguments @("--version")
+}
+
 # Main entry point.
 #
 # Check platform and prerequisites first, then run core dependencies,
-# providers, and ShellCheck as independent steps so one failure does not
-# prevent the remaining checks from running.
+# providers, navigation tools, and development tools as independent steps.
+# A failure in one step does not prevent the remaining steps from running.
 try {
     Write-Host ""
     Write-Host "nvim-config — Windows dependency setup" -ForegroundColor Cyan
@@ -710,6 +741,16 @@ try {
     # Set up Python and the pynvim package required by Neovim.
     Invoke-Step -Name "Setting up the Python 3 provider..." -Action {
         Ensure-PythonProvider
+    }
+
+    # Verify the external file-discovery tool used by navigation workflows.
+    Invoke-Step -Name "Checking fd..." -Action {
+        Ensure-Fd
+    }
+
+    # Verify the external fuzzy finder required by fzf-lua.
+    Invoke-Step -Name "Checking fzf..." -Action {
+        Ensure-Fzf
     }
 
     # Verify the independent shell-script analysis tool.

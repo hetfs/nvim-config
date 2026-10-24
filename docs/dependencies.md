@@ -1,6 +1,6 @@
 # Dependencies
 
-This document defines the dependencies used by nvim-config and describes how the Windows dependency setup script checks, installs, and verifies them.
+This document defines the external dependencies used by `nvim-config` and describes how the Windows dependency setup script checks, installs, and verifies them.
 
 The project follows a native-first approach: Neovim provides the core editing functionality, while external executables and provider packages are installed separately from the Neovim configuration.
 
@@ -21,7 +21,7 @@ These dependencies are checked by the Windows setup script.
 | Dependency | Requirement | Purpose |
 |---|---|---|
 | Neovim | Version 0.12.0 or later | Runs the configuration and provides native editing features. |
-| Git | Available on `PATH` | Provides Git version control and repository operations. |
+| Git | Available on `PATH` | Provides version control and repository operations. |
 | cURL | WinGet-managed executable | Provides command-line URL and network transfer functionality. |
 | WinGet | Required on Windows | Installs missing applications using package identifiers. |
 
@@ -37,7 +37,45 @@ Neovim is checked against the minimum supported version. If it is missing, the s
 
 Git and cURL are checked for availability and successful version output. The script specifically verifies cURL through WinGet's Links directory rather than accepting an unrelated `curl.exe` elsewhere on `PATH`.
 
-### 2. Neovim Providers
+### 2. Stage 07 Navigation Dependencies
+
+Stage 07 adds external command-line tools that support file discovery and fuzzy-finding workflows.
+
+| Tool | WinGet package identifier | Purpose |
+|---|---|---|
+| `fd` | `sharkdp.fd` | Fast file and directory discovery, including workflows that use the Snacks navigation tools. |
+| `fzf` | `junegunn.fzf` | Command-line fuzzy finder used by the `fzf-lua` navigation plugin. |
+
+These are **external executables**, not Neovim plugins. The corresponding Neovim plugins are configured separately through the project's native `vim.pack` workflow.
+
+#### `fd`
+
+`fd` provides fast file and directory discovery. It supports file-finding workflows that can benefit from a dedicated file-search executable.
+
+The Windows setup script checks for the executable and attempts to install it through WinGet if it is missing. After installation, the executable must be available to the current shell environment.
+
+#### `fzf`
+
+`fzf` is the external fuzzy-finder executable used by `fzf-lua`.
+
+Installing the `fzf-lua` Neovim plugin does not, by itself, install the `fzf` executable. The Windows setup script therefore checks for the executable and attempts to install it through WinGet if necessary.
+
+The `fzf-lua` mappings provide the configured file-finding, content-search, buffer-finding, and picker-resume workflows.
+
+#### Relationship to Stage 07
+
+Stage 07 uses multiple navigation tools with separate responsibilities:
+
+- **Snacks Picker and Explorer** provide file discovery, content search, buffer selection, and file browsing.
+- **`fzf-lua`** provides an independent set of fuzzy-finding workflows backed by the external `fzf` executable.
+- **Flash** provides jump and search navigation inside Neovim.
+- **`mini.nvim` modules** provide editing features such as text-object selection, surrounding operations, and movement.
+
+The external `fd` and `fzf` executables complement these plugins. They do not replace the plugins or make every Stage 07 feature dependent on both executables.
+
+The availability of these commands alone does not verify that plugin setup, keymaps, or interactive navigation behave correctly. Those are tested separately through the project's smoke tests and interactive validation procedures.
+
+### 3. Neovim Providers
 
 The script installs or verifies the Node.js and Python providers.
 
@@ -64,7 +102,7 @@ The script checks whether pip is available and attempts to bootstrap it with `en
 
 The provider package is installed into the selected Python interpreter's environment. The script does not write provider paths into Neovim configuration files or persist provider-related environment variables.
 
-### 3. Development Tools
+### 4. Development Tools
 
 | Tool | WinGet package identifier | Purpose |
 |---|---|---|
@@ -88,14 +126,15 @@ The script:
 2. Ensures Windows System32 is available on the current process's `PATH`.
 3. Checks that WinGet is available.
 4. Checks and verifies the core dependencies.
-5. Sets up and verifies the Node.js provider.
-6. Sets up and verifies the Python provider.
-7. Checks and verifies ShellCheck.
-8. Reports any failures and returns an appropriate exit code.
+5. Checks and verifies the Stage 07 navigation executables, `fd` and `fzf`.
+6. Sets up and verifies the Node.js provider.
+7. Sets up and verifies the Python provider.
+8. Checks and verifies ShellCheck.
+9. Reports any failures and returns an appropriate exit code.
 
 The script reuses existing installations when they satisfy its checks and installs missing dependencies as needed. It continues with independent setup steps when an individual step fails, then summarizes failures at the end.
 
-A successful exit code indicates that the script's dependency and provider checks completed successfully. It does not prove that every Neovim feature or interactive workflow works correctly.
+A successful exit code indicates that the script's dependency and provider checks completed successfully. It does **not** prove that every Neovim feature or interactive workflow works correctly.
 
 ## Environment and Side Effects
 
@@ -142,7 +181,9 @@ When setup fails, resolve the reported issue and rerun:
 
 - Prefer Neovim's built-in functionality where it meets project requirements.
 - Keep external executables and language-provider packages separate from the Neovim configuration.
-- Install dependencies through the operating system or its package manager rather than managing external tools as Neovim plugins.
+- Install external tools through the operating system or its package manager rather than managing them as Neovim plugins.
+- Treat plugin installation and external executable installation as separate responsibilities.
 - Verify dependencies instead of assuming that an installed package is correctly available.
 - Avoid installing optional runtimes unless an accepted feature requires them.
+- Keep navigation tools such as `fd` and `fzf` documented with their actual workflow dependencies.
 - Update this document when the setup script's requirements, package identifiers, or verification behavior change.

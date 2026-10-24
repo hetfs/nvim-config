@@ -1,0 +1,14 @@
+-- Stage 07: mini.surround editing.
+-- Reuse the shared mini.nvim installation from plugins.icons.
+
+require("mini.surround").setup({
+  mappings = {
+    add = "sa",
+    delete = "sd",
+    find = "sf",
+    find_left = "sF",
+    highlight = "sh",
+    replace = "sr",
+    update_n_lines = "sn",
+  },
+})

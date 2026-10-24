@@ -1,5 +1,8 @@
 -- Usage:
--- nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
+--   stylua --check .
+--   nvim --headless -u NONE -l scripts/check-syntax.lua
+--   nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
+--   git diff --check
 
 local function check(condition, message)
   if not condition then
@@ -9,6 +12,19 @@ end
 
 local function check_equal(actual, expected, message)
   check(actual == expected, message .. " (expected " .. vim.inspect(expected) .. ", got " .. vim.inspect(actual) .. ")")
+end
+
+local function check_mapping(mode, lhs, description, context)
+  local mapping = vim.fn.maparg(lhs, mode, false, true)
+  local exists = type(mapping) == "table" and next(mapping) ~= nil
+
+  check(exists, context .. " mapping exists: " .. mode .. " " .. lhs)
+
+  if exists and description then
+    check_equal(mapping.desc, description, context .. " mapping description: " .. lhs)
+  end
+
+  return mapping
 end
 
 local function check_module_failure_contract(root)
@@ -148,17 +164,205 @@ local function check_native_commenting()
 end
 
 local function check_stage06_plugins()
-  -- Verify mini.icons loaded and exposes its expected API.
   local mini_icons = package.loaded["mini.icons"]
 
   check(type(mini_icons) == "table" and type(mini_icons.get) == "function", "mini.icons loaded and exposes its get() API")
 
-  -- Verify which-key loaded and exposes its expected API.
   local which_key = package.loaded["which-key"]
 
   check(type(which_key) == "table" and type(which_key.show) == "function", "which-key.nvim loaded and exposes its show() API")
 
   print("PASS Stage 06 plugin loading")
+end
+
+local function check_stage07_snacks()
+  local snacks = package.loaded["snacks"]
+
+  check(type(snacks) == "table", "Snacks module was loaded")
+
+  if type(snacks) ~= "table" then
+    return
+  end
+
+  check(type(snacks.picker) == "table", "Snacks Picker API is available")
+
+  if type(snacks.picker) == "table" then
+    check(type(snacks.picker.files) == "function", "Snacks file picker is available")
+    check(type(snacks.picker.grep) == "function", "Snacks grep picker is available")
+    check(type(snacks.picker.buffers) == "function", "Snacks buffer picker is available")
+  end
+
+  check(type(snacks.explorer) == "table", "Snacks Explorer API is available")
+
+  if type(snacks.explorer) == "table" then
+    check(type(snacks.explorer.open) == "function", "Snacks Explorer open API is available")
+  end
+
+  local mappings = {
+    { lhs = "<leader>ff", desc = "Find files" },
+    { lhs = "<leader>fg", desc = "Search file contents" },
+    { lhs = "<leader>fb", desc = "Find buffers" },
+    { lhs = "<leader>fe", desc = "Open file explorer" },
+  }
+
+  for _, expected in ipairs(mappings) do
+    check_mapping("n", expected.lhs, expected.desc, "Snacks")
+  end
+
+  print("PASS Stage 07 Snacks navigation registration")
+end
+
+local function check_stage07_fzf_lua()
+  local fzf_lua = package.loaded["fzf-lua"]
+
+  check(type(fzf_lua) == "table", "fzf-lua module was loaded")
+
+  if type(fzf_lua) ~= "table" then
+    return
+  end
+
+  check(type(fzf_lua.files) == "function", "fzf-lua file picker is available")
+  check(type(fzf_lua.live_grep) == "function", "fzf-lua live grep picker is available")
+  check(type(fzf_lua.buffers) == "function", "fzf-lua buffer picker is available")
+  check(type(fzf_lua.resume) == "function", "fzf-lua resume API is available")
+
+  local mappings = {
+    { lhs = "<leader>pf", desc = "Fzf: Find files" },
+    { lhs = "<leader>pg", desc = "Fzf: Search file contents" },
+    { lhs = "<leader>pb", desc = "Fzf: Find buffers" },
+    { lhs = "<leader>pr", desc = "Fzf: Resume picker" },
+  }
+
+  for _, expected in ipairs(mappings) do
+    check_mapping("n", expected.lhs, expected.desc, "fzf-lua")
+  end
+
+  print("PASS Stage 07 fzf-lua navigation registration")
+end
+
+local function check_stage07_flash()
+  local flash = package.loaded["flash"]
+
+  check(type(flash) == "table", "flash.nvim module was loaded")
+
+  if type(flash) ~= "table" then
+    return
+  end
+
+  check(type(flash.jump) == "function", "Flash jump API is available")
+  check(type(flash.treesitter) == "function", "Flash Treesitter API is available")
+  check(type(flash.remote) == "function", "Flash remote API is available")
+  check(type(flash.treesitter_search) == "function", "Flash Treesitter search API is available")
+  check(type(flash.toggle) == "function", "Flash toggle API is available")
+
+  local mappings = {
+    { mode = "n", lhs = "s", desc = "Flash: Jump" },
+    { mode = "n", lhs = "gs", desc = "Flash: Treesitter jump" },
+    { mode = "o", lhs = "r", desc = "Flash: Remote operation" },
+    { mode = "x", lhs = "R", desc = "Flash: Treesitter search" },
+    { mode = "c", lhs = "<C-s>", desc = "Flash: Toggle search labels" },
+  }
+
+  for _, expected in ipairs(mappings) do
+    check_mapping(expected.mode, expected.lhs, expected.desc, "Flash")
+  end
+
+  print("PASS Stage 07 flash.nvim registration")
+end
+
+local function check_stage07_mini_ai()
+  local mini_ai = package.loaded["mini.ai"]
+
+  check(type(mini_ai) == "table", "mini.ai module was loaded")
+
+  if type(mini_ai) ~= "table" then
+    return
+  end
+
+  check(type(mini_ai.setup) == "function", "mini.ai setup API is available")
+  check(type(mini_ai.find_textobject) == "function", "mini.ai textobject API is available")
+  check(type(_G.MiniAi) == "table", "mini.ai global module is available")
+
+  print("PASS Stage 07 mini.ai loading")
+end
+
+local function check_stage07_mini_surround()
+  local mini_surround = package.loaded["mini.surround"]
+
+  check(type(mini_surround) == "table", "mini.surround module was loaded")
+
+  if type(mini_surround) ~= "table" then
+    return
+  end
+
+  check(type(mini_surround.setup) == "function", "mini.surround setup API is available")
+  check(type(_G.MiniSurround) == "table", "mini.surround global module is available")
+
+  check_mapping("n", "sa", nil, "mini.surround")
+  check_mapping("n", "sd", nil, "mini.surround")
+  check_mapping("n", "sr", nil, "mini.surround")
+
+  print("PASS Stage 07 mini.surround registration")
+end
+
+local function check_stage07_mini_move()
+  local mini_move = package.loaded["mini.move"]
+
+  check(type(mini_move) == "table", "mini.move module was loaded")
+
+  if type(mini_move) ~= "table" then
+    return
+  end
+
+  check(type(mini_move.setup) == "function", "mini.move setup API is available")
+  check(type(_G.MiniMove) == "table", "mini.move global module is available")
+
+  for _, lhs in ipairs({ "<M-h>", "<M-j>", "<M-k>", "<M-l>" }) do
+    check_mapping("n", lhs, nil, "mini.move Normal")
+    check_mapping("x", lhs, nil, "mini.move Visual")
+  end
+
+  print("PASS Stage 07 mini.move registration")
+end
+
+local function check_stage07_dial()
+  local dial = package.loaded["dial.map"]
+
+  check(type(dial) == "table", "dial.nvim mapping module was loaded")
+
+  if type(dial) ~= "table" then
+    return
+  end
+
+  check(type(dial.inc_normal) == "function", "Dial normal increment API is available")
+  check(type(dial.dec_normal) == "function", "Dial normal decrement API is available")
+  check(type(dial.inc_visual) == "function", "Dial visual increment API is available")
+  check(type(dial.dec_visual) == "function", "Dial visual decrement API is available")
+
+  local mappings = {
+    { mode = "n", lhs = "<C-a>", desc = "Dial: Increment" },
+    { mode = "n", lhs = "<C-x>", desc = "Dial: Decrement" },
+    { mode = "x", lhs = "<C-a>", desc = "Dial: Increment selection" },
+    { mode = "x", lhs = "<C-x>", desc = "Dial: Decrement selection" },
+  }
+
+  for _, expected in ipairs(mappings) do
+    check_mapping(expected.mode, expected.lhs, expected.desc, "Dial")
+  end
+
+  print("PASS Stage 07 dial.nvim registration")
+end
+
+local function check_stage07_plugins()
+  check_stage07_snacks()
+  check_stage07_fzf_lua()
+  check_stage07_flash()
+  check_stage07_mini_ai()
+  check_stage07_mini_surround()
+  check_stage07_mini_move()
+  check_stage07_dial()
+
+  print("PASS Stage 07 plugin registration")
 end
 
 local function main()
@@ -173,17 +377,25 @@ local function main()
   check(package.loaded["config.autocmds"] ~= nil, "config.autocmds was loaded")
 
   -- Required plugin modules.
-  -- Stage 05
   check(package.loaded["catppuccin"] ~= nil, "catppuccin module was loaded")
   check(package.loaded["mini.icons"] ~= nil, "mini.icons module was loaded")
   check(package.loaded["which-key"] ~= nil, "which-key module was loaded")
-  check(package.loaded["catppuccin"] ~= nil, "catppuccin module was loaded")
+  check(package.loaded["snacks"] ~= nil, "Snacks module was loaded")
+  check(package.loaded["fzf-lua"] ~= nil, "fzf-lua module was loaded")
+  check(package.loaded["flash"] ~= nil, "flash.nvim module was loaded")
+  check(package.loaded["mini.ai"] ~= nil, "mini.ai module was loaded")
+  check(package.loaded["mini.surround"] ~= nil, "mini.surround module was loaded")
+  check(package.loaded["mini.move"] ~= nil, "mini.move module was loaded")
+  check(package.loaded["dial.map"] ~= nil, "dial.nvim mapping module was loaded")
 
   -- Stage 05 colorscheme.
   check_equal(vim.g.colors_name, "catppuccin-mocha", "active colorscheme")
 
   -- Stage 06 plugins.
   check_stage06_plugins()
+
+  -- Stage 07 navigation and editing plugins.
+  check_stage07_plugins()
 
   -- Leader keys.
   check_equal(vim.g.mapleader, " ", "mapleader")
@@ -214,7 +426,7 @@ local function main()
   check_equal(vim.o.undofile, true, "undofile")
 
   -- Native statusline.
-  check_equal(vim.o.laststatus, 3, "laststatus")
+  check_equal(vim.o.laststatus, 3, "native statusline visibility")
   check_equal(vim.o.statusline, "%f %m%r%h%w %= %y %l:%c %p%%", "native statusline format")
 
   -- Windows shell resolution.
@@ -242,11 +454,7 @@ local function main()
   }
 
   for _, expected in ipairs(keymaps) do
-    local mapping = vim.fn.maparg(expected.lhs, expected.mode, false, true)
-
-    check(type(mapping) == "table" and next(mapping) ~= nil, expected.mode .. " mapping exists: " .. expected.lhs)
-
-    check_equal(mapping.desc, expected.desc, expected.mode .. " mapping " .. expected.lhs .. " description")
+    check_mapping(expected.mode, expected.lhs, expected.desc, "Native")
   end
 
   -- Autocommand contract.
@@ -284,7 +492,7 @@ local function main()
   -- Native terminal workflow.
   local terminal_escape = vim.fn.maparg("<Esc><Esc>", "t", false, true)
 
-  check(terminal_escape ~= nil and next(terminal_escape) ~= nil, "terminal escape mapping exists")
+  check(type(terminal_escape) == "table" and next(terminal_escape) ~= nil, "terminal escape mapping exists")
   check_equal(terminal_escape.rhs, "<C-\\><C-n>", "terminal escape mapping rhs")
   check_equal(terminal_escape.desc, "Exit terminal mode", "terminal escape mapping description")
 

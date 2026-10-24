@@ -6,9 +6,10 @@ vim.pack.add({
     name = "which-key.nvim",
   },
 })
-
 require("which-key").setup({
   spec = {
     { "<leader>s", group = "Window Management" },
+    { "<leader>f", group = "Find / Navigation" },
+    { "<leader>p", group = "Fzf Pickers" },
   },
 })
