@@ -44,7 +44,7 @@ Installation instructions will be added when the setup and validation procedures
 
 **Stage 04 — Native Workflows: In Progress**
 
-This stage establishes useful workflows using Neovim's built-in capabilities before introducing plugins.
+Stage 04 establishes useful workflows using Neovim's built-in capabilities before introducing plugins.
 
 Current work includes:
 
@@ -55,9 +55,11 @@ Current work includes:
 - A built-in terminal workflow.
 - Regression tests and documentation.
 
-The automated smoke test checks native grep and quickfix behavior, native commenting-related behavior, representative options and mappings, autocommand registration, and the required-module failure contract.
+The native commenting workflow remains under development. The `gcc` and `gc` mappings have not been added to `lua/config/keymaps.lua`. They must not be treated as implemented until the native commenting behavior has been verified and the mappings have been implemented and tested.
 
-Automated checks do not establish that a workflow works correctly during interactive use. The terminal-mode escape mapping and native commenting workflow still require interactive verification, as documented in [Native Keymap Testing](docs/Keymap-test.md).
+The automated smoke test covers the checks explicitly implemented in `scripts/smoke.lua`. Passing automated checks does not establish that every workflow behaves correctly during interactive use.
+
+The terminal-mode escape mapping and native commenting workflow require interactive verification, as documented in [Native Keymap Testing](docs/Keymap-test.md).
 
 Stage 04 will not be considered complete until the relevant automated checks pass, the documentation is reviewed, and the configuration has been validated in a real interactive session.
 
@@ -91,6 +93,7 @@ nvim-config/
 ├── init.lua
 ├── stylua.toml
 ├── README.md
+├── LICENSE
 ├── docs/
 │   ├── win-install.md
 │   ├── dependencies.md
@@ -129,7 +132,9 @@ The checker compiles discovered Lua files without executing their contents. It e
 nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 ```
 
-The smoke test verifies the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, and the required-module failure contract. It also checks selected native commenting and terminal-mapping properties.
+The smoke test verifies the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, and the required-module failure contract.
+
+Additional workflow checks should be documented and included in the smoke test as their implementations become available.
 
 A passing smoke test does not replace interactive testing.
 
@@ -220,4 +225,6 @@ Changes should be focused, documented, and validated before a stage is marked co
 
 ## License
 
-A license has not yet been established. Add a `LICENSE` file before distributing the project under an open-source license.
+This project is licensed under the [MIT License](LICENSE).
+
+Copyright (c) 2025 HETFS LIMITED

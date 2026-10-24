@@ -50,10 +50,11 @@ if vim.g.neovide then
 
   vim.o.guifont = string.format("%s:h%d", selected_font, neovide_font_size)
 end
-
--- Stage 03: required modules load directly, in a fixed order.
+-- Required modules load directly, in a fixed order.
 -- A failing require aborts the remaining startup sequence.
 require("config.options")
 require("plugins.colorscheme")
+require("plugins.icons")
 require("config.keymaps")
 require("config.autocmds")
+require("plugins.which-key")
