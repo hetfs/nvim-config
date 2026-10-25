@@ -104,6 +104,11 @@ require("plugins.mini-pairs")
 require("config.keymaps")
 require("config.lsp")
 require("langs").setup()
+
+-- Formatting (Conform reads formatter metadata from language packs).
+require("plugins.conform")
+require("config.format").setup()
+
 require("config.autocmds")
 
 -- Configure keymap discovery after mappings have been registered.

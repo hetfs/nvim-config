@@ -128,6 +128,11 @@ map("n", "<leader>e", "$", {
   desc = "Jump to end of line",
 })
 
+-- Formatting
+map("n", "<leader>cf", "<cmd>Format<CR>", {
+  desc = "Format buffer",
+})
+
 -- Start a buffer-wide substitution using the previous search pattern.
 -- Review the replacement before confirming the command.
 map("n", "S", ":%s/<C-r>//g<Left><Left>", {

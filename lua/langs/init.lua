@@ -1,5 +1,6 @@
 -- Stage 09: Language-pack registry.
 -- Discover language packs from this configuration only.
+-- Stage 11: Aggregate language-specific metadata without changing setup behavior.
 
 local M = {}
 
@@ -31,6 +32,33 @@ function M.setup()
 
     pack.setup()
   end
+end
+
+-- Collect metadata declared by language packs.
+-- Each key must have exactly one owning pack; silent overrides are not allowed.
+function M.collect(field)
+  assert(type(field) == "string" and field ~= "", "field must be a non-empty string")
+
+  local merged = {}
+
+  for _, name in ipairs(discover_packs()) do
+    local pack = require("langs." .. name)
+    local metadata = pack[field]
+
+    if metadata ~= nil then
+      assert(type(metadata) == "table", string.format("Language pack 'langs.%s': '%s' must be a table", name, field))
+
+      for key, value in pairs(metadata) do
+        assert(type(key) == "string" and key ~= "", string.format("Language pack 'langs.%s': '%s' keys must be non-empty strings", name, field))
+
+        assert(rawget(merged, key) == nil, string.format("Language packs define '%s' for '%s' more than once", field, key))
+
+        merged[key] = value
+      end
+    end
+  end
+
+  return merged
 end
 
 return M
