@@ -147,7 +147,25 @@ The Windows setup script does **not** install Neovim parsers, configure highligh
 
 Tree-sitter's presence also does not imply that the project has enabled Tree-sitter-based indentation, folding, or other language-specific workflows. Such features remain separate configuration decisions.
 
-### 4. Neovim Providers
+### 4. Stage 09 — LSP and Lua Development Dependencies
+
+Stage 09 introduces native Language Server Protocol (LSP) configuration and Lua development support. Neovim's built-in LSP client remains responsible for configuring and activating language servers, while plugins provide maintained server definitions and additional development context.
+
+#### Lua language server
+
+- **LuaLS (`lua-language-server`)** — external executable used by Neovim's native LSP client for Lua diagnostics and language features.
+- The executable must be available on `PATH`.
+- `lazydev.nvim` improves LuaLS awareness of Neovim and installed Lua libraries; it does not install or manage LuaLS.
+- Server installation and updates remain the responsibility of the system package manager, `mise`, or another explicitly chosen external tool manager.
+- Mason is not part of the default configuration.
+
+Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs configure and activate the language server. The `nvim-lspconfig` plugin supplies maintained server definitions; it does not install the LuaLS executable.
+
+Python language-server dependencies remain outside Stage 09 and are deferred to Stage 13.
+
+The Windows dependency setup script does not install or manage LuaLS. Its availability and actual attachment to Lua buffers must be verified separately from the script's dependency checks.
+
+### 5. Neovim Providers
 
 The script installs or verifies the Node.js and Python providers.
 
@@ -174,7 +192,7 @@ The script checks whether pip is available and attempts to bootstrap it with `en
 
 The provider package is installed into the selected Python interpreter's environment. The script does not write provider paths into Neovim configuration files or persist provider-related environment variables.
 
-### 5. Development Tools
+### 6. Development Tools
 
 | Tool | WinGet package identifier | Purpose |
 |---|---|---|
@@ -237,6 +255,8 @@ git diff --check
 
 Parser installation and actual highlighting should be checked independently inside Neovim. Content search, file discovery, and fuzzy-finding workflows should likewise be validated through their configured Neovim interfaces.
 
+For Stage 09, also verify that `lua-language-server` is available on `PATH`, that the Lua language server attaches to Lua buffers, and that diagnostics and other configured LSP features work as expected. Merely having the executable or a registered LSP configuration does not prove that the server has attached successfully.
+
 ## Environment and Side Effects
 
 The setup script is designed to avoid changing the Neovim configuration itself.
@@ -295,4 +315,5 @@ When setup fails, resolve the reported issue and rerun:
 - Avoid installing optional runtimes unless an accepted feature requires them.
 - Document navigation and search tools according to their actual workflow dependencies: `fd` for file discovery, `rg` for content search, and `fzf` for fuzzy selection.
 - Document Tree-sitter's compiler, CLI, and archive-extraction prerequisites separately from Neovim parser and highlighting configuration.
+- Keep LSP server executables externally managed; `nvim-lspconfig` supplies server definitions, and `lazydev.nvim` supplies Lua development context rather than installing or managing LuaLS.
 - Update this document when the setup script's requirements, package identifiers, or verification behavior change.

@@ -41,6 +41,7 @@ Configuration responsibilities are separated into focused Lua modules.
 - `init.lua` coordinates startup.
 - `lua/config/` contains core Neovim configuration.
 - `lua/plugins/` contains plugin-specific configuration and setup.
+- `lua/langs/` contains project-owned language packs.
 
 Modules should have clear responsibilities, avoid unnecessary coupling, and remain easy to inspect and validate.
 
@@ -114,7 +115,7 @@ It should not become a general-purpose container for options, mappings, autocomm
 
 Owns core Neovim configuration and shared behavior.
 
-Native options, centralized mappings, autocommands, and future native LSP configuration belong here when their stage is reached.
+Native options, centralized mappings, autocommands, and shared LSP lifecycle behavior belong here.
 
 ### `lua/plugins/`
 
@@ -127,8 +128,74 @@ For example:
 - Snacks uses one shared setup path, with dashboard configuration kept separate when that stage is implemented.
 - `mini.nvim` is installed once as a shared repository; individual Mini modules are configured according to their respective stages.
 - Snacks Picker and fzf-lua remain independent tools with their own configuration and mappings.
+- `nvim-lspconfig` is installed through `vim.pack` and supplies maintained language-server definitions.
+- `lazydev.nvim` remains in its dedicated `lua/plugins/lazydev.lua` module.
 
 The presence of a Lua file under `lua/plugins/` is not, by itself, authorization to install its plugin.
+
+### `lua/langs/`
+
+Owns project-specific language packs and their language-specific configuration.
+
+The language-pack boundary separates language-specific declarations from shared LSP lifecycle behavior and plugin installation.
+
+The intended structure is:
+
+| Path | Responsibility |
+|---|---|
+| `lua/langs/init.lua` | Discover project-owned language packs, evaluate their declarations, and coordinate server configuration and activation |
+| `lua/langs/lua.lua` | Declare Lua language-server support and LuaLS-specific settings |
+| Future `lua/langs/*.lua` modules | Declare support for additional languages when admitted in their designated stages |
+
+#### Language-pack discovery
+
+`lua/langs/init.lua` must discover language packs only from this repository's own `lua/langs/` directory.
+
+It must not treat arbitrary `langs/` modules elsewhere on Neovim's runtime path as project-owned packs. Discovery should be deterministic so the registry processes packs in a predictable order.
+
+The registry is responsible for coordinating the declarations provided by the discovered packs. It should distinguish configured servers from missing or unknown server configurations and avoid repeated setup effects when initialization is invoked more than once.
+
+#### Language-pack contract
+
+A language pack declares the language-server names it supports and any server-specific configuration overrides required by the project.
+
+The registry uses these declarations to coordinate server configuration and activation. A language pack should remain focused on its language-specific requirements rather than independently reimplementing shared LSP lifecycle behavior.
+
+For Lua, the initial language pack configures the LuaLS-specific settings:
+
+- LuaJIT runtime.
+- `vim` recognized as a global for diagnostics.
+- `workspace.checkThirdParty = false`.
+- Telemetry disabled.
+
+LuaLS itself is an external executable and must be available on `PATH`. Its installation and updates are managed outside the Neovim plugin manager.
+
+#### Server-definition and activation boundary
+
+`nvim-lspconfig` provides maintained server definitions. Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs remain the interfaces used to configure and activate language servers.
+
+Language packs should apply only the overrides needed by this project. They must not independently duplicate maintained server defaults such as `cmd`, `filetypes`, or `root_markers` without a demonstrated need.
+
+This avoids unnecessary configuration drift and lets the maintained server definitions provide their intended defaults. Overrides remain appropriate when the project has a specific requirement that those defaults do not satisfy.
+
+The legacy `require("lspconfig")` configuration interface is not part of this architecture.
+
+#### LSP lifecycle and keymaps
+
+Shared LSP attachment behavior remains configuration-owned.
+
+The configuration registers an `LspAttach` autocmd and delegates buffer-local mapping registration to `lua/config/keymaps.lua`. The `gd` and `gD` mappings remain buffer-local and are installed when an LSP client attaches to a buffer.
+
+Their responsibilities are:
+
+- `gd` — go to definition.
+- `gD` — go to declaration.
+
+Language packs should not independently register duplicate attachment autocmds or redefine these shared mappings.
+
+Automated tests should validate pack discovery, declarations, server configuration, and registry behavior. Interactive verification must separately confirm that LuaLS actually attaches to Lua buffers and provides the expected language features.
+
+The language-pack registry does not imply that completion, snippets, formatting, linting, debugging, Mason, or lazy-loading are included in Stage 09. Those remain separate decisions governed by the roadmap.
 
 ## Plugin Management
 
@@ -158,6 +225,8 @@ Mappings should:
 
 Plugin-specific actions may require plugin APIs, but their user-facing mappings should remain centralized where the design permits.
 
+LSP mappings follow the same policy. The shared `LspAttach` handler requests buffer-local mappings from `lua/config/keymaps.lua` rather than defining separate copies in individual language packs.
+
 Native functionality should not be redundantly redefined merely because it is available.
 
 ## Dependency Policy
@@ -175,6 +244,15 @@ The dependency documentation should identify the purpose and installation expect
 
 Installing a plugin must not be treated as equivalent to installing the external executable it depends on.
 
+For LSP:
+
+- `nvim-lspconfig` supplies maintained server definitions.
+- Neovim's native LSP APIs configure and activate servers.
+- Language packs declare supported servers and project-specific overrides.
+- Language-server executables are managed externally.
+- `lazydev.nvim` improves Lua development context; it does not install or manage LuaLS.
+- Mason is not part of the default configuration.
+
 ## Validation
 
 Architecture changes must preserve the project's minimum supported version and explicit startup behavior.
@@ -190,6 +268,10 @@ Validation should grow alongside implementation and may include:
 
 A passing syntax check does not prove that a mapping, plugin, language server, or interactive workflow behaves correctly. Tests must match the claim being made.
 
+For the language-pack registry, tests should verify that discovery is restricted to the project-owned directory, pack declarations are processed deterministically, server-specific overrides are applied as intended, and repeated initialization does not duplicate setup effects.
+
+The existence of a server configuration does not prove that the external executable is available or that a server has attached to a buffer. These conditions require separate verification.
+
 ## Stage Boundaries
 
 The 17-stage roadmap governs implementation order.
@@ -198,8 +280,10 @@ Stages should be completed incrementally, with validation and documentation upda
 
 Performance optimization is deliberately deferred until Stage 16. At that stage, any decision to introduce lazy-loading should be supported by measurement and compatibility testing.
 
+Stage 09 establishes the LSP and language-pack foundation. Completion and snippets, formatting and linting, debugging, Mason, and lazy-loading changes remain outside its scope.
+
 ## Summary
 
-The architecture is intentionally explicit: a small startup coordinator, direct module loading, focused configuration boundaries, native-first behavior, controlled plugin admission, separately managed external tools, and stage-based validation.
+The architecture is intentionally explicit: a small startup coordinator, direct module loading, focused configuration boundaries, native-first behavior, controlled plugin admission, separately managed external tools, project-owned language packs, and stage-based validation.
 
 The objective is not to reproduce another distribution's architecture. It is to maintain a minimal, understandable Neovim configuration that can grow without losing predictability.

@@ -1,127 +1,168 @@
 # ADR: nvim-lspconfig
 
-- **Status:** Deferred
+- **Status:** Accepted
 - **Date:** 2026-10-24
 
 ## Context
 
 This project prioritizes Neovim's built-in capabilities and adds plugins only when their benefits justify the additional dependency.
 
-Neovim provides a native Language Server Protocol (LSP) client. The project can configure supported language servers through Neovim's native LSP APIs without making `nvim-lspconfig` an automatic requirement.
+Neovim provides a native Language Server Protocol (LSP) client and native APIs for configuring and enabling language servers. The project will continue to use these APIs as its primary interface for LSP configuration and activation.
 
-The `nvim-lspconfig` project provides server configurations that can simplify the setup of individual language servers. However, adopting it introduces an additional dependency and a configuration layer that must be evaluated against the project's native-first principles.
+The `nvim-lspconfig` project provides maintained configurations for individual language servers. These definitions reduce the need for this project to duplicate server-specific defaults, such as executable commands, supported filetypes, and workspace root markers.
 
-Stage 09 — LSP and `lazydev` establishes the initial language-server workflow. The project should distinguish between configuring Neovim's built-in LSP client and adopting a plugin that supplies server-specific configuration.
+Adopting `nvim-lspconfig` does not require adopting its legacy configuration interface. The project can use its server definitions alongside Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs.
+
+Stage 09 — LSP and `lazydev` establishes the initial language-server workflow. Its scope is deliberately limited to Lua development support, with additional language support introduced in later stages.
+
+Language-server configuration and activation must remain separate from installing and managing the external server executables.
 
 ## Decision
 
-**Defer the adoption of `nvim-lspconfig` until its value can be evaluated during Stage 09.**
+**Accept `nvim-lspconfig` as a Stage 09 dependency for maintained language-server definitions.**
 
-Begin with Neovim's native LSP capabilities and determine the minimum configuration required for the project's initial language-server workflow.
+Use `nvim-lspconfig` together with Neovim's native LSP APIs:
 
-Do not install `nvim-lspconfig` merely because it is commonly used in Neovim configurations or appears in plugin collections.
+- Use `vim.lsp.config()` to configure language servers and apply project-specific overrides.
+- Use `vim.lsp.enable()` to enable the selected language servers.
+- Use the server definitions supplied by `nvim-lspconfig` instead of unnecessarily maintaining duplicate defaults.
+- Do not use the legacy `require("lspconfig")` interface.
+- Keep language-server installation and executable management outside the Neovim plugin configuration.
+- Introduce additional language servers only in their designated roadmap stages.
 
-If native configuration proves sufficient for the project's supported language servers, retain the native approach. Adopt `nvim-lspconfig` only if its server configurations provide a demonstrable maintenance, compatibility, or usability advantage.
+For Stage 09, LuaLS (`lua-language-server`) is the initial language server. Its executable must be installed and available on `PATH` independently of Neovim and `nvim-lspconfig`.
 
-This decision does not prohibit future adoption. It requires explicit evaluation before the dependency is accepted.
+`lazydev.nvim` remains a separate development helper that improves LuaLS awareness of Neovim and installed Lua libraries. It does not install or manage LuaLS.
+
+Python language-server integration remains deferred to Stage 13. Accepting `nvim-lspconfig` does not authorize implementing Python support ahead of that stage.
 
 ## Alternatives Considered
 
-### 1. Configure language servers using native Neovim APIs
+### 1. Maintain all server definitions directly
 
-Use Neovim's built-in LSP client and native configuration mechanisms.
+Configure language servers using Neovim's native APIs without adopting `nvim-lspconfig`.
 
 **Advantages**
+
 - Minimizes third-party dependencies.
-- Keeps the configuration aligned with Neovim's built-in capabilities.
-- Makes the project's language-server setup explicit.
-- Avoids introducing a plugin solely to supply configuration that can be maintained directly.
+- Keeps server configuration entirely within the project.
+- Makes every maintained server setting explicit.
 
 **Trade-offs**
-- Requires the project to maintain server-specific settings.
-- May involve more configuration work as the number of supported servers grows.
-- Requires careful attention to API compatibility and configuration changes across supported Neovim versions.
 
-### 2. Adopt `nvim-lspconfig`
+- Requires the project to maintain server-specific defaults.
+- Can duplicate configuration already maintained by the upstream project.
+- Increases the maintenance burden as the supported language inventory grows.
 
-Use the plugin's server configurations alongside Neovim's built-in LSP client.
+**Outcome:** Not selected as the default approach for server definitions. Native APIs remain the configuration and activation interface, while `nvim-lspconfig` supplies maintained definitions.
+
+### 2. Adopt `nvim-lspconfig` and use its legacy interface
+
+Configure servers through `require("lspconfig")` and the plugin's legacy setup interface.
 
 **Advantages**
-- Can reduce the amount of server-specific configuration maintained by this project.
-- Provides established configurations for many language servers.
-- May simplify adding and maintaining support for additional servers.
+
+- Familiar to users of many existing Neovim configurations.
+- Provides an established setup pattern.
 
 **Trade-offs**
+
+- Introduces a separate configuration interface when Neovim already provides native LSP APIs.
+- Does not align with the project's chosen native-first configuration architecture.
+
+**Outcome:** Rejected. The project will not use the legacy `require("lspconfig")` interface.
+
+### 3. Use `nvim-lspconfig` definitions with native Neovim APIs
+
+Use the plugin to supply maintained server definitions while retaining native configuration and activation.
+
+**Advantages**
+
+- Avoids unnecessary duplication of upstream server defaults.
+- Preserves the project's native-first LSP workflow.
+- Keeps server configuration and activation explicit.
+- Provides a straightforward path for adding language support in later stages.
+
+**Trade-offs**
+
 - Adds a third-party dependency.
-- Introduces an external configuration layer that must be understood and maintained.
-- Requires compatibility checks against the project's minimum Neovim version.
-- May provide limited additional value if the project supports only a small, deliberately selected set of servers.
+- Requires compatibility checks against the minimum supported Neovim version.
+- Requires the project to understand how upstream defaults interact with local overrides.
 
-### 3. Defer broad language-server support
+**Outcome:** Selected.
 
-Implement only the initial LSP workflow needed by the project and evaluate additional servers as language support expands.
+### 4. Defer broad language-server support
+
+Introduce only the language servers needed for each roadmap stage.
 
 **Advantages**
-- Keeps the initial implementation focused.
-- Avoids premature decisions about a broad language-server inventory.
-- Allows dependency decisions to follow demonstrated requirements.
+
+- Keeps each stage focused.
+- Avoids premature language-specific configuration.
+- Allows dependencies and tooling to follow demonstrated requirements.
 
 **Trade-offs**
-- Additional language servers may require further configuration work.
-- The project must clearly document which servers are supported and which remain out of scope.
+
+- Additional language servers require their own implementation and validation when their stages begin.
+
+**Outcome:** Selected as the language-support strategy. Stage 09 is limited to LuaLS; Python support remains deferred to Stage 13.
 
 ## Evaluation Criteria
 
-Evaluate native configuration against `nvim-lspconfig` using the following criteria:
+The selected approach must satisfy the following criteria:
 
-1. **Required functionality:** Identify the initial language servers and capabilities the project actually intends to support.
-2. **Configuration complexity:** Compare the effort required to maintain native server configurations with the effort required to use the plugin.
-3. **Compatibility:** Verify that the selected approach works with the minimum supported Neovim version, currently Neovim 0.12 or later.
-4. **Maintainability:** Assess the cost of tracking server configuration changes and maintaining project-specific overrides.
-5. **Extensibility:** Determine whether adding the project's planned language servers remains straightforward.
-6. **Dependency cost:** Consider the additional dependency, its maintenance requirements, and its effect on the project's minimal baseline.
-7. **Separation of concerns:** Keep LSP client configuration distinct from language-server installation and external executable management.
-8. **Validation:** Ensure that server startup, attachment, diagnostics, and other required capabilities can be tested in a real Neovim session.
+1. **Required functionality:** Support the language servers and capabilities explicitly included in the current stage.
+2. **Configuration complexity:** Reuse maintained upstream definitions where appropriate rather than duplicating them without justification.
+3. **Compatibility:** Verify operation against the minimum supported Neovim version, currently Neovim 0.12 or later.
+4. **Maintainability:** Keep project-specific overrides explicit and limited to requirements not already handled by upstream defaults.
+5. **Extensibility:** Allow future language packs to add server-specific configuration without redesigning the LSP architecture.
+6. **Dependency cost:** Keep the plugin's role narrow and document why it is included.
+7. **Separation of concerns:** Separate server definitions, native LSP configuration and activation, language-specific overrides, and external executable management.
+8. **Validation:** Test configuration loading, server startup, attachment, diagnostics, and the required LSP capabilities in a real Neovim session.
 
 ## Relationship to lazydev
 
-`lazydev.nvim` is evaluated separately for its Lua development workflow. Its admission does not automatically require adopting `nvim-lspconfig`.
+`lazydev.nvim` is selected separately for the Lua development workflow.
 
-The project should evaluate each dependency according to its own purpose and demonstrated value. Decisions about server configuration must not be inferred from the decision to use a development helper.
+Its purpose is to improve LuaLS awareness of Neovim APIs and installed Lua libraries. It does not replace the language server, install the server executable, or determine how servers are configured and enabled.
+
+The decision to use `lazydev.nvim` does not determine whether `nvim-lspconfig` is required. Each dependency has a distinct responsibility within the Stage 09 architecture.
 
 ## Consequences
 
-Until the evaluation is complete:
+The accepted decision establishes the following boundaries:
 
-- `nvim-lspconfig` is not an approved dependency.
-- Stage 09 may proceed with native LSP configuration.
-- The initial language-server scope should remain explicit and limited to validated requirements.
-- Language-server installation and executable availability remain separate from Neovim's LSP configuration.
-- The plugin inventory and dependency documentation must reflect the final decision once made.
+- `nvim-lspconfig` is an approved dependency for maintained language-server definitions.
+- Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs remain the configuration and activation interface.
+- The legacy `require("lspconfig")` interface is not used.
+- LuaLS is the initial server for Stage 09 and must be installed externally.
+- `lazydev.nvim` provides Lua development enhancements but does not manage the LuaLS executable.
+- Python language-server support remains deferred to Stage 13.
+- Mason is not part of the default configuration.
+- Language-specific settings belong in the corresponding language pack, while shared LSP attachment behavior and keymaps remain configuration-owned.
+- The plugin inventory, architecture documentation, roadmap, and dependency documentation must reflect these boundaries.
 
-If native configuration meets the requirements without excessive maintenance, prefer it. If maintaining server configurations becomes disproportionate to the project's goals, reconsider the plugin using the evaluation criteria above.
+The project retains explicit control over which language servers are enabled. Accepting `nvim-lspconfig` does not imply enabling every server definition it provides.
 
 ## Validation
 
-Before accepting a final approach:
+Before Stage 09 can be considered complete:
 
 - Confirm that the configuration loads without errors on the minimum supported Neovim version.
-- Verify that at least one selected language server starts and attaches successfully.
-- Test the required LSP capabilities for the initial scope.
-- Confirm that missing server executables or unavailable servers produce understandable behavior.
-- Run the project's applicable syntax and smoke checks.
-- Document which language servers were actually tested and any known limitations.
+- Verify that the selected LuaLS configuration is available through Neovim's native LSP configuration API.
+- Confirm that `lua-language-server` is available and starts successfully in the intended environment.
+- Verify that LuaLS attaches to a suitable Lua buffer and workspace.
+- Test diagnostics, hover, and the configured buffer-local navigation mappings.
+- Confirm that missing executables or unavailable servers are reported clearly.
+- Run the applicable syntax checks, smoke tests, formatting checks, and `git diff --check`.
+- Record any limitations discovered during live testing.
 
-Do not treat successful Lua syntax validation alone as proof that the LSP workflow functions correctly.
+Successful Lua syntax validation alone is not proof that the LSP workflow functions correctly. A configured server is not considered operational until attachment and required capabilities have been verified.
 
 ## Follow-up
 
-Revisit this ADR during **Stage 09 — LSP and `lazydev`**.
+Implement and validate the Stage 09 workflow using the accepted architecture.
 
-Choose one outcome:
+Update the plugin inventory, architecture documentation, roadmap, and dependency documentation to reflect the decision. Keep Python language support deferred to Stage 13.
 
-- **Accepted:** Adopt `nvim-lspconfig` after demonstrating that its benefits justify the dependency.
-- **Rejected:** Retain native LSP configuration because the plugin does not provide sufficient additional value.
-- **Deferred:** Keep the decision open if the supported server scope or maintenance requirements are not yet clear.
-
-Update this record, the plugin inventory, and dependency documentation to reflect the final decision. Do not add the plugin to the configuration until it has been explicitly approved.
+Revisit this ADR only if the upstream definitions, supported Neovim APIs, or project requirements change enough to justify reconsidering the dependency.

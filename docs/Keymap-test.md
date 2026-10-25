@@ -442,7 +442,7 @@ These results reflect the reported interactive checklist. Keep the detailed test
 The following checks passed on Neovim 0.12.6:
 
 - StyLua formatting, including `stylua --check .`.
-- Syntax validation for all 16 Lua files.
+- Syntax validation for all 16 Lua files at the time of that validation.
 - Stage 06 plugin loading.
 - Stage 07 registration checks for Snacks, fzf-lua, Flash, mini.ai, mini.surround, mini.move, and dial.nvim.
 - Native grep and quickfix.
@@ -455,7 +455,367 @@ These automated results complement, but do not replace, the interactive tests.
 
 ---
 
-## 5. Recording Results
+## 5. Stage 09 — LSP Interactive Verification
+
+Stage 09 integrates Neovim's native Language Server Protocol (LSP) client with LuaLS. The `nvim-lspconfig` plugin supplies maintained server definitions, while Neovim's native LSP APIs configure and activate the server. The `lazydev.nvim` plugin improves LuaLS awareness of Neovim and installed Lua libraries; it does not install or manage the language-server executable.
+
+This section verifies actual server attachment and LSP behavior, not just the existence of configuration entries or mappings.
+
+### 5.1 Test prerequisites
+
+Before testing, confirm the following:
+
+- The `lua-language-server` executable is installed and available on `PATH`.
+- The project configuration loads successfully.
+- The `nvim-lspconfig` and `lazydev.nvim` plugins are installed and loaded.
+- The Lua language pack and native LSP configuration are loaded.
+- The test file is recognized as a Lua buffer.
+- The buffer is in a workspace where LuaLS can determine an appropriate root.
+
+Check the executable from PowerShell:
+
+```powershell
+Get-Command lua-language-server
+```
+
+If PowerShell cannot find the executable, resolve the external installation or `PATH` configuration before investigating Neovim's LSP setup. LuaLS is managed externally through the chosen system package manager, `mise`, or another explicitly selected tool manager. Mason is not part of the default configuration.
+
+### 5.2 Confirm LuaLS attachment
+
+1. Start Neovim with the project configuration:
+
+   ```powershell
+   nvim -u init.lua
+   ```
+
+2. Open a Lua file inside the intended workspace.
+3. Check the buffer's filetype:
+
+   ```vim
+   :set filetype?
+   ```
+
+   The expected value is `lua`.
+
+4. Inspect active LSP clients:
+
+   ```vim
+   :checkhealth vim.lsp
+   ```
+
+   Also inspect the attached clients for the current buffer using the LSP client information available in the installed Neovim version.
+
+5. Confirm that `lua_ls` is attached to the Lua buffer.
+
+6. If it is not attached, inspect the executable, server startup errors, workspace/root detection, and Neovim messages before changing the configuration.
+
+**Expected result:** LuaLS attaches to the Lua buffer when the executable is available, the server configuration is valid, and the workspace requirements are satisfied.
+
+Registering `vim.lsp.config.lua_ls` or enabling `lua_ls` is not sufficient evidence of attachment. Record the actual attachment result separately.
+
+### 5.3 Verify buffer-local mappings
+
+The configuration registers the LSP mappings from the `LspAttach` event. They should be buffer-local and should only be installed for a buffer when an LSP client attaches.
+
+1. Open a Lua buffer where LuaLS successfully attaches.
+2. Inspect the mappings:
+
+   ```vim
+   :verbose nmap gd
+   :verbose nmap gD
+   ```
+
+3. Confirm that the mappings are available in the attached buffer and that their descriptions identify the LSP actions.
+4. Switch to a buffer with no attached LSP client.
+5. Inspect the same mappings there.
+6. Confirm that the LSP-specific mappings have not been added to that buffer merely because the configuration started.
+
+Use `:verbose nmap` to help identify the mapping definition and its source. When testing multiple buffers, verify the current buffer before drawing conclusions.
+
+**Expected result:** `gd` and `gD` are buffer-local mappings registered on LSP attachment. A non-LSP buffer does not receive these mappings simply from configuration startup.
+
+### 5.4 Test definition navigation — `gd`
+
+1. Open a Lua file with a function or variable whose definition can be resolved by LuaLS.
+2. Place the cursor on a reference to that symbol.
+3. Press `gd`.
+4. Confirm that the cursor navigates to the symbol's definition.
+5. Return to the original location and repeat with another resolvable symbol.
+
+**Expected result:** `gd` invokes the LSP definition action and navigates to a definition when LuaLS can resolve one.
+
+A missing definition result does not automatically prove that the mapping is broken. Check that the symbol is resolvable and that the server is attached and responding.
+
+### 5.5 Test declaration navigation — `gD`
+
+1. Open a Lua file containing a symbol with a declaration that LuaLS can resolve.
+2. Place the cursor on a reference to that symbol.
+3. Press `gD`.
+4. Confirm that Neovim navigates to the declaration when the server provides one.
+
+**Expected result:** `gD` invokes the LSP declaration action. Successful navigation depends on the server supporting and returning a declaration location for the tested symbol.
+
+Do not require `gD` to produce a different location from `gd` for every symbol. Some language-server responses may identify the same location, and some symbols may not have a separately resolvable declaration.
+
+### 5.6 Test hover information
+
+1. Open a Lua file with a resolvable function, variable, or library symbol.
+2. Place the cursor over the symbol.
+3. Invoke Neovim's native LSP hover action using the configured or built-in hover command/key sequence.
+4. Confirm that a hover window or equivalent information display appears when LuaLS returns documentation or type information.
+5. Repeat with a symbol from the Neovim API to check that the Lua development environment provides useful information where applicable.
+
+**Expected result:** Hover displays information returned by LuaLS for supported symbols. Missing documentation for an individual symbol is not, by itself, proof of a broken hover workflow.
+
+### 5.7 Test diagnostics
+
+1. Open a disposable Lua file.
+2. Introduce a clear syntax error and save or otherwise trigger an update.
+3. Confirm that LuaLS reports a relevant diagnostic when the file is analyzed.
+4. Correct the syntax error and confirm that the diagnostic clears after the server updates.
+5. Test a Lua-specific diagnostic, such as referencing an undefined global, and confirm that the result matches the configured diagnostics policy.
+6. Check Neovim's diagnostic display and message area for errors that might indicate server startup or communication failures.
+
+The project configures `vim` as a recognized global for Lua diagnostics, disables third-party workspace prompts, and disables LuaLS telemetry. The `vim` global should therefore not be reported as undefined solely because it is a Neovim API global.
+
+**Expected result:** LuaLS publishes diagnostics for relevant issues, and diagnostics update when the underlying issue is corrected. The exact diagnostics depend on the server's analysis and the contents of the test file.
+
+### 5.8 Verify non-LSP buffer isolation
+
+This regression check ensures that the LSP mappings are registered by attachment rather than globally at startup.
+
+1. Start Neovim with the project configuration.
+2. Open a plain text buffer or another buffer that has no attached LSP client.
+3. Inspect `gd` and `gD` in that buffer:
+
+   ```vim
+   :verbose nmap gd
+   :verbose nmap gD
+   ```
+
+4. Confirm that the LSP-specific buffer-local mappings are absent.
+5. Open a Lua buffer where LuaLS attaches.
+6. Confirm that the LSP mappings become available in that buffer.
+7. Switch back to the non-LSP buffer and repeat the check.
+
+**Expected result:** The LSP-specific mappings appear in the buffer where the attachment event registers them, and they do not leak into unrelated buffers.
+
+A global mapping with the same key can still exist independently. The test must distinguish an unrelated global mapping from the configuration's LSP-specific buffer-local mappings.
+
+### 5.9 Automated verification
+
+Automated checks should cover the stable configuration contract where practical:
+
+- The project-local language-pack registry discovers the intended Lua pack.
+- The Lua pack declares `lua_ls` as a supported server.
+- The effective `vim.lsp.config.lua_ls` contains the expected Lua settings.
+- The server configuration has the expected command and filetype, using defaults from `nvim-lspconfig` where appropriate.
+- LSP mappings are installed as buffer-local mappings from the attachment callback.
+- Repeated setup does not create duplicate autocmds or duplicate setup effects.
+- The Stage 09 configuration does not assume that Python language-server support has already been implemented.
+
+Run the standard checks:
+
+```powershell
+stylua --check .
+nvim --headless -u NONE -l scripts/check-syntax.lua
+nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
+git diff --check
+```
+
+These checks do not replace interactive confirmation that LuaLS starts, attaches to the intended buffer, responds to requests, and publishes diagnostics. A registered configuration entry is not proof of a running or attached server.
+
+### 5.10 Recorded result
+
+The following results have been reported from interactive testing:
+
+- LuaLS attached to a Lua buffer.
+- Definition navigation using `gd` worked.
+- Hover information worked.
+- Declaration navigation using `gD` did not work in the tested case.
+
+The declaration result does not establish a general failure if the tested symbol or server response did not support a separate declaration location. Diagnostics and non-LSP buffer isolation still require their own recorded evidence.
+
+| Test | Expected evidence | Result |
+|---|---|---|
+| LuaLS availability | Executable resolves on `PATH` | Unverified until confirmed |
+| LuaLS attachment | `lua_ls` is attached to the intended Lua buffer | Passed — attachment was observed |
+| `gd` definition | Cursor navigates to a resolvable definition | Passed — definition navigation was observed |
+| `gD` declaration | Cursor navigates to a declaration when supported | Not supported in the tested case; investigate with a suitable symbol |
+| Hover | Server-provided hover information appears | Passed — hover was observed |
+| Diagnostics | Relevant diagnostics appear and update | Unverified until tested |
+| Buffer-local mappings | LSP mappings are registered on attachment | Automated configuration checks passed; interactive isolation requires confirmation |
+| Non-LSP buffer isolation | LSP-specific mappings are absent from unrelated buffers | Unverified until tested |
+
+Replace each result only after collecting evidence. If a server feature is unsupported for a particular symbol, record that limitation and test with a suitable symbol before marking the workflow failed.
+
+**Status: Partially verified. Attachment, definition navigation, and hover were observed; declaration behavior, diagnostics, and buffer isolation need further verification.**
+
+---
+
+## 6. Stage 10 — Completion, Snippets, and Automatic Pairing
+
+Stage 10 introduces Blink completion, the `friendly-snippets` collection, Neovim's native snippet API, and automatic bracket and quote pairing through `mini.pairs`.
+
+The implementation follows the project's native-first policy:
+
+- Blink provides completion and its completion interface.
+- `friendly-snippets` provides a collection of snippets.
+- Neovim's native `vim.snippet` API handles snippet expansion and navigation.
+- `mini.pairs` provides automatic pairing, using the existing `mini.nvim` installation.
+- Plugins are loaded eagerly; lazy-loading is not introduced before Stage 16.
+- Language servers remain configured through Neovim's native LSP APIs.
+
+Automated smoke tests verify the configuration contract and the availability of expected APIs. Interactive tests must establish that completion, snippet expansion, and pairing work in an actual editing session.
+
+### 6.1 Test prerequisites
+
+Before testing, confirm that:
+
+- Neovim 0.12 or later is running.
+- The project configuration loads without errors.
+- `blink.cmp` and `friendly-snippets` are installed and loaded.
+- The existing `mini.nvim` installation provides `mini.pairs`.
+- A Lua or other supported source buffer is available for testing.
+- A disposable buffer is used for tests that change text.
+
+Launch Neovim:
+
+```powershell
+nvim -u init.lua
+```
+
+Use the project configuration rather than `nvim --clean` for the primary test. A clean session does not load the project's completion and pairing configuration.
+
+### 6.2 Verify Blink completion
+
+1. Open a source file with a supported filetype.
+2. Enter a partial identifier or expression that can produce completion candidates.
+3. Confirm that the completion menu appears when candidates are available.
+4. Inspect the displayed candidates and verify that they are relevant to the text being entered.
+5. Use Blink's configured default keymap to navigate the candidates.
+6. Accept a candidate.
+7. Confirm that the expected text is inserted and that the surrounding buffer content remains correct.
+8. Repeat with an identifier that can be supplied by the attached language server, if available.
+9. Repeat with a filesystem path or a word already present in the buffer to exercise the other configured completion sources where applicable.
+
+The configured completion sources are:
+
+- LSP
+- Filesystem paths
+- Snippets
+- Words from the current buffer
+
+Not every source must produce candidates in every context. Test each source with a suitable input before recording its behavior.
+
+**Expected result:** Blink displays relevant candidates when a configured source supplies them, allows candidate selection, and inserts the accepted completion correctly.
+
+A loaded completion module or visible menu alone does not establish that accepting a candidate works.
+
+### 6.3 Verify snippet completion and expansion
+
+1. Open a suitable source buffer.
+2. Enter a prefix associated with a snippet supported by `friendly-snippets`.
+3. Confirm that a snippet candidate appears when the current completion context and source provide one.
+4. Select and accept the snippet candidate.
+5. Confirm that the snippet expands into the expected text.
+6. If the snippet contains placeholders or tab stops, test navigation through them using Neovim's native snippet workflow.
+7. Confirm that snippet navigation behaves as expected and that exiting the snippet does not leave the editor in an unexpected state.
+
+Use a known snippet for the selected filetype. If no candidate appears, check the filetype, prefix, completion context, and available snippet definitions before concluding that the integration is broken.
+
+Neovim's native snippet API is responsible for expansion and navigation. Do not assume that `friendly-snippets` itself implements those editing operations.
+
+**Expected result:** A suitable snippet can be discovered through completion, accepted, expanded, and navigated using the configured native snippet workflow.
+
+### 6.4 Verify automatic bracket and quote pairing
+
+Use a disposable buffer to avoid modifying project files unintentionally.
+
+1. Enter Insert mode.
+2. Type an opening parenthesis, `(`.
+3. Confirm that the matching closing parenthesis is inserted as expected.
+4. Repeat with square brackets, curly braces, and a suitable quote character.
+5. Type content between a pair and confirm that the cursor behaves as expected.
+6. Test the closing-character behavior to ensure that typing an existing closing delimiter does not produce unintended duplicate text.
+7. Test backspace behavior inside an automatically inserted pair.
+8. Repeat the relevant checks in another suitable filetype.
+
+The exact behavior can depend on the character, editing context, and `mini.pairs` configuration. Record unexpected behavior rather than assuming every delimiter must behave identically.
+
+**Expected result:** Common opening delimiters and quotes are paired appropriately, and subsequent editing behaves consistently with the configured `mini.pairs` behavior.
+
+### 6.5 Verify interaction with existing mappings
+
+1. Confirm that existing save mappings still work.
+2. Confirm that existing window-focus and split-management mappings remain available.
+3. Confirm that Stage 07 navigation mappings remain functional.
+4. Verify that LSP mappings remain buffer-local and that completion does not prevent their intended use.
+5. Check any completion-key conflict by inspecting the actual mapping and testing the affected workflow.
+6. Confirm that automatic pairing does not interfere with ordinary insertion, deletion, or editing in a disposable buffer.
+
+Do not assume that adding a completion engine necessarily creates a conflict. Establish the actual mapping and behavior before changing either implementation.
+
+### 6.6 Automated verification
+
+Run the standard project checks:
+
+```powershell
+stylua --check .
+nvim --headless -u NONE -l scripts/check-syntax.lua
+nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
+git diff --check
+```
+
+The Stage 10 smoke test checks the following configuration properties:
+
+- The Blink, `friendly-snippets`, and `mini.pairs` modules have loaded.
+- The Blink completion module exposes the expected public APIs.
+- Neovim's native snippet API exposes the expected expansion and navigation functions.
+- `friendly-snippets` is registered as an active installed plugin.
+- `mini.pairs` is loaded and its setup API is available.
+- Representative automatic-pair mappings are registered.
+
+These assertions verify the tested configuration contract. They do not prove that completion candidates are relevant, that accepting a candidate inserts the correct text, that a particular snippet expands correctly, or that pairing behaves correctly in every editing context.
+
+### 6.7 Recorded automated result
+
+The reported smoke-test output includes:
+
+```text
+PASS Stage 10 completion, snippets, and pairing
+PASS nvim-config smoke test on Neovim 0.12.6
+```
+
+The following checks were also reported as passing:
+
+- `stylua --check .`
+- `git diff --check`
+- The complete configured smoke test, including the earlier stage checks.
+
+These results establish that the recorded automated assertions passed on Neovim 0.12.6. Record interactive behavior separately.
+
+### 6.8 Interactive result record
+
+| Test | Evidence required | Result |
+|---|---|---|
+| Blink candidate display | Relevant candidates appear in a suitable completion context | Passed — completion candidates were observed |
+| Candidate navigation | Selection moves between candidates as expected | Passed — candidate navigation was observed |
+| Candidate acceptance | Accepted text is inserted correctly | Passed — acceptance was observed |
+| Snippet discovery | A known snippet is offered for the appropriate context | Unverified until recorded |
+| Snippet expansion | Accepted snippet expands correctly | Unverified until recorded |
+| Snippet navigation | Placeholders and tab stops work where provided | Unverified until recorded |
+| Automatic pairing | Opening delimiters and quotes produce expected pairs | Unverified until recorded |
+| Pair editing behavior | Closing delimiters and backspace behave as expected | Unverified until recorded |
+| Existing mappings | Important earlier workflows remain functional | Unverified until recorded |
+
+Replace a result only after testing the corresponding behavior. If a test is not applicable to the chosen filetype or snippet, record the reason rather than marking it passed.
+
+**Status: Automated validation passed; Blink completion was interactively observed working. Snippet and complete pairing behavior require explicit recorded results.**
+
+---
+
+## 7. Recording Results
 
 Maintain a clear distinction between the test's automated result and its interactive result.
 
@@ -469,12 +829,14 @@ Maintain a clear distinction between the test's automated result and its interac
 | fzf-lua navigation | Mapping and plugin registration checks passed | **Passed** — all four listed checks reported complete |
 | Editing plugins | Plugin and mapping checks passed | **Passed** — mini.ai, mini.surround, mini.move, and dial.nvim reported complete |
 | which-key and regressions | Registration checks passed | **Passed** — keymap discovery and mapping regression checks reported complete |
+| Stage 09 LSP | Configuration and mapping contract checked by automated tests | **Partially verified** — LuaLS attachment, definition navigation, and hover were observed; declaration navigation was not supported in the tested case. Diagnostics and non-LSP buffer isolation require separate recorded results |
+| Stage 10 completion | Module loading, public APIs, snippet registration, and representative pairing mappings checked | **Partially verified** — Blink completion was observed working, including candidate navigation and acceptance. Snippet expansion/navigation and the complete automatic-pairing workflow still require explicit recorded results |
 
 Update this table whenever new evidence is collected. If a workflow fails, retain the failure or unresolved status until a correction has been tested.
 
 ---
 
-## 6. Validation Policy
+## 8. Validation Policy
 
 1. Verify behavior in a real Neovim session before changing the implementation.
 2. Separate syntax validation, automated assertions, and interactive behavior.
@@ -489,7 +851,9 @@ Update this table whenever new evidence is collected. If a workflow fails, retai
 11. Do not declare a stage complete until its acceptance criteria have been satisfied.
 12. Do not treat a successful smoke test as proof of behavior that the test does not exercise.
 
-## 7. Outstanding Follow-ups
+---
+
+## 9. Outstanding Follow-ups
 
 ### Native commenting
 
@@ -508,6 +872,24 @@ Update this table whenever new evidence is collected. If a workflow fails, retai
 4. Run formatting, syntax, smoke, and whitespace checks after documentation or code changes.
 5. Commit only after the final review and validation are complete.
 
+### Stage 09 LSP verification
+
+1. Retain the reported evidence that LuaLS attached to a Lua buffer and that definition navigation and hover worked.
+2. Investigate declaration navigation with a suitable symbol and record whether the server supports the requested declaration result.
+3. Verify diagnostics and confirm that they update when an issue is corrected.
+4. Confirm that LSP-specific mappings remain buffer-local and do not leak into unrelated buffers.
+5. Keep automated configuration checks separate from interactive server-behavior results.
+
+### Stage 10 completion, snippets, and pairing
+
+1. Retain the passing automated smoke-test result for completion, snippets, and pairing.
+2. Verify Blink candidate display, navigation, and acceptance in an interactive session.
+3. Verify a known `friendly-snippets` entry, including expansion and placeholder navigation when supported.
+4. Test `mini.pairs` with common delimiters and quotes, including closing-character and backspace behavior.
+5. Check that important existing mappings continue to work.
+6. Update the interactive results table only after collecting evidence for each workflow.
+7. Do not treat the Stage 10 smoke-test result as proof that every interactive workflow passed.
+
 ### Stage 04 status
 
 The terminal escape workflow is verified. Native commenting remains unresolved.
@@ -518,7 +900,7 @@ Stage 07's interactive checklist and automated checks have been reported as pass
 
 ---
 
-## 8. Quick Validation Reference
+## 10. Quick Validation Reference
 
 Run these commands from the repository root in PowerShell:
 

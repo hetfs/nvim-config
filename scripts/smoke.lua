@@ -437,6 +437,61 @@ local function check_stage09_lsp()
   print("PASS Stage 09 LSP and language-pack configuration")
 end
 
+local function check_stage10_completion()
+  -- Stage 10 configuration modules must be loaded.
+  check(package.loaded["plugins.blink-cmp"] ~= nil, "Blink configuration module was loaded")
+  check(package.loaded["plugins.friendly-snippets"] ~= nil, "friendly-snippets configuration module was loaded")
+  check(package.loaded["plugins.mini-pairs"] ~= nil, "mini.pairs configuration module was loaded")
+
+  -- Verify Blink's public completion API.
+  local blink = package.loaded["blink.cmp"]
+
+  check(type(blink) == "table", "blink.cmp module is available")
+
+  if type(blink) ~= "table" then
+    return
+  end
+
+  check(type(blink.show) == "function", "Blink completion menu API is available")
+  check(type(blink.accept) == "function", "Blink completion acceptance API is available")
+  check(type(blink.snippet_active) == "function", "Blink snippet-state API is available")
+
+  -- Verify Neovim's native snippet expansion and navigation APIs.
+  check(type(vim.snippet) == "table", "native vim.snippet API is available")
+  check(type(vim.snippet.expand) == "function", "native snippet expansion API is available")
+  check(type(vim.snippet.jump) == "function", "native snippet navigation API is available")
+  check(type(vim.snippet.active) == "function", "native snippet activity API is available")
+
+  -- Verify friendly-snippets is registered and active in vim.pack.
+  local friendly_snippets
+
+  for _, plugin in ipairs(vim.pack.get()) do
+    if plugin.spec.name == "friendly-snippets" then
+      friendly_snippets = plugin
+      break
+    end
+  end
+
+  check(type(friendly_snippets) == "table", "friendly-snippets is registered with vim.pack")
+
+  if type(friendly_snippets) == "table" then
+    check_equal(friendly_snippets.active, true, "friendly-snippets active state")
+    check(vim.fn.isdirectory(friendly_snippets.path) == 1, "friendly-snippets installation directory exists")
+  end
+
+  -- Verify mini.pairs is loaded and its Insert-mode mappings exist.
+  local mini_pairs = package.loaded["mini.pairs"]
+
+  check(type(mini_pairs) == "table", "mini.pairs module is available")
+  check(type(mini_pairs.setup) == "function", "mini.pairs setup API is available")
+
+  check_mapping("i", "(", nil, "mini.pairs opening parenthesis")
+  check_mapping("i", "[", nil, "mini.pairs opening bracket")
+  check_mapping("i", "{", nil, "mini.pairs opening brace")
+
+  print("PASS Stage 10 completion, snippets, and pairing")
+end
+
 local function main()
   local root = vim.fn.getcwd()
   local version = vim.version()
@@ -471,6 +526,9 @@ local function main()
 
   -- Stage 09 LSP and language-pack integration.
   check_stage09_lsp()
+
+  -- Stage 10 completion, snippets, and pairing.
+  check_stage10_completion()
 
   -- Leader keys.
   check_equal(vim.g.mapleader, " ", "mapleader")

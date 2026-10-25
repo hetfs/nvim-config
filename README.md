@@ -9,16 +9,22 @@ The project prioritizes a minimal installation, explicit plugin evaluation, repr
 ## Requirements
 
 - Neovim >= 0.12.0
-- [Git](https://git-scm.com/) 'git'
+- [Git](https://git-scm.com/) (`git`)
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for native search workflows
 - [fd](https://github.com/sharkdp/fd) for file and directory discovery
 - [fzf](https://github.com/junegunn/fzf) for the independent `fzf-lua` fuzzy-finding workflow
 
-Stage 08 additionally requires the Tree-sitter CLI, GNU tar, and a compatible C compiler for parser installation and compilation. The Windows setup script verifies the Tree-sitter CLI and configures the WinLibs GCC/G++ toolchain.
+Additional requirements depend on the implemented workflows:
 
-The Windows setup procedure also uses WinGet to install missing dependencies when available. See [Dependencies](docs/dependencies.md) for the dependency policy, setup script, and verification details.
+- **Tree-sitter:** Tree-sitter CLI, GNU tar, and a compatible C compiler for parser installation and compilation.
+- **LSP:** `lua-language-server` for the current Lua language-server integration.
+- **Formatting:** StyLua for formatting checks and maintenance.
 
-Additional tools and providers are introduced only when required by an implemented workflow. Some integrations may have optional runtime or provider requirements.
+The Windows setup procedure uses WinGet to install missing dependencies when available. It verifies the Tree-sitter CLI and configures the WinLibs GCC/G++ toolchain.
+
+See [Dependencies](docs/dependencies.md) for the dependency policy, setup script, and verification details.
+
+Additional tools and providers are introduced only when required by an implemented workflow. Some integrations have optional runtime or provider requirements.
 
 ## Installation
 
@@ -46,20 +52,37 @@ Installation and validation instructions for Linux and macOS have not yet been d
 - **Replaceability:** Retire or replace plugins when evidence justifies the change.
 - **Explicit activation:** Installing a shared plugin repository does not automatically enable every module it provides.
 - **Direct loading:** Keep configuration module loading explicit in `init.lua`.
+- **Behavior-based verification:** Distinguish successful registration and configuration checks from verified interactive behavior.
 
 ## Current Status
 
-The project is progressing through its 17-stage roadmap. Stage 04 remains in progress. Stages 05 and 06 are complete, Stage 07 closeout is in progress, and Stage 08 implementation has been validated while final closeout remains pending.
+The project follows a 17-stage roadmap. Stages 05, 06, 08, and 09 have completed implementation and validation. Stage 07's navigation and editing workflows have been implemented and interactively tested. Stage 10's automated validation has passed, and Blink completion has been verified interactively.
 
-Later stages can be developed and validated independently without treating unfinished earlier work as complete.
+**Stage 04 remains in progress** because native commenting is unresolved. Stage 10 still requires explicit interactive verification of snippet expansion and navigation, automatic pairing behavior, and relevant regressions before its acceptance criteria can be considered fully satisfied.
+
+Later stages may be developed and validated independently without treating unfinished earlier work as complete.
+
+### Stage 01 — First Init
+
+Establishes the initial configuration entry point and the project's foundational startup behavior.
+
+### Stage 02 — Keymaps and Autocommands
+
+Introduces the initial native options, project keymaps, and autocommands, with syntax checks and smoke-test coverage.
+
+### Stage 03 — Modules
+
+Organizes the configuration into focused modules while preserving explicit loading from the root `init.lua`.
+
+The root entry point remains responsible for resolving the configuration root, checking the supported Neovim version, and loading required modules directly.
 
 ### Stage 04 — Native Workflows
 
-**Status: In Progress**
+**Status: In progress — native commenting unresolved**
 
 Stage 04 establishes useful workflows using Neovim's built-in capabilities before introducing plugins.
 
-Current scope includes:
+The scope includes:
 
 - Native search and quickfix integration.
 - Native commenting.
@@ -68,13 +91,19 @@ Current scope includes:
 - A built-in terminal workflow.
 - Regression tests and documentation.
 
-The native commenting workflow remains unresolved. The `gcc` and `gc` mappings have not been verified and implemented as project keymaps in `lua/config/keymaps.lua`. They must not be treated as implemented until their behavior is verified and the mappings are implemented and tested.
+Neovim provides native commenting mappings:
 
-The automated smoke test covers only checks explicitly implemented in `scripts/smoke.lua`. A passing smoke test does not establish that every workflow behaves correctly during interactive use.
+- `gcc` — toggle commenting on the current line.
+- `gc` followed by a motion — toggle commenting over the motion.
+- Visual selection followed by `gc` — toggle commenting on the selection.
 
-The terminal-mode escape mapping and native commenting workflow require interactive verification, as documented in [Native Keymap Testing](docs/Keymap-test.md).
+The current investigation identified a discrepancy: `gcc` worked in `nvim --clean` but left a line unchanged in the configured session. Visual-mode commenting also behaved unexpectedly. The root cause has not been established.
 
-Stage 04 will be complete only after its acceptance criteria, automated checks, documentation, and interactive validation have been satisfied.
+The terminal-mode Escape workflow has been interactively verified. Native commenting remains unresolved and must not be marked functional based solely on mapping registration or a passing smoke-test assertion.
+
+The testing procedure and diagnostic findings are documented in [Native Keymap and Interactive Workflow Testing](docs/Keymap-test.md).
+
+Stage 04 remains open until line and selection commenting have been investigated and verified.
 
 ### Stage 05 — Native Plugin Management and Colorscheme
 
@@ -115,7 +144,7 @@ Additional `mini.nvim` modules are activated explicitly at their assigned stages
 
 ### Stage 07 — Navigation and Editing Workflows
 
-**Status: Implementation validated; closeout in progress**
+**Status: Implementation validated; interactive checks reported passed**
 
 Stage 07 introduces navigation and editing tools while preserving native Neovim capabilities and the explicit plugin admission policy.
 
@@ -137,15 +166,15 @@ Validation has included:
 - Successful plugin registration and loading in the smoke test.
 - Lua syntax and StyLua formatting checks.
 - Regression checks for native search, quickfix, and the required-module failure contract.
-- Interactive checks of the navigation and editing workflows, including Flash mappings, Snacks pickers and Explorer, fzf-lua, selected `mini.nvim` modules, dial.nvim, which-key, and terminal-mode escape behavior.
+- Interactive checks of the navigation and editing workflows, including Flash mappings, Snacks pickers and Explorer, fzf-lua, selected `mini.nvim` modules, dial.nvim, which-key, and existing mapping behavior.
 
-The reported interactive checks passed. Final documentation and staged-diff review remain part of Stage 07 closeout. Stage 07 should not be considered fully closed until that review confirms that the implementation, documentation, and acceptance criteria agree.
+The reported interactive checks passed. Preserve these checks as the regression baseline for future plugin updates and keymap changes.
 
 Plugins introduced before Stage 16 remain eagerly loaded under the current policy. Lazy-loading is not part of Stage 07.
 
 ### Stage 08 — Tree-sitter
 
-**Status: Implementation validated; closeout in progress**
+**Status: Complete**
 
 Stage 08 introduces Tree-sitter-based syntax parsing and highlighting while keeping parser installation separate from plugin installation and configuration.
 
@@ -174,13 +203,91 @@ Validation confirmed:
 - Successful compiler and Tree-sitter CLI verification.
 - Successful parser installation and Lua highlighting.
 - Passing StyLua formatting checks.
-- Passing Lua syntax checks across 17 Lua files.
-
-The final whitespace check and staged-diff review must pass before Stage 08 is formally closed.
+- Passing Lua syntax checks across 17 Lua files at the time of validation.
+- Passing smoke-test and whitespace checks before the stage was committed.
 
 Stage 08 does not automatically enable Tree-sitter-based indentation, folding, LSP, completion, formatting, or linting. These remain separate features for their assigned stages.
 
+### Stage 09 — LSP and lazydev
+
+**Status: Complete**
+
+Stage 09 integrates Neovim's native Language Server Protocol client with LuaLS.
+
+The implementation:
+
+- Installs `nvim-lspconfig` using Neovim's native `vim.pack`.
+- Installs and configures `lazydev.nvim` to improve LuaLS awareness of Neovim and installed Lua libraries.
+- Uses Neovim's native `vim.lsp.config` and `vim.lsp.enable` APIs.
+- Keeps shared LSP attachment behavior in `lua/config/lsp.lua`.
+- Keeps Lua language-server configuration in the project-local language pack `lua/langs/lua.lua`.
+- Discovers language packs from the project's own `lua/langs/` directory.
+- Registers `gd` and `gD` as buffer-local mappings when an LSP client attaches.
+- Uses an externally installed `lua-language-server`; Mason is not part of the default setup.
+- Preserves direct module loading and eager plugin loading.
+
+The LuaLS configuration recognizes `vim` as a global, disables third-party workspace prompts, and disables telemetry.
+
+Automated smoke tests confirmed the LSP and language-pack configuration contract. Interactive testing confirmed that LuaLS attached to a Lua buffer and that definition navigation and hover worked. Declaration navigation did not work in the tested case; this result depends on the symbol and server response and should not be interpreted as proof that all declaration requests fail.
+
+Diagnostics and non-LSP buffer isolation remain separate verification items. The completed Stage 09 implementation and its automated checks are recorded in the project history.
+
+### Stage 10 — Completion and Snippets
+
+**Status: Implementation validated; interactive verification in progress**
+
+Stage 10 introduces completion, snippet integration, and automatic bracket and quote pairing while retaining Neovim's native snippet functionality.
+
+The implementation includes:
+
+- **blink.cmp:** Completion engine installed through Neovim's native `vim.pack`.
+- **friendly-snippets:** Snippet collection registered as a separate plugin.
+- **Native `vim.snippet`:** Snippet expansion and navigation.
+- **mini.pairs:** Automatic bracket and quote pairing, activated from the existing `mini.nvim` installation.
+
+The configured Blink completion sources are:
+
+- LSP
+- Filesystem paths
+- Snippets
+- Words from the current buffer
+
+The implementation uses Blink's Lua fuzzy-search implementation and its default keymap preset. Completion documentation is not shown automatically.
+
+The implementation deliberately avoids LuaSnip, nvim-cmp, and Mason. The native snippet API remains responsible for expansion and navigation, while `friendly-snippets` supplies snippet definitions.
+
+All plugins continue to load eagerly. Lazy-loading remains deferred to Stage 16.
+
+Validation confirmed:
+
+- Successful StyLua formatting checks.
+- Successful `git diff --check`.
+- Passing syntax and configured smoke tests on Neovim 0.12.6.
+- Successful module-loading and API assertions for Blink, native snippets, and `mini.pairs`.
+- Active registration of `friendly-snippets`.
+- Interactive completion behavior, including candidate display, navigation, and acceptance.
+
+Snippet discovery and expansion, placeholder navigation, the complete automatic-pairing workflow, and related mapping regressions still require explicit interactive verification.
+
+A passing smoke test establishes only the assertions it performs. Stage 10 must not be considered fully verified until the remaining interactive checks have been recorded.
+
+### Future Stages
+
+The remaining roadmap is:
+
+- **Stage 11 — Format and Lint:** Formatting and linting integrations.
+- **Stage 12 — Git, Root, and Sessions:** Git workflows, project-root behavior, and session management.
+- **Stage 13 — Language Packs:** Additional language-specific configuration.
+- **Stage 14 — Debugging:** Debug Adapter Protocol integration.
+- **Stage 15 — UI Polish:** Dashboard and other deferred interface enhancements.
+- **Stage 16 — Performance:** Evaluate lazy-loading and performance improvements with validation against the minimum supported Neovim version.
+- **Stage 17 — Hardening:** Final reliability, testing, and CI improvements.
+
+Features are introduced only when their assigned stages are reached and their dependencies and acceptance criteria have been evaluated.
+
 ## Repository Structure
+
+The repository's configuration and plugin modules are organized by responsibility.
 
 ```text
 nvim-config/
@@ -193,12 +300,24 @@ nvim-config/
 ├── docs/
 │   ├── win-install.md
 │   ├── dependencies.md
-│   └── Keymap-test.md
+│   ├── Keymap-test.md
+│   ├── architecture.md
+│   ├── roadmap.md
+│   ├── plugin-inventory.md
+│   ├── plugin-admission-policy.md
+│   ├── dependencies.md
+│   ├── keymaps.md
+│   ├── lsp.md
+│   └── decisions/
 ├── lua/
 │   ├── config/
 │   │   ├── options.lua
 │   │   ├── keymaps.lua
-│   │   └── autocmds.lua
+│   │   ├── autocmds.lua
+│   │   └── lsp.lua
+│   ├── langs/
+│   │   ├── init.lua
+│   │   └── lua.lua
 │   └── plugins/
 │       ├── colorscheme.lua
 │       ├── icons.lua
@@ -210,7 +329,12 @@ nvim-config/
 │       ├── mini-surround.lua
 │       ├── mini-move.lua
 │       ├── dial.lua
-│       └── treesitter.lua
+│       ├── treesitter.lua
+│       ├── lsp.lua
+│       ├── lazydev.lua
+│       ├── blink-cmp.lua
+│       ├── friendly-snippets.lua
+│       └── mini-pairs.lua
 └── scripts/
     ├── check-syntax.lua
     ├── smoke.lua
@@ -218,11 +342,11 @@ nvim-config/
     └── winsetup.ps1
 ```
 
-This tree represents the expected project layout for the current implementation. Confirm the actual repository contents when reviewing or changing files; future stages may add modules, documentation, and tests.
+This tree illustrates the project's organization. Some documentation files and decision records may differ from the current checkout, and future stages may add more modules, documentation, and tests. Use `git status --short` and the actual repository contents when reviewing the project.
 
 ## Validation
 
-Run the following commands from the repository root. The examples use PowerShell, matching the currently documented Windows setup.
+Run the following commands from the repository root. The examples use PowerShell, matching the documented Windows setup.
 
 ### Check Lua syntax
 
@@ -240,7 +364,9 @@ nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 
 The smoke test verifies the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, and the required-module failure contract. It also checks plugin registration and workflow behavior explicitly implemented in the test suite.
 
-A passing smoke test does not replace interactive testing.
+The Stage 10 assertions cover completion, snippets, and pairing configuration. They do not replace interactive tests of actual editing behavior.
+
+A passing smoke test does not establish that every workflow behaves correctly during interactive use.
 
 ### Verify the colorscheme
 
@@ -268,13 +394,25 @@ tar --version
 $env:CC
 ```
 
-Then open a Lua file in Neovim and inspect a syntax token using:
+Then open a Lua file in Neovim and inspect a syntax token:
 
 ```vim
 :Inspect
 ```
 
-Tree-sitter highlighting must be verified in a buffer with the Lua parser installed. The external dependency checks alone do not prove that parser installation, highlighting, or queries work correctly.
+Tree-sitter highlighting must be verified in a buffer with the Lua parser installed. External dependency checks alone do not prove that parser installation, highlighting, or queries work correctly.
+
+### Verify LSP
+
+Confirm that the external Lua language server is available:
+
+```powershell
+Get-Command lua-language-server
+```
+
+Open a Lua file using the project configuration and verify that LuaLS attaches. Test definition navigation, hover, diagnostics, and buffer-local mapping behavior as described in [Native Keymap and Interactive Workflow Testing](docs/Keymap-test.md).
+
+A registered LSP configuration is not proof that the server started or attached successfully.
 
 ### Check formatting
 
@@ -312,13 +450,13 @@ Run syntax, smoke, formatting, and diff checks after changes. Test new interacti
 1. First Init — Complete
 2. Keymaps and Autocommands — Complete
 3. Modules — Complete
-4. Native Workflows — **In Progress**
+4. Native Workflows — **In progress**
 5. `vim.pack` and Catppuccin — Complete
 6. which-key and `mini.icons` — Complete
-7. Navigation and Editing Workflows — **Closeout in progress**
-8. Tree-sitter — **Implementation validated; closeout in progress**
-9. LSP
-10. Completion and Snippets
+7. Navigation and Editing Workflows — **Implementation validated**
+8. Tree-sitter — Complete
+9. LSP and lazydev — Complete
+10. Completion and Snippets — **Interactive verification in progress**
 11. Format and Lint
 12. Git, Root, and Sessions
 13. Language Packs
@@ -327,7 +465,7 @@ Run syntax, smoke, formatting, and diff checks after changes. Test new interacti
 16. Performance
 17. Hardening
 
-Stage status reflects the current implementation and validation evidence. A stage must satisfy its acceptance criteria before it is marked complete. Independent later stages may be developed while an earlier stage remains in progress, provided architecture and regression checks are preserved.
+Stage status reflects implementation and available validation evidence. A stage must satisfy its acceptance criteria before it is marked complete. Independent later stages may be developed while an earlier stage remains in progress, provided architecture and regression checks are preserved.
 
 ## Plugin Policy
 

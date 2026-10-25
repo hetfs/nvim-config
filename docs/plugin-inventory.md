@@ -8,7 +8,7 @@ The project follows a native-first approach: Neovim's built-in capabilities take
 
 > **Approval is not installation.**
 
-A plugin listed in this inventory is not automatically approved for installation. Its presence in a stage plan records an intended evaluation or implementation, not proof that it is installed, configured, or validated.
+A plugin listed in this inventory is not automatically approved for installation. A plugin's admission status records an architectural decision, not proof that it is installed, configured, or validated.
 
 ## Plugin Admission Policy
 
@@ -31,11 +31,12 @@ A plugin should be installed only after its role and stage have been explicitly 
 |---|---|
 | Implemented | Configuration is present in the repository; runtime behavior must still be validated separately |
 | Planned | Assigned to a future or active roadmap stage but not confirmed as installed |
+| Accepted | Explicitly approved for the stated purpose and stage; implementation and validation may still be outstanding |
 | Deferred | Deliberately postponed pending a later stage or a documented decision |
 | Candidate | Under consideration; not approved for installation |
 | Rejected | Evaluated and not selected for the current architecture |
 
-Do not use *Implemented* as a synonym for *Fully validated* or *Stage complete*.
+Do not use *Implemented* as a synonym for *Fully validated* or *Stage complete*. An *Accepted* decision does not establish that implementation has started or succeeded.
 
 ## Core Policy
 
@@ -72,7 +73,7 @@ The project does not adopt Mason as its default external-tool installation mecha
 
 ## Stage-Based Inventory
 
-The following inventory records the project's established selections and roadmap direction. Confirm actual installation and configuration against the repository before treating any item as fully implemented.
+The following inventory records the project's established selections and roadmap direction. Confirm actual installation and configuration against the repository before treating any item as implemented or validated.
 
 ### Stage 05 — Plugin Management and Colorscheme
 
@@ -124,18 +125,24 @@ The plugin and its parsers are separate concerns. Installing the plugin alone do
 
 ### Stage 09 — LSP and Lua Development
 
-| Plugin or capability | Intended role | Policy |
+| Component | Decision | Responsibility |
 |---|---|---|
-| Native Neovim LSP APIs | Configure and enable language servers | Preferred foundation |
-| lazydev.nvim | Lua development support | Selected for Stage 09 evaluation and integration |
-| lua-language-server (LuaLS) | Language server for Lua | External executable |
-| nvim-lspconfig | Additional language-server configurations | Deferred; requires a separate decision |
+| Neovim native LSP | Selected | Configure and activate language servers |
+| `nvim-lspconfig` | Accepted for Stage 09 | Supply maintained server definitions |
+| `lazydev.nvim` | Selected | Improve LuaLS awareness of Neovim and Lua libraries |
+| LuaLS (`lua-language-server`) | External dependency | Provide Lua diagnostics and language features |
+| Python language tooling | Deferred to Stage 13 | Add Python support in its designated stage |
+| Mason | Not selected | External tools remain externally managed |
 
-Use Neovim's built-in `vim.lsp.config()` and `vim.lsp.enable()` APIs as the initial architecture.
+Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs remain the configuration and activation interface. `nvim-lspconfig` supplies maintained server definitions; the project does not use its legacy `require("lspconfig")` interface.
 
-Do not add `nvim-lspconfig` automatically. Evaluate whether it supplies configurations or compatibility that the project actually needs. Record the decision before changing the plugin inventory.
+The Lua language pack should declare Lua-specific settings without unnecessarily duplicating upstream server defaults. LuaLS must be installed separately and available on `PATH`. `lazydev.nvim` enhances Lua development support but does not install or manage the server executable.
+
+Python language-server support remains deferred to Stage 13. Acceptance of `nvim-lspconfig` does not authorize implementing Python support ahead of that stage.
 
 Stage 09 does not include completion, snippets, formatting, linting, Mason, or debugging.
+
+**Validation boundary:** Acceptance of these components records the intended architecture. It does not prove that the plugin has been installed, the server has started, or LSP attachment and capabilities have been verified. Stage 09 remains in progress until its implementation and validation criteria pass.
 
 ### Stage 10 — Completion and Snippets
 
@@ -176,7 +183,7 @@ This stage adds selected language-specific support after the foundational LSP, c
 
 Potential components include:
 
-- Language servers.
+- Additional language servers, including Python tooling.
 - Tree-sitter parsers.
 - Formatters and linters.
 - Debug adapters.
@@ -226,12 +233,13 @@ The following decisions must remain explicit rather than being inferred from ano
 
 | Candidate | Current direction | Admission condition |
 |---|---|---|
-| nvim-lspconfig | Deferred | Reconsider after evaluating native LSP configuration needs |
 | Mason | Not selected as the default tool manager | Reconsider only if a documented requirement outweighs the separate-tool-management policy |
 | nvim-web-devicons | Not selected | Do not add without a concrete unmet requirement |
 | project.nvim | Deferred for separate evaluation | Establish a specific project-root behavior that is not adequately served by existing configuration |
 | zen-mode.nvim | Deferred for separate evaluation | Establish a clear use case and compare with available native or existing-plugin workflows |
 | Additional Markdown or PDF workflow plugins | Future candidates | Evaluate when the relevant workflow stage and requirements are defined |
+
+`nvim-lspconfig` is not listed as a deferred candidate because its admission has been accepted for Stage 09. Its implementation and runtime validation remain separate milestones.
 
 A deferred candidate is not a rejected plugin in all circumstances. It is simply not admitted into the current implementation without further evaluation.
 

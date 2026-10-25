@@ -95,6 +95,11 @@ require("plugins.treesitter")
 require("plugins.lsp")
 require("plugins.lazydev")
 
+-- Completion and snippets.
+require("plugins.blink-cmp")
+require("plugins.friendly-snippets")
+require("plugins.mini-pairs")
+
 -- General configuration and native LSP behavior.
 require("config.keymaps")
 require("config.lsp")

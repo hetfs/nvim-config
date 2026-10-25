@@ -30,7 +30,7 @@ Stage 09 is the next major integration stage after the preceding stages have bee
 | 06 | which-key and mini.icons | Improve mapping discovery and icon integration |
 | 07 | Snacks Navigation | Establish navigation tools and selected Mini modules |
 | 08 | Treesitter | Integrate Tree-sitter-based syntax parsing and highlighting |
-| 09 | LSP and lazydev | Establish native LSP configuration and Lua development support |
+| 09 | LSP and lazydev | Establish native LSP configuration, a project-local language-pack registry, and Lua development support |
 | 10 | Completion and Snippets | Add completion and snippet workflows |
 | 11 | Format and Lint | Integrate formatting and linting |
 | 12 | Git, Root, and Sessions | Add Git integration, project-root behavior, and session workflows |
@@ -186,33 +186,44 @@ Scope:
 
 ### Stage 09 — LSP and lazydev
 
-**Objective:** Establish native Language Server Protocol configuration and improve Lua development support.
+**Objective:** Establish a project-local language-pack registry, configure and activate language servers through Neovim's native LSP APIs, and improve Lua development support.
 
-Scope:
+**Scope:**
 
-- Configure native LSP behavior using Neovim's built-in `vim.lsp.config()` and `vim.lsp.enable()` APIs.
-- Add `lua/config/lsp.lua` for shared LSP behavior.
-- Add `lazydev` for Lua development support.
-- Keep LSP-related keymaps centralized in `lua/config/keymaps.lua`.
-- Attach buffer-local mappings through the appropriate LSP lifecycle event.
-- Document LuaLS and other language servers as external executables.
-- Evaluate `nvim-lspconfig` separately; do not install it merely because LSP is being introduced.
+1. Add `nvim-lspconfig` through Neovim's native `vim.pack` plugin manager. Use it to supply maintained language-server definitions; do not use its legacy `require("lspconfig")` configuration interface.
+2. Keep `lazydev.nvim` in its dedicated `lua/plugins/lazydev.lua` module.
+3. Introduce `lua/langs/init.lua` as the project-local language-pack registry. Restrict pack discovery to this repository's own `lua/langs/` directory and make discovery deterministic.
+4. Add `lua/langs/lua.lua` with the existing LuaLS-specific settings:
+   - LuaJIT runtime.
+   - `vim` as a recognized global for diagnostics.
+   - `workspace.checkThirdParty = false`.
+   - Disabled telemetry.
+5. Configure and activate language servers using Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs. Use the server definitions provided by `nvim-lspconfig` rather than unnecessarily duplicating their defaults.
+6. Preserve the `LspAttach` lifecycle behavior and the buffer-local `gd` and `gD` mappings, with mapping definitions remaining in `lua/config/keymaps.lua`.
+7. Test the registry and configuration contract with automated checks, then verify actual LuaLS attachment interactively, including diagnostics and applicable language features.
+
+LuaLS (`lua-language-server`) remains an external executable and must be available on `PATH`. Its installation and updates are managed through the system package manager, `mise`, or another explicitly chosen external tool manager. `lazydev.nvim` does not install or manage LuaLS. Mason is not part of the default configuration.
 
 **Completion criteria:**
 
-- Native LSP configuration is explicit and compatible with the minimum supported Neovim version.
-- LSP mappings have meaningful descriptions and appropriate buffer scope.
-- `lazydev` is configured without duplicating language-server installation responsibilities.
-- Headless checks validate the configuration contract without requiring a running language server.
-- Live LSP checks are documented and performed where applicable.
+- `nvim-lspconfig` and `lazydev.nvim` are configured in their designated plugin modules.
+- The registry discovers only project-local language packs and handles server status and activation predictably.
+- The Lua language pack preserves the approved LuaLS settings.
+- Server configuration and activation use Neovim's native LSP APIs.
+- The `LspAttach` autocmd and buffer-local `gd` and `gD` mappings work as intended.
+- Automated checks validate language-pack discovery, server configuration, and registry behavior without requiring a live language-server process.
+- Interactive verification confirms that LuaLS actually attaches to Lua buffers and provides the expected features.
+- Syntax and formatting checks pass, and the documentation reflects the implementation.
 
-**Out of scope:**
+**Explicitly out of scope:**
 
 - Completion and snippets.
 - Formatting and linting.
-- Mason.
-- Debugging.
-- Premature lazy-loading.
+- Mason or Mason-based tool installation.
+- Debugging and DAP integration.
+- Lazy-loading changes or performance optimization.
+
+These capabilities remain assigned to their designated later stages. Stage 09 must not expand to absorb them.
 
 ### Stage 10 — Completion and Snippets
 
