@@ -4,6 +4,10 @@ This document defines the external dependencies used by `nvim-config` and descri
 
 The project follows a native-first approach: Neovim provides the core editing functionality, while external executables and provider packages are installed separately from the Neovim configuration.
 
+> **Approval is not installation.**
+
+A plugin may use an external executable, but installing the plugin does not automatically install that executable. Plugin installation, external tool installation, language-server installation, and parser installation are separate responsibilities.
+
 ## Platform Support
 
 The dependency setup script currently supports **Windows only**.
@@ -54,15 +58,17 @@ Stage 07 adds external command-line tools that support file discovery, content s
 |---|---|---|
 | `fd` | `sharkdp.fd` | Fast file and directory discovery. |
 | `fzf` | `junegunn.fzf` | Command-line fuzzy finder used by the `fzf-lua` navigation plugin. |
-| `rg` (ripgrep) | `BurntSushi.ripgrep.MSVC` | Fast recursive content search used by native search workflows. |
+| `rg` (ripgrep) | `BurntSushi.ripgrep.MSVC` | Fast recursive content search used by compatible search workflows. |
 
 These are **external executables**, not Neovim plugins. The corresponding Neovim plugins are configured separately through the project's native `vim.pack` workflow.
 
 #### `fd`
 
-`fd` provides fast file and directory discovery. It supports file-finding workflows that can benefit from a dedicated file-search executable, including navigation workflows that use Snacks and other compatible tools.
+`fd` provides fast file and directory discovery. It supports file-finding workflows that can benefit from a dedicated file-search executable, including compatible navigation workflows using Snacks and other tools.
 
 The Windows setup script checks for the executable and attempts to install it through WinGet if it is missing. After installation, the executable must be available to the current shell environment.
+
+The presence of `fd` does not prove that every picker or file-navigation workflow is configured to use it.
 
 #### `fzf`
 
@@ -74,11 +80,13 @@ The `fzf-lua` mappings provide an independent set of configured file-finding, co
 
 #### Ripgrep (`rg`)
 
-Ripgrep is a fast recursive text-search utility. It searches file contents and supports the content-search workflows used by compatible Neovim pickers and search interfaces.
+Ripgrep is a fast recursive text-search utility. It searches file contents and supports content-search workflows used by compatible Neovim pickers and search interfaces.
 
 The Windows setup script checks for `rg.exe` or `rg` on the current `PATH`. If neither command is available, it attempts to install ripgrep through WinGet using the package identifier `BurntSushi.ripgrep.MSVC`. It then verifies the executable by checking its version output.
 
-Ripgrep provides the search engine for content-search workflows; it is not a file-discovery or fuzzy-finding replacement for `fd` or `fzf`. The tools have distinct responsibilities:
+Ripgrep provides the search engine for content-search workflows; it is not a file-discovery or fuzzy-finding replacement for `fd` or `fzf`.
+
+The tools have distinct responsibilities:
 
 - **`fd`** discovers files and directories.
 - **`rg` (ripgrep)** searches text inside files.
@@ -165,7 +173,68 @@ Python language-server dependencies remain outside Stage 09 and are deferred to 
 
 The Windows dependency setup script does not install or manage LuaLS. Its availability and actual attachment to Lua buffers must be verified separately from the script's dependency checks.
 
-### 5. Neovim Providers
+### 5. Stage 12 — Git, Project Navigation, and Sessions
+
+Stage 12 adds Git integration, project root detection and navigation, and explicit session management.
+
+These workflows combine Neovim plugins, native Neovim APIs, Git, and an optional external terminal application. They do not all require separate external executables.
+
+| Component | Type | External requirement | Purpose |
+|---|---|---|---|
+| Gitsigns | Neovim plugin | Git and a Git repository for Git-based workflows | Displays Git change indicators and provides hunk operations, blame, and diff workflows. |
+| `project.nvim` | Neovim plugin | Git metadata for Git-based root detection; other root markers may also apply | Detects project roots and supports project navigation. |
+| `mini.sessions` | Module from the shared `mini.nvim` plugin | No additional executable required by the documented session workflow | Saves, restores, and deletes sessions explicitly. |
+| Lazygit | Optional external executable | `lazygit` available on `PATH` to launch it | Provides a terminal-based Git interface when installed. |
+
+#### Git and Gitsigns
+
+Git is a core dependency. Gitsigns uses Git repository information to display changes and provide Git-related buffer operations.
+
+The Gitsigns plugin does not install Git. If Git is unavailable or a buffer is not associated with a suitable repository, Git-based functionality may not be available as expected.
+
+The current configuration registers buffer-local hunk mappings through the central keymap module:
+
+- `<leader>ghs` — stage hunk.
+- `<leader>ghr` — reset hunk.
+- `<leader>ghp` — preview hunk.
+- `<leader>ghb` — blame line.
+- `<leader>ghd` — diff buffer.
+
+These mappings require Gitsigns to be installed and attached to the buffer. The presence of Git and Gitsigns alone does not prove that each interactive workflow works correctly.
+
+#### Project root detection
+
+`project.nvim` provides project root detection and navigation. It can use Git-related markers and other configured root indicators to identify projects.
+
+The plugin does not install Git or other external tools. Git-based root detection relies on the repository metadata and Git availability required by the chosen detection workflow.
+
+Project root detection is distinct from automatic working-directory changes. The current configuration disables automatic directory changes, so root detection should not be interpreted as a guarantee that Neovim's working directory changes whenever a project is detected.
+
+The plugin's root detection and navigation behavior must be verified inside Neovim.
+
+#### Session management
+
+Session management uses `mini.sessions`, which is a module of the existing shared `mini.nvim` installation. It does not require a second `mini.nvim` installation or an additional command-line executable for the documented workflow.
+
+The current configuration uses explicit save, restore, and delete operations:
+
+- `<leader>qw` — select a session and save it.
+- `<leader>qs` — select a session and restore it.
+- `<leader>qd` — select a session and delete it.
+
+Automatic session reads and writes are disabled. Session management is separate from Git operations and project root detection: a saved session records editor state according to `mini.sessions` behavior, not a promise that external tools or project dependencies are installed.
+
+#### Optional Lazygit
+
+Lazygit is an optional external terminal application, not a Neovim plugin and not a core dependency.
+
+The Windows dependency setup script does not install or verify Lazygit unless that behavior is explicitly added to the script in a future change. Users who want to launch Lazygit from Neovim must install it separately and make the `lazygit` executable available on `PATH`.
+
+Any Neovim mapping that launches Lazygit must check whether the executable is available before attempting to run it. If it is missing, the configuration should show a clear warning rather than failing silently.
+
+The presence of Git does not imply that Lazygit is installed. Likewise, installing Gitsigns or `project.nvim` does not install Lazygit.
+
+### 6. Neovim Providers
 
 The script installs or verifies the Node.js and Python providers.
 
@@ -192,7 +261,7 @@ The script checks whether pip is available and attempts to bootstrap it with `en
 
 The provider package is installed into the selected Python interpreter's environment. The script does not write provider paths into Neovim configuration files or persist provider-related environment variables.
 
-### 6. Development Tools
+### 7. Development Tools
 
 | Tool | WinGet package identifier | Purpose |
 |---|---|---|
@@ -226,6 +295,8 @@ The script:
 
 The script reuses existing installations when they satisfy its checks and installs missing dependencies as needed. It continues with independent setup steps when an individual step fails, then summarizes failures at the end.
 
+**The script's current scope does not include installing LuaLS or Lazygit.** Those tools must be managed separately if required. Neovim plugins, language servers, and Tree-sitter parsers are also outside the Windows script's installation responsibilities unless explicitly implemented there.
+
 A successful exit code indicates that the script's dependency and provider checks completed successfully. It does **not** prove that every Neovim feature, parser, or interactive workflow works correctly.
 
 ### Recommended verification commands
@@ -257,6 +328,8 @@ Parser installation and actual highlighting should be checked independently insi
 
 For Stage 09, also verify that `lua-language-server` is available on `PATH`, that the Lua language server attaches to Lua buffers, and that diagnostics and other configured LSP features work as expected. Merely having the executable or a registered LSP configuration does not prove that the server has attached successfully.
 
+For Stage 12, verify Git hunk workflows in a Git repository, project root detection and navigation, and explicit session save/restore/delete behavior. If Lazygit integration is enabled, verify both the installed-executable path and the missing-executable warning.
+
 ## Environment and Side Effects
 
 The setup script is designed to avoid changing the Neovim configuration itself.
@@ -281,6 +354,8 @@ Perl and Ruby are not installed by the Windows dependency setup script. The curr
 
 They should not be treated as dependencies unless a future project decision introduces a feature that requires them.
 
+Lazygit is also optional. It is an external terminal application and is not installed by Gitsigns, `project.nvim`, or the Windows dependency setup script.
+
 ## Failure Handling
 
 The script uses explicit checks and reports failures for required setup steps.
@@ -304,6 +379,8 @@ When setup fails, resolve the reported issue and rerun:
 .\scripts\win-depend.ps1
 ```
 
+External tools outside the script's scope, such as LuaLS and optional Lazygit, must be installed and verified separately.
+
 ## Dependency Policy
 
 - Prefer Neovim's built-in functionality where it meets project requirements.
@@ -316,4 +393,7 @@ When setup fails, resolve the reported issue and rerun:
 - Document navigation and search tools according to their actual workflow dependencies: `fd` for file discovery, `rg` for content search, and `fzf` for fuzzy selection.
 - Document Tree-sitter's compiler, CLI, and archive-extraction prerequisites separately from Neovim parser and highlighting configuration.
 - Keep LSP server executables externally managed; `nvim-lspconfig` supplies server definitions, and `lazydev.nvim` supplies Lua development context rather than installing or managing LuaLS.
+- Keep project root detection distinct from automatic working-directory changes.
+- Treat Git as a core external dependency for Git-based workflows, not as something Gitsigns installs.
+- Keep Lazygit optional and externally managed. Do not imply that Git or any Neovim plugin installs it.
 - Update this document when the setup script's requirements, package identifiers, or verification behavior change.

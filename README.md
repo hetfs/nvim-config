@@ -9,18 +9,19 @@ The project prioritizes a minimal installation, explicit plugin evaluation, repr
 ## Requirements
 
 - [Neovim](https://neovim.io/doc/install/) 0.12.0 or later.
-- [Git](https://git-scm.com/)
-- [ripgrep](https://github.com/BurntSushi/ripgrep) `rg` for native search workflows.
+- [Git](https://git-scm.com/).
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for content-search workflows.
 - [fd](https://github.com/sharkdp/fd) for file and directory discovery.
 - [fzf](https://github.com/junegunn/fzf) for the independent `fzf-lua` fuzzy-finding workflow.
 
 Additional requirements depend on the implemented workflows:
 
-- **Tree-sitter:** Tree-sitter CLI, GNU tar, and a compatible C compiler for parser installation and compilation.
+- **Tree-sitter:** Tree-sitter CLI, GNU tar, cURL, and a compatible C compiler for parser-related installation and compilation workflows.
 - **LSP:** `lua-language-server` for the current Lua language-server integration.
-- **Formatting:** StyLua for Lua formatting and repository formatting checks. Conform provides the Neovim-side formatting interface; it does not install formatter executables.
+- **Formatting:** [StyLua](https://github.com/JohnnyMorganz/StyLua) for Lua formatting and repository formatting checks. Conform provides the Neovim-side formatting interface; it does not install formatter executables.
+- **Optional Git interface:** [Lazygit](https://github.com/jesseduffield/lazygit), if you choose to use the external terminal application. It is not a core dependency.
 
-On Windows, the dependency setup procedure uses WinGet to install missing dependencies when available, verifies the Tree-sitter CLI, and configures the WinLibs GCC/G++ toolchain.
+On Windows, `scripts/win-depend.ps1` uses WinGet to install and verify the dependencies within its defined scope. It checks the Tree-sitter CLI and configures the WinLibs GCC/G++ toolchain for the current PowerShell process. It does not install every external tool mentioned in this document; LuaLS and optional Lazygit must be managed separately.
 
 See [Dependencies](docs/dependencies.md) for dependency policy, setup, and verification details.
 
@@ -48,6 +49,8 @@ Installation and validation instructions for Linux and macOS have not yet been d
 - **Replaceability:** Retire or replace plugins when evidence justifies the change.
 - **Explicit activation:** Installing a shared plugin repository does not automatically enable every module it provides.
 - **Direct loading:** Keep configuration module loading explicit in the root `init.lua`.
+- **External dependency separation:** Plugins do not automatically install the external executables or language servers they use.
+- **Explicit state changes:** Keep session operations deliberate and distinguish project root detection from automatic working-directory changes.
 - **Behavior-based verification:** Distinguish successful registration and configuration checks from verified interactive behavior.
 
 ## Current status
@@ -56,7 +59,9 @@ The project follows a 17-stage roadmap. Stages 05, 06, 08, 09, and 11 have compl
 
 **Stage 04 remains in progress** because native commenting is unresolved. **Stage 10's interactive verification remains in progress:** completion behavior has been tested, but snippet discovery and expansion, placeholder navigation, the complete automatic-pairing workflow, and related mapping regressions still require explicit verification.
 
-Later stages may be developed and validated independently without treating unfinished earlier work as complete.
+**Stage 12 is in progress.** Gitsigns, `project.nvim`, and `mini.sessions` are implemented. Interactive checks for Git workflows, project navigation, and session save/restore have passed, as have the Stage 12 smoke-test checks on Neovim 0.12.6. Documentation alignment, dependency and keymap references, and remaining closeout requirements are still outstanding.
+
+Later stages may be developed and validated independently without treating unfinished earlier stages as complete.
 
 ### Stage summary
 
@@ -73,7 +78,7 @@ Later stages may be developed and validated independently without treating unfin
 | 09 | LSP and lazydev | Complete |
 | 10 | Completion and Snippets | Interactive verification in progress |
 | 11 | Manual Formatting | Complete |
-| 12 | Git, Root, and Sessions | Planned |
+| 12 | Git, Root, and Sessions | In progress — implementation and initial validation passed; closeout outstanding |
 | 13 | Language Packs | Planned |
 | 14 | Debugging | Planned |
 | 15 | UI Polish | Planned |
@@ -82,7 +87,7 @@ Later stages may be developed and validated independently without treating unfin
 
 Stage status reflects implementation and available validation evidence. A stage must satisfy its acceptance criteria before it is marked complete.
 
-### Stage 04 — Native Workflows
+## Stage 04 — Native Workflows
 
 Stage 04 prioritizes Neovim's built-in capabilities before introducing plugins. Its scope includes native search and quickfix integration, commenting, a built-in statusline, a diagnostics baseline, a terminal workflow, regression tests, and documentation.
 
@@ -96,7 +101,7 @@ Testing found that `gcc` worked in `nvim --clean` but left a line unchanged in t
 
 See [Native Keymap and Interactive Workflow Testing](docs/Keymap-test.md) for the testing procedure and diagnostic findings.
 
-### Stage 07 — Navigation and Editing Workflows
+## Stage 07 — Navigation and Editing Workflows
 
 The implemented workflow includes:
 
@@ -107,27 +112,29 @@ The implemented workflow includes:
 - **dial.nvim:** Increment and decrement operations for supported values and selections.
 - **which-key.nvim:** Keymap discovery.
 
-Snacks Picker and `fzf-lua` configuration and mappings remain independent. The Snacks dashboard is deferred to Stage 15. External navigation dependencies include `fd` and `fzf`; on Windows, their installation and verification are handled by `scripts/win-depend.ps1`.
+Snacks Picker and `fzf-lua` configuration and mappings remain independent. The Snacks dashboard is deferred to Stage 15. External navigation dependencies include `fd`, `fzf`, and `rg` for the workflows that use them. On Windows, the installation and verification of these tools are handled by `scripts/win-depend.ps1`.
 
 The reported interactive checks passed. Plugins introduced before Stage 16 remain eagerly loaded; lazy-loading is not part of Stage 07.
 
-### Stage 08 — Tree-sitter
+## Stage 08 — Tree-sitter
 
 Stage 08 installs `nvim-treesitter` through `vim.pack`, configures parser and query storage under Neovim's data directory, and enables native Tree-sitter highlighting for Lua buffers through `vim.treesitter.start()` and an explicit `FileType` autocommand.
 
-On Windows, parser installation requires GNU tar, a compatible GCC/G++ toolchain, the Tree-sitter CLI (version 0.26.1 or later under the current setup policy), and cURL. The setup script changes `PATH` and `CC` for the current PowerShell process and its child processes; those changes are not persisted as Windows environment settings.
+On Windows, parser-related workflows require GNU tar, a compatible GCC/G++ toolchain, the Tree-sitter CLI (version 0.26.1 or later under the current setup policy), and cURL. The setup script changes `PATH` and `CC` for the current PowerShell process and its child processes; those changes are not persisted as Windows environment settings.
 
 Tree-sitter highlighting does not automatically enable Tree-sitter indentation, folding, LSP, completion, formatting, or linting.
 
-### Stage 09 — LSP and lazydev
+## Stage 09 — LSP and lazydev
 
-Stage 09 integrates Neovim's native LSP client with LuaLS. It uses `nvim-lspconfig` and `lazydev.nvim`, while configuration and activation use Neovim's native `vim.lsp.config` and `vim.lsp.enable` APIs.
+Stage 09 integrates Neovim's native LSP client with LuaLS. It uses `nvim-lspconfig` and `lazydev.nvim`, while configuration and activation use Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs.
 
 Shared attachment behavior lives in `lua/config/lsp.lua`; LuaLS settings live in `lua/langs/lua.lua`. The externally installed `lua-language-server` is used instead of Mason. LuaLS recognizes `vim` as a global, disables third-party workspace prompts, and disables telemetry.
 
 Automated tests verify the configuration contract. Interactive testing confirmed LuaLS attachment, definition navigation, and hover. Declaration navigation did not work in the tested case; that result depends on the symbol and server response and does not prove all declaration requests fail. Diagnostics and non-LSP buffer isolation remain separate verification items.
 
-### Stage 10 — Completion and Snippets
+The LSP configuration does not imply that the language-server executable is installed by the Neovim plugin manager.
+
+## Stage 10 — Completion and Snippets
 
 Stage 10 includes:
 
@@ -140,7 +147,7 @@ Blink's configured sources are LSP, filesystem paths, snippets, and words from t
 
 The project deliberately avoids LuaSnip, nvim-cmp, and Mason. All plugins continue to load eagerly; lazy-loading remains deferred to Stage 16. Automated validation and interactive completion candidate display, navigation, and acceptance have passed. Snippet discovery and expansion, placeholder navigation, complete automatic-pairing behavior, and related mapping regressions still need explicit interactive verification.
 
-### Stage 11 — Manual Formatting
+## Stage 11 — Manual Formatting
 
 Stage 11 adds [Conform.nvim](https://github.com/stevearc/conform.nvim) as the Neovim-side formatting interface and StyLua as the Lua formatter. Conform is installed with `vim.pack`; the StyLua executable is managed separately.
 
@@ -153,9 +160,26 @@ The implementation:
 - Does not configure format-on-save.
 - Does not add a linter or Mason.
 
-Validation passed on Neovim 0.12.6: StyLua formatting checks, Lua syntax checks across 27 files, the configured smoke test, formatter registration and command/keymap checks, manual StyLua formatting, missing-executable warning behavior, and checks confirming that formatting is not triggered on save.
+Validation passed on Neovim 0.12.6, including StyLua formatting checks, Lua syntax checks, the configured smoke test, formatter registration and command/keymap checks, manual StyLua formatting, missing-executable warning behavior, and checks confirming that formatting is not triggered on save.
 
 Stage 11 is complete for its defined manual-formatting scope. Linting is not included in this stage.
+
+## Stage 12 — Git, Root, and Sessions
+
+Stage 12 adds Git integration, project root detection and navigation, and explicit session management.
+
+- **Gitsigns:** Git change indicators and hunk workflows, including stage, reset, preview, blame, and diff actions. Git remains an external dependency; Gitsigns does not install it.
+- **project.nvim:** Project root detection and project navigation. Root detection does not automatically change Neovim's working directory under the current configuration.
+- **mini.sessions:** Explicit session save, restore, and delete operations using the existing shared `mini.nvim` installation. Automatic session reads and writes are disabled.
+- **Lazygit:** An optional external terminal application, not a Neovim plugin or a core dependency.
+
+User-facing mappings remain centralized in `lua/config/keymaps.lua`. Gitsigns mappings are buffer-local. Session mappings invoke explicit operations, and the existing fzf-lua `<leader>pr` resume mapping remains independent of project navigation.
+
+Interactive checks for Git workflows, project navigation, and session save/restore have passed. The Stage 12 smoke-test checks also pass on Neovim 0.12.6.
+
+The stage remains in progress until documentation, dependency and keymap references, automated checks, and remaining closeout requirements are reconciled. A headless `project.nvim` history-write warning has also been observed during exit and must be investigated before closeout; it should not be treated as resolved merely because the smoke test passes.
+
+See [Architecture](docs/architecture.md), [Dependencies](docs/dependencies.md), and [Keymaps](docs/keymaps.md) for the corresponding design and workflow references.
 
 ## Repository structure
 
@@ -178,7 +202,6 @@ nvim-config/
 │   ├── plugin-inventory.md
 │   ├── plugin-admission-policy.md
 │   ├── keymaps.md
-│   ├── lsp.md
 │   └── decisions/
 ├── lua/
 │   ├── config/
@@ -207,7 +230,10 @@ nvim-config/
 │       ├── blink-cmp.lua
 │       ├── friendly-snippets.lua
 │       ├── mini-pairs.lua
-│       └── conform.lua
+│       ├── conform.lua
+│       ├── gitsigns.lua
+│       ├── project.lua
+│       └── mini-sessions.lua
 └── scripts/
     ├── check-syntax.lua
     ├── smoke.lua
@@ -215,7 +241,7 @@ nvim-config/
     └── winsetup.ps1
 ```
 
-This tree shows the main source layout; consult the current checkout for the full list of documentation and files.
+This tree shows the main source layout, not an exhaustive listing of every file. Consult the current checkout for the complete set of configuration modules and documentation.
 
 ## Validation
 
@@ -235,9 +261,11 @@ The checker compiles discovered Lua files without executing their contents. It e
 nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 ```
 
-The smoke test checks the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, native search and quickfix behavior, the required-module failure contract, and the plugin/workflow assertions implemented in the test suite.
+The smoke test checks the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, and the configuration and workflow assertions implemented in the test suite.
 
-A passing smoke test does not establish that every workflow behaves correctly during interactive use. In particular, Stage 10 assertions do not replace interactive tests of snippet expansion, placeholder navigation, and pairing behavior.
+A passing smoke test does not establish that every workflow behaves correctly during interactive use. In particular, Stage 04 commenting and Stage 10 snippet expansion, placeholder navigation, and pairing behavior require their own interactive verification.
+
+Use the `-c "luafile scripts/smoke.lua"` invocation shown above. Do not substitute `-l scripts/smoke.lua` for this smoke-test command; the startup behavior differs and can produce misleading option-check failures.
 
 ### Verify the colorscheme
 

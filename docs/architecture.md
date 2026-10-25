@@ -23,6 +23,7 @@ Examples include:
 - Built-in LSP configuration and activation APIs.
 - Native commenting mappings and editing workflows.
 - `vim.pack` for plugin management.
+- Native session and project-related workflows where they satisfy the requirement.
 
 External plugins should provide a clearly justified capability rather than duplicate functionality that Neovim already supplies adequately.
 
@@ -34,12 +35,14 @@ A plugin is not installed merely because it appears in documentation, an invento
 
 Each plugin must be evaluated against the project's requirements, alternatives, maintenance considerations, dependencies, and intended stage. Installation occurs only when the plugin is explicitly admitted into the implementation.
 
+A documented candidate is not necessarily approved, installed, or validated.
+
 ### 3. Modular configuration
 
 Configuration responsibilities are separated into focused Lua modules.
 
 - `init.lua` coordinates startup.
-- `lua/config/` contains core Neovim configuration.
+- `lua/config/` contains core Neovim configuration and shared behavior.
 - `lua/plugins/` contains plugin-specific configuration and setup.
 - `lua/langs/` contains project-owned language packs.
 
@@ -68,6 +71,14 @@ Neovim plugins and external executables are separate dependency categories.
 Tools such as language servers, formatters, linters, debuggers, Git utilities, and compilers should be installed and managed outside Neovim's plugin manager unless a documented decision establishes otherwise.
 
 The project does not adopt Mason as its default external-tool installation mechanism.
+
+### 7. Explicit state changes
+
+Operations that change user state should be intentional and understandable.
+
+Examples include Git hunk operations, project navigation, and session management. Automatic behavior should be introduced only when its scope and consequences are justified.
+
+In particular, session saving and restoration should remain explicit unless a future decision establishes a different policy.
 
 ## Runtime Requirements
 
@@ -117,21 +128,28 @@ Owns core Neovim configuration and shared behavior.
 
 Native options, centralized mappings, autocommands, and shared LSP lifecycle behavior belong here.
 
+Shared behavior should be implemented once where practical, with plugin-specific modules delegating to the appropriate configuration module rather than creating duplicate mapping or lifecycle definitions.
+
 ### `lua/plugins/`
 
 Owns plugin setup and plugin-specific behavior.
 
 Plugin modules should have clear responsibilities. Multiple configuration files may be appropriate when they separate distinct features, but shared plugin setup should not be duplicated unnecessarily.
 
-For example:
+Examples include:
 
-- Snacks uses one shared setup path, with dashboard configuration kept separate when that stage is implemented.
-- `mini.nvim` is installed once as a shared repository; individual Mini modules are configured according to their respective stages.
-- Snacks Picker and fzf-lua remain independent tools with their own configuration and mappings.
-- `nvim-lspconfig` is installed through `vim.pack` and supplies maintained language-server definitions.
-- `lazydev.nvim` remains in its dedicated `lua/plugins/lazydev.lua` module.
+- **Gitsigns:** supplies Git change indicators and hunk-related workflows. Its buffer-local mappings are registered through the central keymap module.
+- **project.nvim:** supplies project root detection and project navigation.
+- **mini.nvim:** is installed once as a shared repository; individual Mini modules are configured according to their respective stages.
+- **mini.sessions:** provides explicit session save, restore, and delete workflows through the shared Mini installation.
+- **Snacks:** uses one shared setup path, with dashboard configuration kept separate when that stage is implemented.
+- **Snacks Picker and fzf-lua:** remain independent tools with their own configuration and mappings.
+- **nvim-lspconfig:** supplies maintained language-server definitions.
+- **lazydev.nvim:** remains in its dedicated `lua/plugins/lazydev.lua` module.
 
 The presence of a Lua file under `lua/plugins/` is not, by itself, authorization to install its plugin.
+
+Plugin modules should not imply that installing a plugin also installs its external executables or language servers.
 
 ### `lua/langs/`
 
@@ -197,6 +215,46 @@ Automated tests should validate pack discovery, declarations, server configurati
 
 The language-pack registry does not imply that completion, snippets, formatting, linting, debugging, Mason, or lazy-loading are included in Stage 09. Those remain separate decisions governed by the roadmap.
 
+## Git, Project Navigation, and Sessions
+
+These workflows have separate responsibilities and dependency boundaries.
+
+### Git integration
+
+Git is an external executable and a core dependency for Git-based workflows.
+
+Gitsigns integrates Git change information into Neovim and provides hunk-related actions. It does not install Git.
+
+User-facing Gitsigns mappings are registered centrally in `lua/config/keymaps.lua` and are buffer-local when Gitsigns attaches.
+
+The presence of Git and Gitsigns does not by itself prove that every Git workflow has been configured or tested.
+
+### Project root detection
+
+`project.nvim` provides project root detection and project navigation.
+
+Project detection can use Git-related markers and other configured root indicators. The plugin does not install Git or other external tools.
+
+Project root detection must remain distinct from automatic working-directory changes. The current configuration disables automatic directory changes, so identifying a project root does not imply that Neovim's working directory changes automatically.
+
+Project detection and navigation must be verified through the actual configured workflow.
+
+### Session management
+
+`mini.sessions` uses the existing shared `mini.nvim` installation. It does not require a second installation of the shared repository.
+
+The current configuration provides explicit session save, restore, and delete operations. Automatic session reads and writes are disabled.
+
+Session management is separate from project root detection and Git integration. A saved session does not guarantee that external tools are installed or that a language server will successfully attach when the session is restored.
+
+### Optional terminal integrations
+
+Lazygit is an optional external terminal application, not a Neovim plugin and not a core dependency.
+
+If a Lazygit mapping is provided, it must check whether the `lazygit` executable is available before attempting to launch it. If the executable is missing, the configuration should display a clear warning.
+
+Git and Neovim plugins must not be treated as installers for Lazygit.
+
 ## Plugin Management
 
 The project uses Neovim's native `vim.pack` plugin manager.
@@ -225,6 +283,10 @@ Mappings should:
 
 Plugin-specific actions may require plugin APIs, but their user-facing mappings should remain centralized where the design permits.
 
+Gitsigns mappings are buffer-local and registered when the plugin attaches to a buffer. Session mappings invoke explicit save, restore, and delete operations. Project navigation remains separate from fzf-lua's picker-resume workflow.
+
+Snacks Picker and fzf-lua configuration and mappings must remain independent.
+
 LSP mappings follow the same policy. The shared `LspAttach` handler requests buffer-local mappings from `lua/config/keymaps.lua` rather than defining separate copies in individual language packs.
 
 Native functionality should not be redundantly redefined merely because it is available.
@@ -238,20 +300,29 @@ The project distinguishes between:
 1. Neovim itself.
 2. External executables and system tools.
 3. Neovim plugins.
-4. Optional integrations and providers.
+4. Language-server executables and parser dependencies.
+5. Optional integrations and providers.
 
 The dependency documentation should identify the purpose and installation expectations of relevant tools. Platform-specific setup instructions belong in the appropriate installation documentation or scripts.
 
 Installing a plugin must not be treated as equivalent to installing the external executable it depends on.
 
-For LSP:
+Examples:
 
+- Git is installed and managed outside Neovim's plugin manager.
+- `fd` supports file discovery.
+- `rg` (ripgrep) supports content search.
+- `fzf` provides fuzzy selection for compatible workflows such as fzf-lua.
+- A compiler and the required Tree-sitter CLI support parser-related build workflows.
+- LuaLS is an external language-server executable.
+- Lazygit is an optional external terminal application.
 - `nvim-lspconfig` supplies maintained server definitions.
 - Neovim's native LSP APIs configure and activate servers.
 - Language packs declare supported servers and project-specific overrides.
-- Language-server executables are managed externally.
 - `lazydev.nvim` improves Lua development context; it does not install or manage LuaLS.
 - Mason is not part of the default configuration.
+
+The Windows dependency setup script has a defined scope. Tools outside that scope must be installed and verified separately rather than assumed to be covered by a successful script run.
 
 ## Validation
 
@@ -272,6 +343,8 @@ For the language-pack registry, tests should verify that discovery is restricted
 
 The existence of a server configuration does not prove that the external executable is available or that a server has attached to a buffer. These conditions require separate verification.
 
+Git workflows should be tested in a suitable repository. Project navigation should be tested against representative root markers. Session save and restore should be verified interactively, with explicit deletion tested carefully. Optional executable integrations should be tested both when the executable is available and when it is missing.
+
 ## Stage Boundaries
 
 The 17-stage roadmap governs implementation order.
@@ -282,8 +355,10 @@ Performance optimization is deliberately deferred until Stage 16. At that stage,
 
 Stage 09 establishes the LSP and language-pack foundation. Completion and snippets, formatting and linting, debugging, Mason, and lazy-loading changes remain outside its scope.
 
+Stage 12 introduces Git integration, project root detection and navigation, and explicit session management. Implementation and initial verification do not by themselves mean that the stage is complete: the relevant documentation, dependency records, keymap references, automated checks, and remaining closeout requirements must also be reconciled.
+
 ## Summary
 
-The architecture is intentionally explicit: a small startup coordinator, direct module loading, focused configuration boundaries, native-first behavior, controlled plugin admission, separately managed external tools, project-owned language packs, and stage-based validation.
+The architecture is intentionally explicit: a small startup coordinator, direct module loading, focused configuration boundaries, native-first behavior, controlled plugin admission, separately managed external tools, project-owned language packs, intentional state changes, and stage-based validation.
 
 The objective is not to reproduce another distribution's architecture. It is to maintain a minimal, understandable Neovim configuration that can grow without losing predictability.

@@ -111,5 +111,10 @@ require("config.format").setup()
 
 require("config.autocmds")
 
+-- Sessions
+require("plugins.gitsigns")
+require("plugins.project")
+require("plugins.mini-sessions")
+
 -- Configure keymap discovery after mappings have been registered.
 require("plugins.which-key")

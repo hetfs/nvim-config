@@ -365,6 +365,58 @@ local function check_stage07_plugins()
   print("PASS Stage 07 plugin registration")
 end
 
+local function check_stage12_workflows()
+  -- Stage 12 configuration modules must load during startup.
+  check(package.loaded["plugins.gitsigns"] ~= nil, "Gitsigns configuration module was loaded")
+  check(package.loaded["plugins.project"] ~= nil, "project.nvim configuration module was loaded")
+  check(package.loaded["plugins.mini-sessions"] ~= nil, "mini.sessions configuration module was loaded")
+
+  -- Gitsigns must be available, and its buffer-local mappings must be exposed
+  -- through the central keymap module. Actual buffer attachment is verified
+  -- interactively because this smoke test does not require a Git buffer.
+  local gitsigns_ok, gitsigns = pcall(require, "gitsigns")
+  check(gitsigns_ok and type(gitsigns) == "table", "Gitsigns API is available")
+
+  local keymaps = package.loaded["config.keymaps"]
+  check(type(keymaps) == "table", "central keymap module is available")
+  if type(keymaps) == "table" then
+    check(type(keymaps.gitsigns) == "function", "central keymaps expose Gitsigns mappings")
+  end
+
+  -- Verify project.nvim's public root API and user-facing command.
+  local project_ok, project = pcall(require, "project")
+  check(project_ok and type(project) == "table", "project.nvim API is available")
+  if project_ok and type(project) == "table" then
+    check(type(project.get_project_root) == "function", "project root API is available")
+  end
+  check_equal(vim.fn.exists(":Project"), 2, "project.nvim command registration")
+
+  -- Verify mini.sessions is available and sessions remain explicit opt-in.
+  local sessions = _G.MiniSessions
+  check(type(sessions) == "table", "MiniSessions API is available")
+  if type(sessions) == "table" then
+    check(type(sessions.select) == "function", "MiniSessions selection API is available")
+    check(type(sessions.config) == "table", "MiniSessions configuration is available")
+    if type(sessions.config) == "table" then
+      check_equal(sessions.config.autoread, false, "automatic session reading is disabled")
+      check_equal(sessions.config.autowrite, false, "automatic session writing is disabled")
+    end
+  end
+
+  -- Session operations are mapped centrally and include discoverable descriptions.
+  local mappings = {
+    { mode = "n", lhs = "<leader>qs", desc = "Session: Restore" },
+    { mode = "n", lhs = "<leader>qw", desc = "Session: Save" },
+    { mode = "n", lhs = "<leader>qd", desc = "Session: Delete" },
+  }
+
+  for _, expected in ipairs(mappings) do
+    check_mapping(expected.mode, expected.lhs, expected.desc, "Stage 12 sessions")
+  end
+
+  print("PASS Stage 12 Git, project, and session registration")
+end
+
 local function check_stage09_lsp()
   -- The plugin declaration must have been loaded during startup.
   check(package.loaded["plugins.lsp"] ~= nil, "plugins.lsp module was loaded")
@@ -529,6 +581,9 @@ local function main()
 
   -- Stage 10 completion, snippets, and pairing.
   check_stage10_completion()
+
+  -- Stage 12 Git, project-root, and session workflows.
+  check_stage12_workflows()
 
   -- Leader keys.
   check_equal(vim.g.mapleader, " ", "mapleader")

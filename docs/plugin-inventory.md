@@ -148,10 +148,10 @@ Stage 09 does not include completion, snippets, formatting, linting, Mason, or d
 
 | Plugin | Intended role | Policy |
 |---|---|---|
-| blink.cmp | Completion | Planned |
-| friendly-snippets | Reusable snippets | Planned |
+| blink.cmp | Completion | Implemented; interactive verification remains outstanding |
+| friendly-snippets | Reusable snippets | Implemented; interactive verification remains outstanding |
 
-These plugins belong to Stage 10. Their presence in this inventory does not authorize installation before that stage.
+These plugins belong to Stage 10. Their configuration and smoke-test coverage do not, by themselves, establish that completion and snippet expansion work correctly in interactive use.
 
 ### Stage 11 — Format and Lint
 
@@ -168,14 +168,30 @@ The selected linting solution should be documented after its requirements, filet
 
 | Plugin or tool | Intended role | Policy |
 |---|---|---|
-| gitsigns.nvim | Git change indicators and hunk workflows | Planned |
-| lazygit | Optional terminal Git interface | Optional external executable |
-| Project-root integration | Consistent project context | Requires separate evaluation |
-| Session integration | Restore selected workspace state | Requires separate evaluation |
+| gitsigns.nvim | Git change indicators and hunk workflows | Implemented; interactive workflows verified |
+| project.nvim (`DrKJeff16/project.nvim`) | Project-root detection, working-directory behavior, and project history | Accepted and implemented; root detection and navigation verified |
+| mini.sessions (from shared `mini.nvim`) | Explicit session save, restore, and delete workflows | Implemented; session save and restore verified |
+| lazygit | Optional terminal Git interface | Optional external executable; not a Neovim plugin |
 
-Optional tools must be checked for availability before invocation. Missing optional executables should produce clear feedback rather than confusing errors.
+#### Implementation and validation notes
 
-Project-root and session plugins should not be admitted solely because they are common in other Neovim distributions.
+- **Gitsigns:** Git change indicators and hunk workflows are configured. The central keymap module registers buffer-local mappings for staging a hunk, resetting a hunk, previewing a hunk, blaming a line, and diffing the current buffer. Interactive checks have confirmed the mappings and tested preview, blame, and diff behavior.
+- **project.nvim:** The project plugin is admitted for Stage 12. Its configuration enables Git-based project detection, disables automatic directory changes, and uses global scope when an explicit directory change is requested. Project-root detection, the `:Project` command, project switching, and `get_project_root()` have been tested.
+- **mini.sessions:** The implementation reuses the existing shared `mini.nvim` repository rather than installing a duplicate repository. Automatic session reads and writes are disabled. Explicit save, restore, and delete mappings are defined in the central keymap module. Interactive session save and restore have been tested.
+- **Smoke tests:** The Stage 12 registration checks pass on Neovim 0.12.6 using the normal configuration startup path. The broader smoke test also passes. These checks complement, but do not replace, interactive validation.
+- **Optional executable:** Any lazygit workflow must check whether `lazygit` is available and provide clear feedback if it is missing.
+- **External dependencies:** Requirements such as Git and any relevant project-navigation tools should be recorded in `docs/dependencies.md`; a plugin does not install its external dependencies.
+
+#### Remaining closeout work
+
+Stage 12 is not complete merely because its main modules and workflows have been implemented. Before closing the stage:
+
+- Align the inventory, roadmap, dependency documentation, and keymap documentation with the implementation.
+- Run the applicable syntax, formatting, smoke, and diff checks.
+- Investigate and document the observed headless-exit warning from `project.nvim` history writing before deciding whether it requires a configuration change or can be safely treated as a non-blocking condition.
+- Confirm that optional-tool behavior and documented mappings match the actual repository.
+
+The implementation should remain eager-loaded under the project's current loading policy. Do not introduce a separate root module unless a demonstrated requirement justifies it.
 
 ### Stage 13 — Language Packs
 
@@ -235,9 +251,10 @@ The following decisions must remain explicit rather than being inferred from ano
 |---|---|---|
 | Mason | Not selected as the default tool manager | Reconsider only if a documented requirement outweighs the separate-tool-management policy |
 | nvim-web-devicons | Not selected | Do not add without a concrete unmet requirement |
-| project.nvim | Deferred for separate evaluation | Establish a specific project-root behavior that is not adequately served by existing configuration |
 | zen-mode.nvim | Deferred for separate evaluation | Establish a clear use case and compare with available native or existing-plugin workflows |
 | Additional Markdown or PDF workflow plugins | Future candidates | Evaluate when the relevant workflow stage and requirements are defined |
+
+`project.nvim` is no longer a deferred candidate: its admission has been accepted for Stage 12 and its implementation and core project-navigation behavior have been tested. Its presence in the implementation does not make Stage 12 complete.
 
 `nvim-lspconfig` is not listed as a deferred candidate because its admission has been accepted for Stage 09. Its implementation and runtime validation remain separate milestones.
 

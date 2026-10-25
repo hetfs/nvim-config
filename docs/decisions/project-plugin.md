@@ -1,127 +1,130 @@
-# ADR: Dedicated Project-Management Plugin
+# ADR: Project Management with project.nvim
 
-- **Status:** Deferred
-- **Date:** 2026-10-24
+- **Status:** Accepted for Stage 12
+- **Date:** 2026-10-25
 
 ## Context
 
-The `nvim-config` project aims to provide useful project-aware workflows while preserving a native-first, modular architecture.
+The `nvim-config` project needs predictable project-root detection and project-aware workflows while preserving its native-first, modular architecture.
 
-Project-management plugins can provide features such as project discovery, root detection, project switching, and integration with file navigation or session management. However, adding a dedicated plugin introduces another dependency and may duplicate behavior already available through Neovim, the shell environment, or existing navigation tools.
+Stage 12 — Git, Root, and Sessions — is responsible for integrating Git change indicators, establishing project context, and evaluating session workflows.
 
-Stage 12 of the roadmap covers Git, project-root behavior, and sessions. The project must determine which project-aware capabilities are actually required and whether a dedicated project-management plugin is necessary before admitting one into the configuration.
+The project has selected [`DrKJeff16/project.nvim`](https://github.com/DrKJeff16/project.nvim) for project discovery, root detection, project selection, and project history. This decision does not reopen or change the completed Stage 09 LSP implementation.
 
-The project's governing principle is:
+The governing principle remains:
 
 > **Minimum installation. Compose the rest.**
 
 ## Decision
 
-Defer the admission of a dedicated project-management plugin until Stage 12 evaluates the actual project-root, project-switching, and session-management requirements.
+Accept `DrKJeff16/project.nvim` for implementation in Stage 12.
 
-No dedicated project-management plugin is approved for installation by this record.
+The plugin will be managed through Neovim's native `vim.pack` plugin manager and configured in a dedicated `lua/plugins/project.lua` module.
 
-The configuration should first establish the required behavior and determine whether existing native capabilities and admitted plugins already satisfy those requirements.
+The following boundaries apply:
 
-Project-root detection, project switching, and session management must be evaluated as distinct capabilities. Selecting a solution for one does not automatically justify adding a dependency for the others.
+- **Plugin management:** Use `vim.pack`.
+- **Project management:** Use project.nvim for the selected project-aware workflows.
+- **LSP:** Preserve the existing native `vim.lsp.config()` and `vim.lsp.enable()` architecture from Stage 09.
+- **Snacks:** Keep the existing Snacks configuration independent. Enable project.nvim's Snacks integration only if a concrete requirement justifies it.
+- **fzf-lua:** Keep its configuration and mappings independent from Snacks and project.nvim. Do not enable another integration by default.
+- **Sessions:** Evaluate session behavior separately. Project detection alone must not be treated as complete editor-session restoration.
+- **External tools:** Continue managing executables outside the Neovim plugin manager. Verify `fd` availability before relying on features that require it.
+- **Loading:** Keep the plugin eagerly loaded through Stage 15. Performance-driven lazy-loading belongs to Stage 16.
+- **Root abstraction:** Do not create `lua/config/root.lua` by default. Introduce a separate abstraction only if a demonstrated requirement cannot be handled cleanly by the selected plugin and existing configuration.
+- **Keymaps:** Keep user-facing mappings centralized in `lua/config/keymaps.lua`, use meaningful descriptions, and check for collisions before introducing mappings. Preserve existing mappings unless a separate decision changes them.
 
-Stage 12 may retain the native-first approach, admit a dedicated project-management plugin, or defer a decision if the requirements remain unclear.
+Review the plugin's upstream defaults before finalizing configuration. Settings affecting root detection, working-directory changes, history, LSP behavior, or optional picker integrations must be chosen deliberately rather than copied without evaluation.
+
+Acceptance of this ADR records the architectural decision. It does not mean the plugin has been installed, configured, or validated.
 
 ## Alternatives Considered
 
 ### 1. Use native capabilities and existing tools
 
-Prefer Neovim's built-in functionality and the existing navigation configuration where they satisfy the requirement.
+Retain native Neovim behavior and add only the minimum project-related configuration necessary.
 
 **Advantages:**
 
 - Fewer dependencies.
-- Less plugin-specific configuration.
-- Lower maintenance overhead.
-- Consistency with the native-first architecture.
+- Less plugin-specific behavior.
+- A smaller configuration surface.
 
 **Trade-offs:**
 
-- Some project-discovery or switching workflows may require explicit configuration.
-- Native functionality may not provide every convenience offered by a dedicated project plugin.
-- Project-root behavior may need to be coordinated with navigation and session workflows.
+- Project discovery, history, and switching may require additional implementation.
+- Root detection and session behavior may need coordination across separate modules.
 
-### 2. Admit a dedicated project-management plugin
+### 2. Use `DrKJeff16/project.nvim`
 
-Evaluate a plugin such as `project.nvim` for project discovery, root detection, and project-aware workflows.
+Adopt the selected fork for project discovery, root detection, project selection, and history.
 
 **Advantages:**
 
-- Potentially provides integrated project detection and switching.
-- May simplify workflows that would otherwise require custom configuration.
-- Could provide useful integration with sessions or navigation.
+- Consolidates the selected project-management workflows in a dedicated plugin.
+- Avoids maintaining a custom root-detection implementation without a demonstrated need.
+- Provides a defined integration point for future project-aware workflows.
 
 **Trade-offs:**
 
-- Adds another dependency and configuration surface.
-- May overlap with existing navigation, root-detection, or session behavior.
-- Requires compatibility and maintenance evaluation.
-- May introduce behavior that is unnecessary for the project's intended scope.
+- Adds a plugin dependency and configuration surface.
+- Requires review of upstream defaults and compatibility with the existing configuration.
+- Some features, particularly session-related workflows, may depend on external executables or additional configuration.
 
-This alternative remains a candidate, not an accepted implementation.
+**Decision:** Select this alternative for Stage 12, subject to implementation and validation.
+
+## Configuration Principles
+
+The implementation should follow these principles:
+
+1. Prefer Git-root detection and the plugin's supported project markers. Validate marker precedence against representative repositories.
+2. Keep automatic working-directory behavior explicit. Do not enable `enable_autochdir` without a demonstrated requirement.
+3. Select a working-directory scope deliberately and test behavior when switching projects, buffers, windows, and tabs.
+4. Retain reasonable upstream history defaults unless testing establishes a need to change them.
+5. Keep Snacks and fzf-lua integrations disabled unless a specific workflow justifies enabling one.
+6. Avoid duplicating project detection in custom autocommands or a separate root module.
+7. Preserve existing keymap ownership and descriptions. Check for collisions before introducing project mappings.
+8. Keep optional command-line tools optional and report missing dependencies clearly.
+
+These principles define implementation constraints, not verified runtime behavior.
+
+## Stage 12 Validation
+
+Before Stage 12 can be marked complete, validate:
+
+- The plugin is installed through `vim.pack` and loaded from `lua/plugins/project.lua`.
+- Git repositories are detected as expected.
+- Recognized project markers behave predictably.
+- Project selection and history work as configured.
+- Working-directory behavior is consistent when switching projects.
+- Project detection does not regress the existing LSP setup or language-pack behavior.
+- Existing Snacks and fzf-lua workflows remain independent unless an integration is explicitly enabled.
+- Session behavior is tested and documented separately from root detection.
+- Features requiring `fd` behave correctly when the executable is present; missing-tool behavior is documented and handled clearly.
+- Keymaps do not conflict with existing mappings.
+- Syntax, formatting, smoke tests, and applicable interactive checks pass.
+- The README, plugin inventory, dependency documentation, and keymap documentation reflect the verified implementation.
+
+Do not mark a feature validated merely because its plugin configuration loads or its command is registered.
 
 ## Consequences
 
 ### Positive
 
-- Project-root behavior can be evaluated against concrete requirements before selecting a dependency.
-- The configuration avoids installing a plugin solely because it is common in other Neovim distributions.
-- Stage 12 remains responsible for the relevant architectural decision.
-- Existing navigation tools remain independent of any future project-management plugin.
-- Project-root detection, switching, and session management can be designed independently where appropriate.
-- The evaluation can conclude that no dedicated project-management plugin is necessary.
+- Project management has an explicit owner.
+- A separate root abstraction is not introduced without need.
+- Existing LSP and navigation responsibilities remain clearly separated.
+- Optional integrations can be evaluated without coupling existing pickers together.
+- Stage 12 has concrete validation requirements.
 
-### Negative
+### Trade-offs
 
-- A dedicated project-switching workflow may remain unavailable until the evaluation is complete.
-- Stage 12 must define and validate the required project-root behavior before deciding whether a plugin is warranted.
-- Navigation and session workflows may need explicit coordination if native capabilities are retained.
-
-## Evaluation Criteria
-
-During Stage 12, evaluate the following questions:
-
-1. What behavior is required for identifying a project root?
-2. Which root markers should be recognized, and should the behavior vary by language or repository?
-3. Is project switching a required workflow or merely a convenience?
-4. Can existing navigation tools operate adequately with the required root behavior?
-5. Is session management required, and does it need project-plugin integration?
-6. Would a dedicated plugin reduce complexity compared with a small native implementation?
-7. Does the candidate support the project's minimum Neovim version?
-8. Can the behavior be tested reliably and documented clearly?
-9. Can project-root detection, switching, and session management be implemented independently without introducing unnecessary coupling?
-10. What ongoing maintenance and configuration complexity would the candidate add compared with the benefits it provides?
-
-The evaluation should compare actual requirements and observed behavior rather than relying on feature lists alone.
-
-The outcome may retain the native-first approach, admit a dedicated plugin, or defer the decision if the requirements remain unclear. Selecting a solution for one capability must not automatically justify adding a dependency for the others.
-
-## Validation
-
-Before admitting a project-management plugin:
-
-- Define the required project-root and switching behavior.
-- Establish whether session management is required and whether it needs integration with project detection.
-- Verify how the existing configuration handles those workflows.
-- Test representative repository layouts and root markers.
-- Check for conflicts with Snacks, fzf-lua, and session behavior.
-- Review compatibility, dependencies, maintenance, and configuration complexity.
-- Compare the candidate against the native-first alternative using the same requirements.
-- Document the resulting decision and update the plugin inventory.
-
-If a plugin is selected, validate its behavior before marking the relevant roadmap stage complete.
-
-If no plugin is needed, document how the required behavior is provided by native capabilities and existing tools. Do not add a dependency merely to complete the evaluation.
+- The configuration adopts another dependency.
+- The selected plugin's behavior and defaults must be tested against actual project workflows.
+- Session behavior may require a separate decision after project-management workflows are implemented.
 
 ## Follow-up
 
-Revisit this decision during Stage 12 — **Git, Root, and Sessions**.
+Implement this decision during **Stage 12 — Git, Root, and Sessions**.
 
-Until that evaluation is complete, treat `project.nvim` and other dedicated project-management plugins as deferred candidates. Do not install them merely because they appear in the roadmap or plugin inventory.
-
-If a concrete requirement emerges earlier, document the requirement and its impact before changing this decision.
+Keep Stage 09 complete. Keep Stage 12 planned until its implementation and required validation are complete. Update the roadmap, plugin inventory, dependency documentation, and keymap documentation as the implementation establishes verified behavior.

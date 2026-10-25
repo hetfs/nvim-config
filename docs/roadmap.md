@@ -17,7 +17,7 @@ Each stage introduces a defined set of capabilities, with validation and documen
 - **Stages 05–09:** Complete. Stage 09's native LSP and lazydev implementation and defined validation are closed out.
 - **Stage 10 — Completion and Snippets:** Implementation is in place; interactive verification remains in progress.
 - **Stage 11 — Format and Lint:** Complete for the defined manual formatting implementation and automated validation.
-- **Stage 12 — Git, Root, and Sessions:** Planned. `DrKJeff16/project.nvim` has been accepted for project-management workflows; implementation and validation have not yet been completed.
+- **Stage 12 — Git, Root, and Sessions:** In progress. Gitsigns, `DrKJeff16/project.nvim`, and `mini.sessions` are implemented. Interactive checks for Git workflows, project navigation, and session save/restore have passed. The Stage 12 smoke-test checks also pass on Neovim 0.12.6. Related documentation, dependency and keymap alignment, and remaining stage-closeout requirements are still outstanding.
 - **Stages 13–17:** Planned.
 
 Later-stage work must not be used to imply that an earlier stage's outstanding requirements have been resolved. In particular, Stage 12 does not reopen Stage 09.
@@ -295,27 +295,37 @@ The completed status refers to the implementation and validation currently defin
 
 ### Stage 12 — Git, Root, and Sessions
 
-**Status:** Planned
+**Status:** In progress
 
-**Objective:** Establish predictable Git integration, project management, project-root behavior, and justified session workflows.
+**Objective:** Establish predictable Git integration, project management, project-root behavior, and explicit session workflows.
 
 **Decision reference:** `docs/decisions/project-plugin.md`
 
-The project has accepted [`DrKJeff16/project.nvim`](https://github.com/DrKJeff16/project.nvim) for Stage 12 project-management workflows. Acceptance records the architectural decision; it does not mean the plugin has already been installed, configured, or validated.
+The project has accepted [`DrKJeff16/project.nvim`](https://github.com/DrKJeff16/project.nvim) for Stage 12 project-management workflows. The plugin has now been added through `vim.pack`, configured in `lua/plugins/project.lua`, and validated for root detection and project navigation. Acceptance records the architectural decision; implementation and validation are tracked separately.
+
+**Implemented components and verified behavior:**
+
+- **Gitsigns:** Configured in `lua/plugins/gitsigns.lua`. Git change indicators have been observed, and the hunk preview, blame, and diff workflows have been exercised interactively. The five buffer-local Git hunk mappings are defined through `lua/config/keymaps.lua`.
+- **project.nvim:** Configured in `lua/plugins/project.lua`. The plugin module loads, the `:Project` command is registered, the public root-detection API is available, and project navigation and switching have been tested interactively.
+- **mini.sessions:** Configured in `lua/plugins/mini-sessions.lua`, reusing the existing shared `mini.nvim` installation. Session selection, save, and restore workflows have been tested. Automatic session reading and writing remain disabled so session operations are explicit.
+- **Smoke tests:** `scripts/smoke.lua` checks the Stage 12 configuration modules, relevant plugin APIs, the project command, session behavior, and session keymap descriptions. The complete smoke test passes on Neovim 0.12.6 when invoked with `nvim --headless -u init.lua -c "luafile scripts/smoke.lua"`.
+
+These checks establish that the implemented configuration and tested workflows work in the current environment. They do not, by themselves, close the stage or prove behavior across every supported platform and repository layout.
 
 **Scope:**
 
-1. Integrate `gitsigns.nvim` for Git change indicators and hunk workflows.
-2. Integrate `DrKJeff16/project.nvim` through Neovim's native `vim.pack` plugin manager, using a dedicated `lua/plugins/project.lua` module.
-3. Use project.nvim for project discovery, root detection, project selection, and project history. Review its defaults and validate root-marker precedence against representative repositories before finalizing configuration.
-4. Keep working-directory behavior explicit. Test project switching and directory scope; do not enable automatic directory-changing behavior without a demonstrated requirement.
+1. Maintain `gitsigns.nvim` in its dedicated `lua/plugins/gitsigns.lua` module for Git change indicators and hunk workflows.
+2. Maintain `DrKJeff16/project.nvim` in its dedicated `lua/plugins/project.lua` module, installed through Neovim's native `vim.pack` plugin manager.
+3. Use project.nvim for project discovery, root detection, project selection, and project history. Continue reviewing root-marker precedence against representative repositories before treating all root-detection cases as covered.
+4. Keep working-directory behavior explicit. The current configuration disables automatic directory-changing behavior and uses global directory scope. Preserve this behavior unless testing establishes a concrete requirement for a change.
 5. Preserve the existing native LSP configuration and language-pack architecture from Stage 09. Do not introduce `lua/config/root.lua` by default; reconsider a separate abstraction only if an implementation requirement demonstrates the need.
 6. Keep Snacks and fzf-lua configuration and mappings independent. Leave project.nvim's optional picker integrations disabled unless a concrete requirement justifies enabling one.
-7. Evaluate session behavior separately from root detection. Document the actual capabilities and limitations of the selected workflow before deciding whether additional session functionality is needed.
-8. Keep `lazygit` optional. Check executable availability before invocation and provide clear feedback when it is missing.
-9. Verify `fd` availability before relying on project.nvim features that require it, particularly session-related workflows. Keep external executable management separate from plugin installation.
+7. Use `mini.sessions` from the shared `mini.nvim` repository for explicit session selection and operations. Keep automatic session reading and writing disabled unless a separate decision and validation justify changing that policy.
+8. Keep `lazygit` optional. If a lazygit mapping or workflow is introduced, check executable availability before invocation and provide clear feedback when it is missing.
+9. Verify `fd` availability before relying on project.nvim features that require it. Keep external executable management separate from plugin installation; a plugin does not install the external tools it uses.
 10. Keep plugin loading eager through Stage 15. Performance-driven lazy-loading remains assigned to Stage 16.
 11. Centralize new user-facing mappings in `lua/config/keymaps.lua`, use meaningful descriptions, and check for collisions with existing mappings. Preserve the existing `<leader>pr` fzf-lua resume mapping unless a separately reviewed mapping decision changes it.
+12. Align the roadmap, plugin inventory, dependency documentation, keymap documentation, testing guidance, and decision record with the verified implementation. Investigate and characterize any shutdown warnings from headless sessions before deciding whether they require a code change.
 
 **Completion criteria:**
 
@@ -325,10 +335,13 @@ The project has accepted [`DrKJeff16/project.nvim`](https://github.com/DrKJeff16
 - Project selection, history, and working-directory behavior are predictable.
 - Project switching does not regress existing navigation, keymaps, or LSP behavior.
 - Snacks Picker and fzf-lua remain independent unless an integration has been explicitly selected and tested.
+- `mini.sessions` reuses the shared `mini.nvim` installation and supports the documented explicit session workflows.
+- Automatic session reading and writing remain disabled unless deliberately changed through a reviewed decision.
 - Session behavior and external-tool requirements are documented and tested separately from root detection.
-- Missing optional executables produce clear feedback rather than confusing errors.
-- Syntax, formatting, smoke tests, and required interactive checks pass.
-- The README, plugin inventory, dependency documentation, keymap documentation, and decision record reflect the verified implementation.
+- Any implemented optional-executable workflow produces clear feedback when its executable is missing.
+- Syntax, formatting, smoke tests, and required interactive checks pass using the documented commands.
+- The README, plugin inventory, dependency documentation, keymap documentation, testing guidance, and decision record reflect the verified implementation.
+- Known warnings and remaining limitations are characterized rather than silently ignored.
 
 **Explicitly out of scope:**
 
@@ -338,7 +351,7 @@ The project has accepted [`DrKJeff16/project.nvim`](https://github.com/DrKJeff16
 - Introducing Mason or changing the external-tool management policy.
 - Implementing performance-driven lazy-loading before Stage 16.
 
-Stage 12 remains planned until its implementation and required validation are complete.
+Stage 12 remains in progress until its remaining documentation, dependency and keymap alignment, and required closeout checks are complete. The existing implementation and passing smoke tests are evidence of progress, not grounds for declaring the entire stage complete.
 
 ### Stage 13 — Language Packs
 

@@ -158,13 +158,68 @@ function M.lsp(bufnr)
     buffer = bufnr,
   }
 
-  map("n", "gd", vim.lsp.buf.definition, vim.tbl_extend("force", opts, {
-    desc = "LSP: Go to definition",
-  }))
+  map(
+    "n",
+    "gd",
+    vim.lsp.buf.definition,
+    vim.tbl_extend("force", opts, {
+      desc = "LSP: Go to definition",
+    })
+  )
 
-  map("n", "gD", vim.lsp.buf.declaration, vim.tbl_extend("force", opts, {
-    desc = "LSP: Go to declaration",
-  }))
+  map(
+    "n",
+    "gD",
+    vim.lsp.buf.declaration,
+    vim.tbl_extend("force", opts, {
+      desc = "LSP: Go to declaration",
+    })
+  )
 end
 
+-- Git hunk mappings are installed for buffers attached by gitsigns.
+function M.gitsigns(bufnr)
+  local gs = require("gitsigns")
+
+  local opts = { buffer = bufnr }
+
+  opts.desc = "Git: Stage hunk"
+  map("n", "<leader>ghs", gs.stage_hunk, opts)
+
+  opts.desc = "Git: Reset hunk"
+  map("n", "<leader>ghr", gs.reset_hunk, opts)
+
+  opts.desc = "Git: Preview hunk"
+  map("n", "<leader>ghp", gs.preview_hunk, opts)
+
+  opts.desc = "Git: Blame line"
+  map("n", "<leader>ghb", gs.blame_line, opts)
+
+  opts.desc = "Git: Diff buffer"
+  map("n", "<leader>ghd", gs.diffthis, opts)
+end
+
+-- ============================================================
+-- Sessions
+-- ============================================================
+
+local sessions = require("mini.sessions")
+
+map("n", "<leader>qs", function()
+  sessions.select("read")
+end, {
+  desc = "Session: Restore",
+})
+
+map("n", "<leader>qw", function()
+  sessions.select("write")
+end, {
+  desc = "Session: Save",
+})
+
+map("n", "<leader>qd", function()
+  sessions.select("delete")
+end, {
+  desc = "Session: Delete",
+})
 return M
