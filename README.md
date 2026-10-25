@@ -10,7 +10,7 @@ The project prioritizes a minimal installation, explicit plugin evaluation, repr
 
 - [Neovim](https://neovim.io/doc/install/) 0.12.0 or later.
 - [Git](https://git-scm.com/)
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for native search workflows.
+- [ripgrep](https://github.com/BurntSushi/ripgrep) `rg` for native search workflows.
 - [fd](https://github.com/sharkdp/fd) for file and directory discovery.
 - [fzf](https://github.com/junegunn/fzf) for the independent `fzf-lua` fuzzy-finding workflow.
 
