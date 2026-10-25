@@ -2,6 +2,7 @@
 -- Keep mappings centralized and describe them for discoverability.
 -- Add workflow mappings only after their implementation and validation.
 
+local M = {}
 local map = vim.keymap.set
 
 -- ============================================================
@@ -140,3 +141,27 @@ map("n", "S", ":%s/<C-r>//g<Left><Left>", {
 map("t", "<Esc><Esc>", "<C-\\><C-n>", {
   desc = "Exit terminal mode",
 })
+
+-- Register buffer-local mappings when an LSP client attaches.
+function M.lsp(bufnr)
+  local opts = { buffer = bufnr }
+
+  map(
+    "n",
+    "gd",
+    vim.lsp.buf.definition,
+    vim.tbl_extend("force", opts, {
+      desc = "LSP: Go to definition",
+    })
+  )
+
+  map(
+    "n",
+    "gD",
+    vim.lsp.buf.declaration,
+    vim.tbl_extend("force", opts, {
+      desc = "LSP: Go to declaration",
+    })
+  )
+end
+return M

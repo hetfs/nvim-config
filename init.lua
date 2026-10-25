@@ -91,8 +91,14 @@ require("plugins.dial")
 -- Syntax parsing and highlighting.
 require("plugins.treesitter")
 
--- General configuration.
+-- LSP server definitions and Lua development support.
+require("plugins.lsp")
+require("plugins.lazydev")
+
+-- General configuration and native LSP behavior.
 require("config.keymaps")
+require("config.lsp")
+require("langs").setup()
 require("config.autocmds")
 
 -- Configure keymap discovery after mappings have been registered.

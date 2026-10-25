@@ -365,6 +365,78 @@ local function check_stage07_plugins()
   print("PASS Stage 07 plugin registration")
 end
 
+local function check_stage09_lsp()
+  -- The plugin declaration must have been loaded during startup.
+  check(package.loaded["plugins.lsp"] ~= nil, "plugins.lsp module was loaded")
+  check(package.loaded["plugins.lazydev"] ~= nil, "plugins.lazydev module was loaded")
+
+  local lazydev = package.loaded["lazydev"]
+
+  check(type(lazydev) == "table", "lazydev module is available")
+
+  -- The project-local language registry and Lua pack must be loaded.
+  check(package.loaded["langs"] ~= nil, "language-pack registry was loaded")
+  check(package.loaded["langs.lua"] ~= nil, "Lua language pack was loaded")
+
+  local langs = package.loaded["langs"]
+
+  check(type(langs) == "table" and type(langs.setup) == "function", "language registry exposes setup()")
+
+  local lua_pack = package.loaded["langs.lua"]
+
+  check(type(lua_pack) == "table" and type(lua_pack.setup) == "function", "Lua language pack exposes setup()")
+
+  -- The server definition must be available through Neovim's native LSP API.
+  local lua_ls = vim.lsp.config.lua_ls
+
+  check(type(lua_ls) == "table", "effective lua_ls configuration exists")
+  check(type(lua_ls.cmd) == "table", "lua_ls command is configured")
+  check_equal(lua_ls.cmd[1], "lua-language-server", "lua_ls executable command")
+
+  check(type(lua_ls.filetypes) == "table", "lua_ls filetypes are configured")
+
+  local supports_lua = false
+
+  for _, filetype in ipairs(lua_ls.filetypes) do
+    if filetype == "lua" then
+      supports_lua = true
+      break
+    end
+  end
+
+  check(supports_lua, "lua_ls supports Lua buffers")
+
+  local settings = lua_ls.settings
+
+  check(type(settings) == "table", "lua_ls settings exist")
+  check(type(settings.Lua) == "table", "lua_ls Lua settings exist")
+
+  check_equal(settings.Lua.runtime.version, "LuaJIT", "lua_ls runtime")
+  check_equal(settings.Lua.diagnostics.globals[1], "vim", "lua_ls Neovim global")
+  check_equal(settings.Lua.workspace.checkThirdParty, false, "lua_ls third-party workspace checks")
+  check_equal(settings.Lua.telemetry.enable, false, "lua_ls telemetry")
+
+  check(vim.lsp.is_enabled("lua_ls"), "lua_ls is enabled through the native LSP API")
+
+  -- Shared LSP behavior must be registered independently of language packs.
+  check(package.loaded["config.lsp"] ~= nil, "shared LSP configuration was loaded")
+
+  local lsp_autocmds = vim.api.nvim_get_autocmds({
+    group = "nvim_config_lsp",
+    event = "LspAttach",
+  })
+
+  check(#lsp_autocmds >= 1, "shared LspAttach autocommand is registered")
+
+  -- LSP mappings are centrally defined and can be installed per attached buffer.
+  local keymaps = package.loaded["config.keymaps"]
+
+  check(type(keymaps) == "table", "config.keymaps module is available")
+  check(type(keymaps.lsp) == "function", "config.keymaps exposes the LSP mapping function")
+
+  print("PASS Stage 09 LSP and language-pack configuration")
+end
+
 local function main()
   local root = vim.fn.getcwd()
   local version = vim.version()
@@ -396,6 +468,9 @@ local function main()
 
   -- Stage 07 navigation and editing plugins.
   check_stage07_plugins()
+
+  -- Stage 09 LSP and language-pack integration.
+  check_stage09_lsp()
 
   -- Leader keys.
   check_equal(vim.g.mapleader, " ", "mapleader")
