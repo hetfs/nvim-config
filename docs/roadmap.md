@@ -8,15 +8,21 @@ Each stage introduces a defined set of capabilities, with validation and documen
 
 > **Minimum installation. Compose the rest.**
 
-**Stage policy:** A stage is complete only when its implementation and required validation are complete. Listing a plugin or capability in this roadmap does not authorize its installation.
+**Stage policy:** A stage is complete only when its implementation and required validation are complete. Listing a plugin or capability in this roadmap does not authorize its installation unless a separate decision explicitly admits it.
 
 ## Current Status
 
-Stages 01–06 are complete. Stage 07 closeout and Stage 08 final closeout must be tracked against their implementation and validation requirements before proceeding.
+- **Stages 01–03:** Complete.
+- **Stage 04 — Native Workflows:** In progress. The native commenting workflow remains unresolved.
+- **Stages 05–09:** Complete. Stage 09's native LSP and lazydev implementation and defined validation are closed out.
+- **Stage 10 — Completion and Snippets:** Implementation is in place; interactive verification remains in progress.
+- **Stage 11 — Format and Lint:** Complete for the defined manual formatting implementation and automated validation.
+- **Stage 12 — Git, Root, and Sessions:** Planned. `DrKJeff16/project.nvim` has been accepted for project-management workflows; implementation and validation have not yet been completed.
+- **Stages 13–17:** Planned.
 
-Stage 09 is the next major integration stage after the preceding stages have been closed out.
+Later-stage work must not be used to imply that an earlier stage's outstanding requirements have been resolved. In particular, Stage 12 does not reopen Stage 09.
 
-> Update this status whenever a stage is formally completed. Do not infer completion from the presence of configuration files alone.
+> Update this status whenever a stage formally changes. Do not infer completion from the presence of configuration files alone.
 
 ## Stage Overview
 
@@ -33,7 +39,7 @@ Stage 09 is the next major integration stage after the preceding stages have bee
 | 09 | LSP and lazydev | Establish native LSP configuration, a project-local language-pack registry, and Lua development support |
 | 10 | Completion and Snippets | Add completion and snippet workflows |
 | 11 | Format and Lint | Integrate formatting and linting |
-| 12 | Git, Root, and Sessions | Add Git integration, project-root behavior, and session workflows |
+| 12 | Git, Root, and Sessions | Add Git integration, project management, and session workflows |
 | 13 | Language Packs | Extend support for selected languages |
 | 14 | Debugging | Integrate debugging workflows |
 | 15 | UI Polish | Complete selected interface enhancements and dashboard work |
@@ -44,9 +50,11 @@ Stage 09 is the next major integration stage after the preceding stages have bee
 
 ### Stage 01 — First Init
 
+**Status:** Complete
+
 **Objective:** Establish the smallest working configuration.
 
-Scope:
+**Scope:**
 
 - Create the top-level `init.lua`.
 - Establish the minimum supported Neovim version.
@@ -61,9 +69,11 @@ Scope:
 
 ### Stage 02 — Keymaps and Autocommands
 
+**Status:** Complete
+
 **Objective:** Establish foundational configuration behavior.
 
-Scope:
+**Scope:**
 
 - Add `lua/config/options.lua`.
 - Add `lua/config/keymaps.lua`.
@@ -80,9 +90,11 @@ Scope:
 
 ### Stage 03 — Modules
 
+**Status:** Complete
+
 **Objective:** Separate responsibilities without obscuring startup behavior.
 
-Scope:
+**Scope:**
 
 - Organize core configuration into focused modules.
 - Retain direct `require()` calls in `init.lua`.
@@ -97,9 +109,11 @@ Scope:
 
 ### Stage 04 — Native Workflows
 
+**Status:** In progress
+
 **Objective:** Establish useful workflows using Neovim's built-in capabilities before adding more plugins.
 
-Scope:
+**Scope:**
 
 - Review native editing and navigation capabilities.
 - Validate relevant key mappings and mode-specific behavior.
@@ -113,11 +127,15 @@ Scope:
 - Documentation reflects the verified behavior.
 - The stage's required validation is complete.
 
+Stage 04 remains open until its outstanding requirements are resolved and validated. Completion of later stages does not close this stage automatically.
+
 ### Stage 05 — `vim.pack` and Catppuccin
+
+**Status:** Complete
 
 **Objective:** Introduce native plugin management and the selected colorscheme.
 
-Scope:
+**Scope:**
 
 - Use Neovim's built-in `vim.pack` plugin manager.
 - Add Catppuccin through an explicit plugin configuration.
@@ -131,9 +149,11 @@ Scope:
 
 ### Stage 06 — which-key and mini.icons
 
+**Status:** Complete
+
 **Objective:** Improve mapping discovery and icon support.
 
-Scope:
+**Scope:**
 
 - Add which-key.
 - Add `mini.icons`.
@@ -148,9 +168,11 @@ Scope:
 
 ### Stage 07 — Snacks Navigation
 
+**Status:** Complete
+
 **Objective:** Establish the selected navigation and editing enhancements.
 
-Scope:
+**Scope:**
 
 - Integrate Snacks.
 - Integrate fzf-lua as an independent navigation tool.
@@ -168,9 +190,11 @@ Scope:
 
 ### Stage 08 — Treesitter
 
+**Status:** Complete
+
 **Objective:** Add Tree-sitter-based syntax parsing and highlighting.
 
-Scope:
+**Scope:**
 
 - Configure the Tree-sitter plugin.
 - Define the selected parser policy.
@@ -186,6 +210,8 @@ Scope:
 
 ### Stage 09 — LSP and lazydev
 
+**Status:** Complete
+
 **Objective:** Establish a project-local language-pack registry, configure and activate language servers through Neovim's native LSP APIs, and improve Lua development support.
 
 **Scope:**
@@ -193,7 +219,7 @@ Scope:
 1. Add `nvim-lspconfig` through Neovim's native `vim.pack` plugin manager. Use it to supply maintained language-server definitions; do not use its legacy `require("lspconfig")` configuration interface.
 2. Keep `lazydev.nvim` in its dedicated `lua/plugins/lazydev.lua` module.
 3. Introduce `lua/langs/init.lua` as the project-local language-pack registry. Restrict pack discovery to this repository's own `lua/langs/` directory and make discovery deterministic.
-4. Add `lua/langs/lua.lua` with the existing LuaLS-specific settings:
+4. Add `lua/langs/lua.lua` with the approved LuaLS-specific settings:
    - LuaJIT runtime.
    - `vim` as a recognized global for diagnostics.
    - `workspace.checkThirdParty = false`.
@@ -223,13 +249,15 @@ LuaLS (`lua-language-server`) remains an external executable and must be availab
 - Debugging and DAP integration.
 - Lazy-loading changes or performance optimization.
 
-These capabilities remain assigned to their designated later stages. Stage 09 must not expand to absorb them.
+These capabilities remain assigned to their designated later stages. Stage 09 is complete and must not be reopened merely to accommodate later-stage work.
 
 ### Stage 10 — Completion and Snippets
 
+**Status:** In progress — interactive verification remains outstanding.
+
 **Objective:** Add completion and snippet workflows after the LSP foundation is established.
 
-Scope:
+**Scope:**
 
 - Evaluate and configure blink.cmp.
 - Add friendly-snippets.
@@ -241,12 +269,15 @@ Scope:
 - Completion and snippet workflows operate as intended.
 - Plugin setup and mappings are documented.
 - Relevant dependencies and validation are addressed.
+- Required interactive verification is complete.
 
 ### Stage 11 — Format and Lint
 
+**Status:** Complete for the defined manual formatting implementation and automated validation.
+
 **Objective:** Establish consistent formatting and linting workflows.
 
-Scope:
+**Scope:**
 
 - Integrate conform.nvim for formatting.
 - Add the selected linting integration after evaluating its requirements.
@@ -260,29 +291,62 @@ Scope:
 - External tool prerequisites are recorded.
 - Validation does not depend solely on the presence of plugin files.
 
+The completed status refers to the implementation and validation currently defined for this stage. Any additional linting work must be explicitly scoped and validated rather than assumed to exist.
+
 ### Stage 12 — Git, Root, and Sessions
 
-**Objective:** Add project-aware workflows and Git integration.
+**Status:** Planned
 
-Scope:
+**Objective:** Establish predictable Git integration, project management, project-root behavior, and justified session workflows.
 
-- Integrate gitsigns.
-- Evaluate project-root behavior.
-- Add session functionality where justified.
-- Keep optional command-line integrations optional.
-- Check for executables before invoking them and provide clear feedback when unavailable.
+**Decision reference:** `docs/decisions/project-plugin.md`
+
+The project has accepted [`DrKJeff16/project.nvim`](https://github.com/DrKJeff16/project.nvim) for Stage 12 project-management workflows. Acceptance records the architectural decision; it does not mean the plugin has already been installed, configured, or validated.
+
+**Scope:**
+
+1. Integrate `gitsigns.nvim` for Git change indicators and hunk workflows.
+2. Integrate `DrKJeff16/project.nvim` through Neovim's native `vim.pack` plugin manager, using a dedicated `lua/plugins/project.lua` module.
+3. Use project.nvim for project discovery, root detection, project selection, and project history. Review its defaults and validate root-marker precedence against representative repositories before finalizing configuration.
+4. Keep working-directory behavior explicit. Test project switching and directory scope; do not enable automatic directory-changing behavior without a demonstrated requirement.
+5. Preserve the existing native LSP configuration and language-pack architecture from Stage 09. Do not introduce `lua/config/root.lua` by default; reconsider a separate abstraction only if an implementation requirement demonstrates the need.
+6. Keep Snacks and fzf-lua configuration and mappings independent. Leave project.nvim's optional picker integrations disabled unless a concrete requirement justifies enabling one.
+7. Evaluate session behavior separately from root detection. Document the actual capabilities and limitations of the selected workflow before deciding whether additional session functionality is needed.
+8. Keep `lazygit` optional. Check executable availability before invocation and provide clear feedback when it is missing.
+9. Verify `fd` availability before relying on project.nvim features that require it, particularly session-related workflows. Keep external executable management separate from plugin installation.
+10. Keep plugin loading eager through Stage 15. Performance-driven lazy-loading remains assigned to Stage 16.
+11. Centralize new user-facing mappings in `lua/config/keymaps.lua`, use meaningful descriptions, and check for collisions with existing mappings. Preserve the existing `<leader>pr` fzf-lua resume mapping unless a separately reviewed mapping decision changes it.
 
 **Completion criteria:**
 
-- Git and project workflows are predictable.
-- Session behavior is documented and tested.
-- Optional dependencies fail clearly rather than producing confusing errors.
+- `gitsigns.nvim` and project.nvim are configured in their designated modules and installed through `vim.pack`.
+- Git indicators and relevant hunk workflows behave as intended.
+- Project-root detection works for representative Git repositories and supported project markers.
+- Project selection, history, and working-directory behavior are predictable.
+- Project switching does not regress existing navigation, keymaps, or LSP behavior.
+- Snacks Picker and fzf-lua remain independent unless an integration has been explicitly selected and tested.
+- Session behavior and external-tool requirements are documented and tested separately from root detection.
+- Missing optional executables produce clear feedback rather than confusing errors.
+- Syntax, formatting, smoke tests, and required interactive checks pass.
+- The README, plugin inventory, dependency documentation, keymap documentation, and decision record reflect the verified implementation.
+
+**Explicitly out of scope:**
+
+- Reworking or reopening Stage 09.
+- Adding a custom `lua/config/root.lua` module without a demonstrated need.
+- Replacing or combining Snacks Picker and fzf-lua.
+- Introducing Mason or changing the external-tool management policy.
+- Implementing performance-driven lazy-loading before Stage 16.
+
+Stage 12 remains planned until its implementation and required validation are complete.
 
 ### Stage 13 — Language Packs
 
+**Status:** Planned
+
 **Objective:** Extend the configuration for selected programming languages.
 
-Scope:
+**Scope:**
 
 - Define supported language profiles.
 - Document language servers, formatters, linters, parsers, and other required external tools.
@@ -297,9 +361,11 @@ Scope:
 
 ### Stage 14 — Debugging
 
+**Status:** Planned
+
 **Objective:** Establish a deliberate debugging workflow.
 
-Scope:
+**Scope:**
 
 - Evaluate and integrate nvim-dap.
 - Add the required DAP UI and adapter components if admitted.
@@ -314,9 +380,11 @@ Scope:
 
 ### Stage 15 — UI Polish
 
+**Status:** Planned
+
 **Objective:** Add selected interface enhancements after core workflows are stable.
 
-Scope:
+**Scope:**
 
 - Configure the Snacks dashboard in a separate `lua/plugins/dashboard.lua` module.
 - Keep the shared Snacks setup in one place.
@@ -330,9 +398,11 @@ Scope:
 
 ### Stage 16 — Performance
 
+**Status:** Planned
+
 **Objective:** Measure and improve performance only where evidence supports a change.
 
-Scope:
+**Scope:**
 
 - Measure startup behavior.
 - Identify expensive configuration or plugin-loading paths.
@@ -348,9 +418,11 @@ Scope:
 
 ### Stage 17 — Hardening
 
+**Status:** Planned
+
 **Objective:** Consolidate project reliability and maintainability.
 
-Scope:
+**Scope:**
 
 - Review syntax and formatting checks.
 - Strengthen smoke tests and integration checks.
@@ -371,14 +443,16 @@ Scope:
 
 The following rules apply throughout the roadmap:
 
-1. **One stage at a time.** Complete the active stage before beginning unrelated work in the next stage.
+1. **One stage at a time.** Complete the active stage's defined requirements before beginning unrelated work. A later stage may be planned or documented without being treated as implemented.
 2. **Validate before closeout.** A file existing in the repository is not proof that its behavior works.
 3. **Document dependencies.** Plugin installation does not install the external executables a plugin may require.
 4. **Keep mappings discoverable.** Centralize user-facing mappings where practical and use meaningful descriptions.
 5. **Avoid duplicate setup.** Shared plugin repositories and common setup paths should not be configured redundantly.
 6. **Preserve native behavior.** Do not recreate built-in functionality without a concrete reason.
 7. **Defer optimization.** Lazy-loading belongs to Stage 16 unless a documented compatibility or correctness issue requires earlier intervention.
-8. **Keep scope explicit.** A future-stage item remains a candidate until its stage admits and implements it.
+8. **Keep scope explicit.** A future-stage item remains a candidate until its stage admits and implements it, unless a separate decision explicitly approves the capability.
+9. **Respect completed stages.** Later work must preserve completed-stage contracts and must not silently reopen their scope.
+10. **Distinguish decisions from implementation.** An accepted architectural decision establishes direction; it does not establish that implementation or validation is complete.
 
 ## Updating This Roadmap
 
@@ -386,8 +460,8 @@ When a stage changes status:
 
 - Update the current status near the top of this document.
 - Record completion only after required implementation and validation are confirmed.
-- Update related documentation, including plugin inventory, dependencies, keymaps, and testing guidance where applicable.
-- Keep rejected or deferred candidates clearly distinguished from installed capabilities.
+- Update related documentation, including plugin inventory, dependencies, keymaps, testing guidance, and decision records where applicable.
+- Keep rejected or deferred candidates clearly distinguished from accepted, installed, and validated capabilities.
 - Avoid claiming a stage is complete based solely on a commit message or configuration file.
 
 The roadmap should describe the repository's actual state, not an aspirational state.
