@@ -8,26 +8,57 @@ vim.pack.add({
   },
 })
 
-require("project").setup({
+local project = require("project")
+
+project.setup({
   -- Detect project roots automatically.
   manual_mode = false,
 
-  -- Do not enable Neovim's automatic directory-changing option.
+  -- Keep working-directory changes explicit.
   enable_autochdir = false,
-
-  -- Make working-directory scope explicit.
   scope_chdir = "global",
 
-  -- Retain Git and marker-based root detection.
+  -- Detect roots using Git and supported marker files.
   use_git = true,
 
-  -- Keep root detection compatible with the existing LSP setup.
+  -- Integrate with the existing LSP configuration.
   lsp = {
     enabled = true,
     use_pattern_matching = false,
     no_fallback = false,
   },
 
-  -- Keep project.nvim's picker integrations independent from
-  -- the existing Snacks Picker and fzf-lua configurations.
+  -- Keep project.nvim picker integrations independent from
+  -- Snacks Picker and fzf-lua.
+})
+
+-- Avoid the empty-history warning during shutdown.
+-- project.nvim registers a VimLeavePre callback that writes history
+-- even when there are no recent or current-session projects.
+local project_history = require("project.util.history")
+
+-- Replace project.nvim's unconditional shutdown callback with a
+-- guarded callback that writes history only when projects exist.
+for _, autocmd in
+  ipairs(vim.api.nvim_get_autocmds({
+    group = "project.nvim",
+    event = "VimLeavePre",
+  }))
+do
+  vim.api.nvim_del_autocmd(autocmd.id)
+end
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  group = vim.api.nvim_create_augroup("nvim_config_project_history", {
+    clear = true,
+  }),
+  desc = "Persist project history when projects exist",
+  callback = function()
+    -- Avoid triggering an additional history write while checking.
+    local projects = project_history.get_recent_projects(false, false, false)
+
+    if #projects > 0 then
+      project_history.write_history()
+    end
+  end,
 })
