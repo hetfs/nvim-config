@@ -11,7 +11,7 @@ local function check(condition, message)
 end
 
 local function check_equal(actual, expected, message)
-  check(actual == expected, message .. " (expected " .. vim.inspect(expected) .. ", got " .. vim.inspect(actual) .. ")")
+  check(vim.deep_equal(actual, expected), string.format("%s (expected %s, got %s)", message, vim.inspect(expected), vim.inspect(actual)))
 end
 
 local function check_mapping(mode, lhs, description, context)
@@ -103,8 +103,7 @@ local function check_native_grep()
   print("PASS native grep and quickfix")
 end
 
--- Retained for the later Stage 04 commenting investigation.
--- Deliberately not called by main() while native gcc/gc behavior is unresolved.
+-- Stage 04: Verify native gcc/gc commenting behavior.
 local function check_native_commenting()
   local original_buf = vim.api.nvim_get_current_buf()
   local buf = vim.api.nvim_create_buf(false, true)
@@ -365,6 +364,206 @@ local function check_stage07_plugins()
   print("PASS Stage 07 plugin registration")
 end
 
+local function check_stage11_formatting()
+  local conform = require("conform")
+  local formatting = require("config.format")
+  local language_config = require("config.languages")
+
+  check(type(formatting.setup) == "function", "Formatting setup function is available")
+  check(type(formatting.format) == "function", "Manual formatting function is available")
+  check(type(formatting.resolve) == "function", "Formatter resolver is available")
+  check(type(conform.setup) == "function", "Conform setup API is available")
+  check(type(conform.format) == "function", "Conform format API is available")
+  check(type(conform.list_formatters_to_run) == "function", "Conform formatter discovery API is available")
+
+  -- Verify that language-pack formatter metadata is available.
+  local defaults = require("langs").collect("formatters")
+
+  check(type(defaults) == "table", "Language-pack formatter metadata is available")
+  check(type(defaults.lua) == "table", "Lua formatter defaults are available")
+  check(vim.tbl_contains(defaults.lua, "stylua"), "StyLua is the Lua default formatter")
+
+  -- Verify preference ordering, deduplication, and Conform metadata.
+  local resolved = formatting.resolve({
+    lua = { "stylua", "fallback" },
+    typescript = { "prettier", "biome" },
+  }, {
+    preferred = {
+      lua = { "fallback", "fallback", "stylua" },
+      typescript = { "biome" },
+    },
+    stop_after_first = {
+      typescript = true,
+    },
+    formatters_only = {},
+  })
+
+  check_equal(resolved.lua, { "fallback", "stylua" }, "Formatter preferences precede defaults and duplicate names are removed")
+
+  check_equal(resolved.typescript, { "biome", "prettier", stop_after_first = true }, "stop_after_first is preserved in the resolved Conform configuration")
+
+  -- Verify that formatters_only excludes language-pack defaults.
+  local restricted = formatting.resolve({
+    lua = { "stylua", "fallback" },
+  }, {
+    preferred = {
+      lua = { "custom" },
+    },
+    stop_after_first = {},
+    formatters_only = {
+      lua = true,
+    },
+  })
+
+  check_equal(restricted.lua, { "custom" }, "formatters_only restricts the filetype to preferred formatters")
+
+  -- Verify that formatters_only rejects an empty preferred list.
+  local ok, err = pcall(function()
+    formatting.resolve({ lua = { "stylua" } }, {
+      preferred = {},
+      stop_after_first = {},
+      formatters_only = { lua = true },
+    })
+  end)
+
+  check(not ok, "formatters_only rejects an empty preferred formatter list")
+  check(tostring(err):find("formatters_only.lua", 1, true) ~= nil, "Invalid formatters_only configuration reports the filetype")
+
+  -- Capture setup configuration without changing the live Conform setup.
+  -- All monkey patches and package.loaded changes are restored even on error.
+  local original_conform_setup = conform.setup
+  local original_create_user_command = vim.api.nvim_create_user_command
+  local original_language_config = package.loaded["config.languages"]
+
+  local captured_config
+  local captured_command
+
+  local function capture_setup_config(config)
+    captured_config = config
+  end
+
+  local function capture_user_command(name, callback, opts)
+    captured_command = {
+      name = name,
+      callback = callback,
+      opts = opts,
+    }
+  end
+
+  local function run_setup_with_language_config(config)
+    captured_config = nil
+    captured_command = nil
+
+    local setup_ok, setup_err = xpcall(function()
+      package.loaded["config.languages"] = config
+      conform.setup = capture_setup_config
+      vim.api.nvim_create_user_command = capture_user_command
+
+      formatting.setup()
+    end, debug.traceback)
+
+    -- Restore shared state regardless of the setup result.
+    conform.setup = original_conform_setup
+    vim.api.nvim_create_user_command = original_create_user_command
+    package.loaded["config.languages"] = original_language_config
+
+    if not setup_ok then
+      error(setup_err, 0)
+    end
+
+    return captured_config, captured_command
+  end
+
+  -- The normal configuration must leave format-on-save disabled.
+  local default_config, default_command = run_setup_with_language_config(language_config)
+
+  check(type(default_config) == "table", "Formatting setup produces a Conform configuration")
+  check(default_config.format_on_save == nil, "Format-on-save is disabled in the default configuration")
+  check_equal(default_config.default_format_opts, { lsp_format = "never" }, "LSP formatting fallback is disabled")
+  check(type(default_config.formatters_by_ft) == "table", "Conform receives resolved formatters_by_ft")
+  check(default_command ~= nil, "Formatting setup registers the :Format command")
+  check_equal(default_command.name, "Format", "Formatting setup registers the expected command name")
+  check(type(default_command.callback) == "function", ":Format is registered with a callback")
+  check_equal(default_command.opts, { desc = "Format current buffer" }, ":Format receives the expected description")
+
+  -- Explicit opt-in should enable format-on-save with a safe LSP policy.
+  local enabled_language_config = vim.deepcopy(language_config)
+  enabled_language_config.format_on_save = {
+    enabled = true,
+    timeout_ms = 750,
+  }
+
+  local enabled_config = run_setup_with_language_config(enabled_language_config)
+
+  check_equal(enabled_config.format_on_save, {
+    timeout_ms = 750,
+    lsp_format = "never",
+  }, "Format-on-save opt-in uses the configured timeout and disables LSP fallback")
+
+  -- Verify the real command is registered after normal startup.
+  -- Do not depend on nvim_get_commands().desc: command metadata may expose
+  -- the description differently across Neovim versions.
+  local command_info = vim.api.nvim_get_commands({})["Format"]
+
+  check(command_info ~= nil, ":Format exists after normal configuration loading")
+
+  -- Confirm the formatting callback requests asynchronous Conform formatting
+  -- and explicitly disables LSP formatting. No external formatter is run.
+  local original_list_formatters = conform.list_formatters_to_run
+  local original_format = conform.format
+  local original_notify = vim.notify
+
+  local test_bufnr = vim.api.nvim_get_current_buf()
+  local original_buf_option = vim.bo[test_bufnr].filetype
+  local test_filetype = original_buf_option
+  local observed_format_opts
+
+  -- Select a filetype with a formatter in the captured configuration.
+  if not default_config.formatters_by_ft[test_filetype] or #default_config.formatters_by_ft[test_filetype] == 0 then
+    test_filetype = nil
+
+    for filetype, configured in pairs(default_config.formatters_by_ft) do
+      if #configured > 0 then
+        test_filetype = filetype
+        break
+      end
+    end
+  end
+
+  check(test_filetype ~= nil, "At least one filetype has a formatter for the :Format smoke test")
+
+  local format_ok, format_err = xpcall(function()
+    vim.bo[test_bufnr].filetype = test_filetype
+
+    conform.list_formatters_to_run = function()
+      return { { name = "smoke-test-formatter" } }
+    end
+
+    conform.format = function(opts)
+      observed_format_opts = opts
+    end
+
+    formatting.format()
+  end, debug.traceback)
+
+  -- Restore stubs and buffer options regardless of the callback result.
+  conform.list_formatters_to_run = original_list_formatters
+  conform.format = original_format
+  vim.notify = original_notify
+  vim.bo[test_bufnr].filetype = original_buf_option
+
+  if not format_ok then
+    error(format_err, 0)
+  end
+
+  check(type(observed_format_opts) == "table", ":Format invokes Conform formatting")
+  check_equal(observed_format_opts.bufnr, test_bufnr, ":Format targets the current buffer")
+  check_equal(observed_format_opts.async, true, ":Format uses asynchronous formatting")
+  check_equal(observed_format_opts.lsp_format, "never", ":Format disables LSP formatting")
+
+  print("PASS Stage 11 formatting and linting")
+end
+
 local function check_stage12_workflows()
   -- Stage 12 configuration modules must load during startup.
   check(package.loaded["plugins.gitsigns"] ~= nil, "Gitsigns configuration module was loaded")
@@ -582,6 +781,9 @@ local function main()
   -- Stage 10 completion, snippets, and pairing.
   check_stage10_completion()
 
+  -- Stage 11 formatter integration.
+  check_stage11_formatting()
+
   -- Stage 12 Git, project-root, and session workflows.
   check_stage12_workflows()
 
@@ -686,9 +888,7 @@ local function main()
 
   -- Stage 04 native workflow tests.
   check_native_grep()
-
-  -- Native commenting is deliberately deferred pending investigation.
-  -- Keep check_native_commenting() available for when that investigation resumes.
+  check_native_commenting()
 
   -- Required modules must fail visibly and stop later module loading.
   check_module_failure_contract(root)

@@ -18,6 +18,24 @@ require("snacks").setup({
   },
 })
 
+-- picker = {
+--   projects = {
+--   sources = {
+--     workspace = {"D:\\workspace"}, -- Replace with your project perent directories
+--     recent = true
+--   },
+--   },
+-- }
+
+-- ============================================================
+-- Snacks Picker workspace
+-- ============================================================
+vim.keymap.set("n", "<leader>fp", function()
+  Snacks.picker.projects()
+end, {
+  desc = "Projects",
+})
+
 -- ============================================================
 -- Snacks Navigation
 -- ============================================================

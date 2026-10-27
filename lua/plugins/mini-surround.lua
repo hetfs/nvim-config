@@ -1,4 +1,3 @@
--- Stage 07: mini.surround editing.
 -- Reuse the shared mini.nvim installation from plugins.icons.
 
 require("mini.surround").setup({
