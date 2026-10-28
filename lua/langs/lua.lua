@@ -18,7 +18,9 @@ function M.setup()
         diagnostics = {
           globals = { "vim" },
         },
+
         workspace = {
+
           checkThirdParty = false,
         },
         telemetry = {

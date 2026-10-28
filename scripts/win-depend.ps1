@@ -1057,6 +1057,9 @@ try {
     else {
         Write-Status -Status PASS -Message "All dependencies, providers, navigation and search tools, and development tools were verified."
     }
+python.exe -m pip install --upgrade pip
+pip install git+https://github.com/johnnymorganz/stylua
+
 
     # Explain the scope of PATH and compiler updates if applicable.
     if ($script:InstalledAnyPackage) {
