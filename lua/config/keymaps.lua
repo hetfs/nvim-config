@@ -222,4 +222,12 @@ map("n", "<leader>qd", function()
 end, {
   desc = "Session: Delete",
 })
+
+-- jq: Run a filter against the current buffer.
+vim.keymap.set("n", "<leader>jq", function()
+  require("langs.data").run_prompt()
+end, {
+  desc = "Run jq filter",
+})
+
 return M

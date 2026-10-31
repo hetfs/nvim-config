@@ -19,9 +19,12 @@ Additional requirements depend on the implemented workflows:
 - **Tree-sitter:** Tree-sitter CLI, GNU tar, cURL, and a compatible C compiler for parser-related installation and compilation workflows.
 - **LSP:** `lua-language-server` for the current Lua language-server integration.
 - **Formatting:** [StyLua](https://github.com/JohnnyMorganz/StyLua) for Lua formatting and repository formatting checks. Conform provides the Neovim-side formatting interface; it does not install formatter executables.
+- **Data language packs:** YAML Language Server, JSON Language Server, Prettier, `jq`, and Taplo for the implemented YAML, JSON, JSONC, JSON5, jq, and TOML workflows. `jq-lsp` is optional.
 - **Optional Git interface:** [Lazygit](https://github.com/jesseduffield/lazygit), if you choose to use the external terminal application. It is not a core dependency.
 
 On Windows, `scripts/win-depend.ps1` uses WinGet to install and verify the dependencies within its defined scope. It checks the Tree-sitter CLI and configures the WinLibs GCC/G++ toolchain for the current PowerShell process. It does not install every external tool mentioned in this document; LuaLS and optional Lazygit must be managed separately.
+
+The data-language pack has a dedicated Windows installation entry point at `scripts/install/windows/data-pack.ps1`. It orchestrates the individual YAML, JSON, jq-lsp, and TOML installers. The `jq` executable is installed separately and checked by the data-pack installer.
 
 See [Dependencies](docs/dependencies.md) for dependency policy, setup, and verification details.
 
@@ -61,6 +64,8 @@ The project follows a 17-stage roadmap. Stages 05, 06, 08, 09, and 11 have compl
 
 **Stage 12 is in progress.** Gitsigns, `project.nvim`, and `mini.sessions` are implemented. Interactive checks for Git workflows, project navigation, and session save/restore have passed, as have the Stage 12 smoke-test checks on Neovim 0.12.6. Documentation alignment, dependency and keymap references, and remaining closeout requirements are still outstanding.
 
+**Stage 13 is in progress.** The Lua language pack is implemented. The data-language pack provides YAML, JSON, JSONC, JSON5, jq, and TOML support, and its external tools have been installed and verified on Windows. Python configuration is implemented and undergoing testing. The remaining baseline language packs are pending implementation and validation.
+
 Later stages may be developed and validated independently without treating unfinished earlier stages as complete.
 
 ### Stage summary
@@ -79,7 +84,7 @@ Later stages may be developed and validated independently without treating unfin
 | 10 | Completion and Snippets | Interactive verification in progress |
 | 11 | Manual Formatting | Complete |
 | 12 | Git, Root, and Sessions | In progress — implementation and initial validation passed; closeout outstanding |
-| 13 | Language Packs | Planned |
+| 13 | Language Packs | In progress — Lua and data packs implemented; Python testing in progress |
 | 14 | Debugging | Planned |
 | 15 | UI Polish | Planned |
 | 16 | Performance | Planned |
@@ -118,7 +123,7 @@ The reported interactive checks passed. Plugins introduced before Stage 16 remai
 
 ## Stage 08 — Tree-sitter
 
-Stage 08 installs `nvim-treesitter` through `vim.pack`, configures parser and query storage under Neovim's data directory, and enables native Tree-sitter highlighting for Lua buffers through `vim.treesitter.start()` and an explicit `FileType` autocommand.
+Stage 08 installs `nvim-treesitter` through `vim.pack`, configures parser and query storage under Neovim's data directory, and enables native Tree-sitter highlighting through `vim.treesitter.start()` and an explicit `FileType` autocommand.
 
 On Windows, parser-related workflows require GNU tar, a compatible GCC/G++ toolchain, the Tree-sitter CLI (version 0.26.1 or later under the current setup policy), and cURL. The setup script changes `PATH` and `CC` for the current PowerShell process and its child processes; those changes are not persisted as Windows environment settings.
 
@@ -181,6 +186,74 @@ The stage remains in progress until documentation, dependency and keymap referen
 
 See [Architecture](docs/architecture.md), [Dependencies](docs/dependencies.md), and [Keymaps](docs/keymaps.md) for the corresponding design and workflow references.
 
+## Stage 13 — Language Packs
+
+Stage 13 organizes language-specific configuration into focused packs under `lua/langs/`. Each pack contributes filetype, formatter, parser, and language-server metadata through the existing language registry.
+
+The baseline implementation order is:
+
+1. Lua
+2. Python
+3. YAML
+4. JSON
+5. Shell
+6. PowerShell
+7. HTML
+8. CSS
+9. JavaScript/TypeScript
+10. Markdown
+11. Rust
+
+The language packs use the existing Neovim configuration architecture. They do not introduce a separate language-server manager or install external tools during Neovim startup.
+
+### Implemented packs
+
+**Lua**
+
+The Lua pack configures LuaLS, StyLua formatting, and Lua-specific language settings. LuaLS is configured through Neovim's native LSP API.
+
+**Python**
+
+The Python pack uses `ty` for language-server functionality and Ruff for formatting. Python tooling installation and interactive validation are in progress.
+
+**Data formats**
+
+The data-language pack supports YAML, JSON, JSONC, JSON5, jq, and TOML in `lua/langs/data.lua`.
+
+| Format | Language server | Formatter |
+|---|---|---|
+| YAML | YAML Language Server | Prettier |
+| JSON | JSON Language Server | Prettier |
+| JSONC | JSON Language Server | Prettier |
+| JSON5 | Not configured | Prettier |
+| jq | Optional `jq-lsp` | None |
+| TOML | Taplo | Taplo |
+
+The JSON Language Server handles JSON and JSONC. JSON5 deliberately uses Tree-sitter and Prettier without JSON Language Server attachment. jq execution uses Neovim's native `vim.system()` API.
+
+The data-pack external tools have been installed and verified on Windows. The installation entry point is:
+
+```powershell
+.\scripts\install\windows\data-pack.ps1
+```
+
+The script orchestrates the individual YAML, JSON, jq-lsp, and TOML installers. The `jq` executable is installed separately and checked by the orchestrator.
+
+See [Data Language Pack](docs/data-pack.md) for the architecture, supported formats, dependencies, installation, and validation details.
+
+Format-specific documentation:
+
+- [YAML support](docs/yaml-support.md)
+- [JSON support](docs/json-support.md)
+- [jq support](docs/jq-support.md)
+- [TOML support](docs/toml-support.md)
+
+### Remaining baseline work
+
+The remaining language packs are pending implementation and validation. HTML and CSS are part of the core baseline. The rest of the baseline will follow the documented implementation order.
+
+A language pack is not considered complete solely because its configuration loads. Its external dependencies, language-server attachment, diagnostics, formatting, parser behavior, and relevant interactive workflows must be validated before its support is marked complete.
+
 ## Repository structure
 
 The main configuration and plugin modules are organized by responsibility:
@@ -202,6 +275,11 @@ nvim-config/
 │   ├── plugin-inventory.md
 │   ├── plugin-admission-policy.md
 │   ├── keymaps.md
+│   ├── data-pack.md
+│   ├── yaml-support.md
+│   ├── json-support.md
+│   ├── jq-support.md
+│   ├── toml-support.md
 │   └── decisions/
 ├── lua/
 │   ├── config/
@@ -212,7 +290,9 @@ nvim-config/
 │   │   └── format.lua
 │   ├── langs/
 │   │   ├── init.lua
-│   │   └── lua.lua
+│   │   ├── lua.lua
+│   │   ├── python.lua
+│   │   └── data.lua
 │   └── plugins/
 │       ├── colorscheme.lua
 │       ├── icons.lua
@@ -238,7 +318,14 @@ nvim-config/
     ├── check-syntax.lua
     ├── smoke.lua
     ├── win-depend.ps1
-    └── winsetup.ps1
+    ├── winsetup.ps1
+    └── install/
+        └── windows/
+            ├── data-pack.ps1
+            ├── yaml.ps1
+            ├── json.ps1
+            ├── jq-lsp.ps1
+            └── toml.ps1
 ```
 
 This tree shows the main source layout, not an exhaustive listing of every file. Consult the current checkout for the complete set of configuration modules and documentation.
@@ -301,6 +388,23 @@ Get-Command lua-language-server
 
 Open a Lua file and verify that LuaLS attaches. Test definition navigation, hover, diagnostics, and buffer-local mapping behavior as described in [Native Keymap and Interactive Workflow Testing](docs/Keymap-test.md). A registered LSP configuration does not prove that the server started or attached successfully.
 
+### Verify data-pack executables
+
+After running the Windows data-pack installer, open Neovim and execute:
+
+```vim
+:lua print(vim.fn.executable("yaml-language-server"))
+:lua print(vim.fn.executable("vscode-json-language-server"))
+:lua print(vim.fn.executable("jq-lsp"))
+:lua print(vim.fn.executable("taplo"))
+:lua print(vim.fn.executable("prettier"))
+:lua print(vim.fn.executable("jq"))
+```
+
+Each command should return `1`. A return value of `1` means Neovim can find the executable through its `PATH`; `0` means it cannot.
+
+This check verifies executable discovery only. Language-server attachment and feature behavior must be validated separately inside Neovim.
+
 ### Check formatting
 
 Install [StyLua](https://github.com/JohnnyMorganz/StyLua) separately, then run the repository formatting check:
@@ -355,4 +459,3 @@ Contributions should respect the architecture, roadmap, plugin admission policy,
 This project is licensed under the [MIT License](LICENSE).
 
 Copyright (c) 2025 HETFS LIMITED
-

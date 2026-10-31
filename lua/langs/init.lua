@@ -1,4 +1,4 @@
--- Stage 09: Language-pack registry.
+-- Stage 10: Language-pack registry.
 -- Discover language packs from this configuration only.
 -- Stage 11: Aggregate language-specific metadata without changing setup behavior.
 
