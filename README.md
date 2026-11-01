@@ -17,8 +17,9 @@ The project prioritizes a minimal installation, explicit plugin evaluation, repr
 Additional requirements depend on the implemented workflows:
 
 - **Tree-sitter:** Tree-sitter CLI, GNU tar, cURL, and a compatible C compiler for parser-related installation and compilation workflows.
-- **LSP:** `lua-language-server` for the current Lua language-server integration.
-- **Formatting:** [StyLua](https://github.com/JohnnyMorganz/StyLua) for Lua formatting and repository formatting checks. Conform provides the Neovim-side formatting interface; it does not install formatter executables.
+- **LSP:** `lua-language-server` for the current Lua language-server integration, and `ty` for the Python language-server workflow.
+- **Formatting:** [StyLua](https://github.com/JohnnyMorganz/StyLua) for Lua formatting, [Ruff](https://docs.astral.sh/ruff/) for Python formatting and linting, and Prettier for the data-language workflows. Conform provides the Neovim-side formatting interface; it does not install formatter executables.
+- **Optional Lua linting:** [LuaCheck](https://github.com/lunarmodules/luacheck) for standalone Lua linting. It is not a Neovim diagnostics integration or a startup dependency.
 - **Data language packs:** YAML Language Server, JSON Language Server, Prettier, `jq`, and Taplo for the implemented YAML, JSON, JSONC, JSON5, jq, and TOML workflows. `jq-lsp` is optional.
 - **Optional Git interface:** [Lazygit](https://github.com/jesseduffield/lazygit), if you choose to use the external terminal application. It is not a core dependency.
 
@@ -64,7 +65,7 @@ The project follows a 17-stage roadmap. Stages 05, 06, 08, 09, and 11 have compl
 
 **Stage 12 is in progress.** Gitsigns, `project.nvim`, and `mini.sessions` are implemented. Interactive checks for Git workflows, project navigation, and session save/restore have passed, as have the Stage 12 smoke-test checks on Neovim 0.12.6. Documentation alignment, dependency and keymap references, and remaining closeout requirements are still outstanding.
 
-**Stage 13 is in progress.** The Lua language pack is implemented. The data-language pack provides YAML, JSON, JSONC, JSON5, jq, and TOML support, and its external tools have been installed and verified on Windows. Python configuration is implemented and undergoing testing. The remaining baseline language packs are pending implementation and validation.
+**Stage 13 is in progress.** The Lua language pack is complete against its current acceptance criteria, including repository-wide Lua syntax and LuaCheck validation. The data-language pack implements YAML, JSON, JSONC, JSON5, jq, and TOML support; its external tools have been installed and verified on Windows. Python configuration is implemented and undergoing testing. Remaining baseline language packs and outstanding language-specific validation are tracked separately; implementation alone does not constitute completion.
 
 Later stages may be developed and validated independently without treating unfinished earlier stages as complete.
 
@@ -84,7 +85,7 @@ Later stages may be developed and validated independently without treating unfin
 | 10 | Completion and Snippets | Interactive verification in progress |
 | 11 | Manual Formatting | Complete |
 | 12 | Git, Root, and Sessions | In progress — implementation and initial validation passed; closeout outstanding |
-| 13 | Language Packs | In progress — Lua and data packs implemented; Python testing in progress |
+| 13 | Language Packs | In progress — Lua complete; data pack implemented; Python testing in progress; remaining language validation outstanding |
 | 14 | Debugging | Planned |
 | 15 | UI Polish | Planned |
 | 16 | Performance | Planned |
@@ -210,11 +211,11 @@ The language packs use the existing Neovim configuration architecture. They do n
 
 **Lua**
 
-The Lua pack configures LuaLS, StyLua formatting, and Lua-specific language settings. LuaLS is configured through Neovim's native LSP API.
+The Lua pack configures LuaLS, StyLua formatting, and Lua-specific language settings. LuaLS is configured through Neovim's native LSP API. The Lua pack is complete. Repository-wide Lua syntax validation passed for 33 files, and standalone LuaCheck reported zero warnings and zero errors across those files. LuaCheck remains an optional CLI tool; it is not integrated into Neovim's LSP or diagnostics workflow.
 
 **Python**
 
-The Python pack uses `ty` for language-server functionality and Ruff for formatting. Python tooling installation and interactive validation are in progress.
+The Python pack uses `ty` for language-server functionality and Ruff for formatting and linting. Python tooling installation and interactive validation are in progress; the pack should not be marked complete until its defined checks pass.
 
 **Data formats**
 
@@ -231,7 +232,7 @@ The data-language pack supports YAML, JSON, JSONC, JSON5, jq, and TOML in `lua/l
 
 The JSON Language Server handles JSON and JSONC. JSON5 deliberately uses Tree-sitter and Prettier without JSON Language Server attachment. jq execution uses Neovim's native `vim.system()` API.
 
-The data-pack external tools have been installed and verified on Windows. The installation entry point is:
+The data-pack external tools have been installed and verified on Windows. This confirms executable installation and discovery, not every language server's attachment or each format's interactive behavior. The installation entry point is:
 
 ```powershell
 .\scripts\install\windows\data-pack.ps1
@@ -250,7 +251,7 @@ Format-specific documentation:
 
 ### Remaining baseline work
 
-The remaining language packs are pending implementation and validation. HTML and CSS are part of the core baseline. The rest of the baseline will follow the documented implementation order.
+The remaining baseline language packs are pending implementation and validation. HTML and CSS are part of the core baseline. YAML and the other data formats are already represented in the shared data-language pack, but each format must still satisfy its documented validation criteria before its support is treated as complete. The remaining baseline will follow the documented implementation order.
 
 A language pack is not considered complete solely because its configuration loads. Its external dependencies, language-server attachment, diagnostics, formatting, parser behavior, and relevant interactive workflows must be validated before its support is marked complete.
 
@@ -341,6 +342,29 @@ nvim --headless -u NONE -l scripts/check-syntax.lua
 ```
 
 The checker compiles discovered Lua files without executing their contents. It exits with status `0` when all checked files compile successfully and a nonzero status when syntax errors are found.
+
+### Check Lua lint
+
+LuaCheck is optional. If it is installed, run the repository-wide check from the repository root:
+
+```powershell
+$LuaFiles = Get-ChildItem -Path . -Recurse -Filter "*.lua" -File |
+    Where-Object {
+        $_.FullName -notmatch '[\\/](\.git|node_modules|vendor|build|dist)[\\/]'
+    } |
+    ForEach-Object {
+        $_.FullName
+    }
+
+luacheck `
+    --no-config `
+    --std luajit `
+    --globals vim Snacks `
+    --no-color `
+    $LuaFiles
+```
+
+The command uses the LuaJIT standard because Neovim embeds LuaJIT. `vim` and `Snacks` are declared globals used by this configuration. LuaCheck is a standalone repository check; it does not run automatically at startup or provide Neovim diagnostics.
 
 ### Run the smoke test
 

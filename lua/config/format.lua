@@ -255,10 +255,14 @@ function M.format()
   local conform = require("conform")
   local bufnr = vim.api.nvim_get_current_buf()
   local filetype = vim.bo[bufnr].filetype
+  local display_filetype = filetype ~= "" and filetype or "unknown"
   local configured = formatters_by_ft[filetype]
 
   if not configured or #configured == 0 then
-    vim.notify(string.format("Format: no formatter configured for '%s'", filetype ~= "" and filetype or "unknown"), vim.log.levels.WARN)
+    vim.notify(
+      string.format("Format: no formatter configured for '%s'", display_filetype),
+      vim.log.levels.WARN
+    )
     return
   end
 
@@ -276,10 +280,19 @@ function M.format()
     end
 
     if #unavailable > 0 then
-      vim.notify(string.format("Format: formatter executable unavailable: %s", table.concat(unavailable, ", ")), vim.log.levels.WARN)
+      vim.notify(
+        string.format(
+          "Format: formatter executable unavailable: %s",
+          table.concat(unavailable, ", ")
+        ),
+        vim.log.levels.WARN
+      )
     else
       vim.notify(
-        string.format("Format: no configured formatter is runnable for '%s' in this buffer", filetype ~= "" and filetype or "unknown"),
+        string.format(
+          "Format: no configured formatter is runnable for '%s' in this buffer",
+          display_filetype
+        ),
         vim.log.levels.WARN
       )
     end

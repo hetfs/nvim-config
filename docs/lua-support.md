@@ -1,7 +1,7 @@
 # Lua Language Support
 
-- **Status:** In progress — core LuaLS, StyLua, standalone-project, Tree-sitter, and standalone Lua 5.4.9 Windows runtime workflows validated
-- **Last validated:** 2026-10-30
+- **Status:** In progress — core LuaLS, StyLua, standalone-project, Tree-sitter, standalone Lua 5.4.9, LuaCheck repository linting, and LuaRocks setup validated; core failure-path checks remain open
+- **Last validated:** 2026-11-01
 - **Roadmap stage:** Stage 13 — Language Packs
 - **Validated environment:** Windows, Neovim 0.12.6, PowerShell 7.6.7
 
@@ -14,7 +14,7 @@ Lua serves two purposes in this environment:
 1. It is the implementation language for Neovim configuration and plugins.
 2. It is a general-purpose language for standalone applications and libraries.
 
-These environments have different runtime requirements. The language pack must support both without forcing every user to install a standalone Lua runtime, compiler, package manager, or additional linter.
+These environments have different runtime requirements. The language pack must support both without forcing every user to install a standalone Lua runtime, compiler, package manager, test framework, or additional linter.
 
 The project follows this principle:
 
@@ -49,13 +49,16 @@ The built-in LSP client is part of Neovim. It is not a separate executable or pl
 
 The existing plugins and shared modules remain part of the configuration architecture. They must not be duplicated inside the Lua language pack.
 
-A user installing the default Lua support should not need standalone Lua 5.4, GCC, LuaCheck, or LuaRocks.
+A user installing the default Lua support should not need standalone Lua 5.4, GCC, LuaCheck, LuaRocks, Busted, LuaUnit, or LuaCov.
 
 ### 2.2 Optional installation
 
 | Component | Tool | Responsibility | When to install |
 |---|---|---|---|
 | Static analysis and linting | LuaCheck (`luacheck`) | Detect undefined globals, unused variables, and other code issues | When additional static analysis is wanted |
+| Unit and integration testing | Busted | Lua test framework | When a project needs a dedicated test framework |
+| Alternative test framework | LuaUnit | xUnit-style Lua testing | When a project prefers its API or reporting model |
+| Lua coverage | LuaCov | Measure Lua source-code coverage | When test coverage reports are needed |
 | Standalone runtime | Lua 5.4.x | Execute standalone Lua applications | When developing or running Lua 5.4 projects |
 | Bytecode compiler | `luac` | Compile Lua source into bytecode | When bytecode compilation is needed |
 | Native build toolchain | GCC or another supported C compiler | Build Lua and native Lua modules | When compiling Lua or C extensions |
@@ -63,18 +66,44 @@ A user installing the default Lua support should not need standalone Lua 5.4, GC
 
 Optional components must not be installed automatically by Neovim or by the default Lua language-pack setup.
 
+**Current Windows environment:** LuaCheck `1.2.0` and LuaRocks `3.13.0` are installed as optional command-line tools. Their installation does not promote them to core dependencies. LuaCheck is used for an explicit repository lint command; it is not integrated as an LSP or automatic Neovim lint-on-save workflow.
+
 **Important:** LuaRocks is not a prerequisite for LuaLS, StyLua, Tree-sitter, or ordinary Lua development. It is a package-management tool for projects that need it.
 
-### 2.3 Installation profiles
+Busted and LuaUnit are alternatives for the same broad testing role. Do not install both by default.
+
+LuaCov is for Lua source coverage. GCOV and LCOV belong to native-code coverage workflows and are not substitutes for LuaCov.
+
+### 2.3 Separate native-development tools
+
+The following tools are not part of the Lua language pack:
+
+| Tool | Responsibility | When to use |
+|---|---|---|
+| GCOV | Coverage instrumentation for compiled native code | When measuring coverage of compiled C/C++ code |
+| LCOV | Collect and present GCOV coverage data | When generating native-code coverage reports |
+| AddressSanitizer (ASan) | Detect memory errors | When developing or debugging native code |
+| ThreadSanitizer (TSan) | Detect data races | When debugging multithreaded native code |
+| UndefinedBehaviorSanitizer (UBSan) | Detect selected forms of undefined behavior | When validating native C/C++ code |
+
+These tools are relevant to native C/C++ development, including native Lua modules. They do not provide ordinary Lua source-code testing or coverage.
+
+Keep them in a separate native-development toolchain.
+
+### 2.4 Installation profiles
 
 | Profile | Included |
 |---|---|
 | Default Lua support | LuaLS and StyLua, using existing Neovim infrastructure |
-| Lua linting extension | LuaCheck |
+| Lua linting extension | LuaCheck (installed; invoked explicitly from the CLI) |
+| Lua testing extension | Busted |
+| Alternative Lua testing extension | LuaUnit instead of Busted |
+| Lua coverage extension | LuaCov |
 | Standalone Lua development | A project-selected Lua runtime |
 | Lua 5.4 development | Lua 5.4 runtime and `luac` |
 | Lua native-extension development | Lua development headers, libraries, and a C compiler |
 | Lua package-management workflow | LuaRocks and the runtime it is configured to manage |
+| Native-code QA | GCOV/LCOV and applicable compiler sanitizers |
 
 The Lua 5.4 Windows build described in this document is an optional development setup. Its successful installation does not make it part of the default profile.
 
@@ -91,10 +120,13 @@ Lua support uses the existing language-pack architecture, native Neovim LSP APIs
 | Formatting | StyLua | Consistent Lua formatting |
 | Formatter integration | Conform.nvim | Formatter resolution and execution |
 | Optional linting | LuaCheck | Additional static analysis |
+| Optional testing | Busted or LuaUnit | Lua unit and integration tests |
+| Optional coverage | LuaCov | Lua source-code coverage |
 | Syntax parsing and highlighting | Existing Tree-sitter integration | Lua parsing and highlighting |
 | Language-pack registration | `lua/langs/init.lua` | Pack discovery, setup, and formatter metadata |
 | Standalone runtime | Project-selected Lua | General-purpose Lua execution |
 | Optional package management | LuaRocks | Lua module and dependency management |
+| Native-code QA | GCC and native QA tools | Native module compilation and diagnostics |
 
 The implementation must:
 
@@ -279,6 +311,9 @@ std = "luajit"
 globals = {
   "vim",
 }
+
+max_line_length = 120
+max_code_line_length = 120
 ```
 
 For standalone Lua 5.4 projects, use the Lua 5.4 standard only when the installed LuaCheck release exposes and accepts that standard:
@@ -294,13 +329,13 @@ Do not use one global configuration that treats all Lua files as LuaJIT or Lua 5
 
 Prefer project-local `.luacheckrc` files or an equivalent explicit project configuration. This prevents Neovim globals from being accepted accidentally in standalone projects and prevents standalone Lua assumptions from leaking into Neovim configuration checks.
 
-**Compatibility qualification:** LuaCheck's current upstream documentation identifies syntax support for Lua 5.1 through 5.4 and LuaJIT. However, syntax support and standard-library global definitions are separate capabilities. Verify the installed release's supported `std` names before using `std = "lua54"`. Do not assume that the standard name is valid merely because Lua 5.4 syntax is supported.
+**Compatibility qualification:** LuaCheck's current upstream project identifies syntax support for Lua 5.1 through 5.4 and LuaJIT. However, syntax support and standard-library global definitions are separate capabilities. Verify the installed release's supported `std` names before using `std = "lua54"`. Do not assume that the standard name is valid merely because Lua 5.4 syntax is supported.
 
 LuaCheck's Lua 5.4 attribute support also needs to be considered carefully. Parser acceptance of `<const>` and `<close>` does not necessarily mean that the linter performs semantic checks specific to those attributes.
 
 ### 7.2 LuaCheck integration policy
 
-If LuaCheck is adopted:
+The current repository CLI workflow is adopted and validated. Any broader integration must follow these rules:
 
 - Keep it optional.
 - Install it as an external executable.
@@ -310,9 +345,105 @@ If LuaCheck is adopted:
 - Decide separately whether to run it manually, through a script, or through the existing lint workflow.
 - Do not add automatic installation or automatic execution until the linting workflow is explicitly configured and tested.
 
-LuaCheck integration is not recorded as implemented or validated in this document.
+**Current implementation and validation status:**
 
-## 8. Optional LuaRocks package management
+- LuaCheck `1.2.0` is installed in the user LuaRocks tree.
+- The `luacheck` command is available through the user's PATH.
+- The complete repository was checked using the LuaJIT standard and explicit `vim` and `Snacks` globals.
+- All 33 Lua files passed with zero warnings and zero errors.
+- A temporary diagnostic fixture confirmed that LuaCheck reports an unused local and an undefined global. The fixture was removed after the test.
+- No `.luacheckrc` has been added to the repository.
+- LuaCheck is not configured as an LSP, a Neovim diagnostic provider, a save hook, or an automatic startup task.
+- Lua 5.4-specific standard selection and `<const>` / `<close>` behavior have not been independently tested.
+
+The repository CLI lint workflow is validated. A general-purpose LuaCheck integration for arbitrary standalone Lua 5.4 projects remains unverified.
+
+## 8. Optional testing and QA tools
+
+Testing and QA tools are separate from the default language pack. They must be selected according to the type of Lua project and the validation it needs.
+
+### 8.1 Lua test frameworks
+
+Two test frameworks are under consideration:
+
+| Tool | Role | Recommendation |
+|---|---|---|
+| Busted | Unit, integration, and functional testing | Preferred optional framework |
+| LuaUnit | Unit testing with an xUnit-style API | Alternative to Busted |
+
+Busted is the preferred choice if a dedicated Lua test framework is needed. It provides a specification-style testing workflow and supports structured test output.
+
+LuaUnit is a valid alternative for projects that prefer an xUnit-style API.
+
+Do not install both by default. They solve the same broad testing requirement, and using both would add dependencies without an established need.
+
+**Project policy:** The existing `nvim-config` headless smoke-test suite remains the primary validation mechanism for the Neovim configuration. Do not introduce Busted or LuaUnit merely to replace working smoke tests. Consider a dedicated test framework when a Lua module or standalone application develops a meaningful independent test suite.
+
+### 8.2 Lua source-code coverage
+
+LuaCov is the recommended optional coverage tool.
+
+It measures Lua source-code execution during tests and can produce coverage reports.
+
+Use LuaCov when:
+
+- A project has a dedicated Lua test suite.
+- Test coverage is a meaningful quality metric.
+- The team needs to identify untested source paths.
+- Coverage reports are useful in local development or CI.
+
+LuaCov is not a test runner. It measures coverage from test execution and complements a test framework such as Busted.
+
+Do not add LuaCov to the default Lua installation. Coverage instrumentation is useful only when a project has a test workflow that can produce meaningful coverage data.
+
+### 8.3 Native-code coverage
+
+GCOV and LCOV belong to native-code coverage workflows.
+
+| Tool | Role |
+|---|---|
+| GCOV | Collect coverage information from instrumented compiled code |
+| LCOV | Collect and present GCOV coverage data in report form |
+
+These tools are appropriate when developing native C/C++ components, such as Lua C modules.
+
+They do not replace LuaCov and should not be installed for ordinary Lua source-code coverage.
+
+### 8.4 Native-code sanitizers
+
+Sanitizers are compiler-assisted diagnostics for native code.
+
+| Sanitizer | Purpose |
+|---|---|
+| ASan | Detect memory errors, including out-of-bounds access and use-after-free |
+| TSan | Detect data races |
+| UBSan | Detect selected forms of undefined behavior |
+
+These tools are useful when developing or debugging native C/C++ components.
+
+They do not provide ordinary Lua script diagnostics or replace LuaLS, LuaCheck, or LuaCov.
+
+Keep sanitizer support in the native-development toolchain. Do not make it a dependency of the Lua language pack.
+
+### 8.5 Testing and QA selection policy
+
+| Development requirement | Recommended tool |
+|---|---|
+| Neovim configuration validation | Existing headless smoke tests |
+| Lua unit and integration tests | Busted |
+| Alternative xUnit-style tests | LuaUnit |
+| Static analysis | LuaCheck |
+| Lua source coverage | LuaCov |
+| Native C/C++ coverage | GCOV and LCOV |
+| Native memory diagnostics | ASan |
+| Native race diagnostics | TSan |
+| Native undefined-behavior diagnostics | UBSan |
+
+All tools in this section are optional except the existing repository validation workflow.
+
+No test framework, coverage tool, native coverage utility, or sanitizer should be installed automatically by the default Lua language-pack setup.
+
+## 9. Optional LuaRocks package management
 
 LuaRocks manages Lua modules and project dependencies through packages called rocks.
 
@@ -327,7 +458,7 @@ LuaRocks is not required for:
 - Ordinary standalone Lua execution.
 - The existing Lua language-pack setup.
 
-### 8.1 Runtime alignment
+### 9.1 Runtime alignment
 
 LuaRocks must be configured for the Lua runtime used by the project.
 
@@ -335,7 +466,7 @@ For a Lua 5.4 project, it must use the matching Lua 5.4 interpreter and, when bu
 
 Do not let LuaRocks silently use a different Lua installation found earlier on `PATH`.
 
-### 8.2 Native module requirements
+### 9.2 Native module requirements
 
 Building native Lua modules may require:
 
@@ -348,9 +479,71 @@ The standalone Lua 5.4.9 Windows installation described below provides the runti
 
 LuaRocks installation and configuration remain separate from the default language-pack installation.
 
-## 9. Optional standalone Lua 5.4.9 — Windows
+### 9.3 Current Windows installation
 
-### 9.1 Decision
+LuaRocks `3.13.0` is installed and configured for the standalone Lua `5.4.9` toolchain.
+
+| Setting | Current value |
+|---|---|
+| LuaRocks version | `3.13.0` |
+| Lua runtime | Lua `5.4.9` |
+| LuaRocks installation root | `%LOCALAPPDATA%\Programs\LuaRocks` |
+| Main command | `%LOCALAPPDATA%\Programs\LuaRocks\luarocks.bat` |
+| Configuration file | `%LOCALAPPDATA%\Programs\LuaRocks\config-5.4.lua` |
+| System rock tree | `%LOCALAPPDATA%\LuaRocks\5.4` |
+| User rock tree | `%APPDATA%\LuaRocks` |
+| Compiler | WinLibs GCC, target `x86_64-w64-mingw32` |
+| Make executable | `mingw32-make.exe` from the WinLibs toolchain |
+
+The LuaRocks configuration sets `variables.MAKE` to the available `mingw32-make.exe`. The standalone Lua `5.4` binary directory and the LuaRocks command and rock `bin` directories are included in the Windows user PATH.
+
+The following command completed successfully:
+
+```powershell
+luarocks --version
+```
+
+Observed output:
+
+```text
+C:\Users\Administrator\AppData\Local\Programs\LuaRocks\luarocks.lua 3.13.0 LuaRocks main command-line interface
+```
+
+The command-line version output identifies the LuaRocks entry point and version. It does not use the shorter `LuaRocks 3.13.0` format.
+
+### 9.4 LuaCheck installed through LuaRocks
+
+LuaCheck was installed into the user rock tree:
+
+```powershell
+luarocks --local install luacheck
+```
+
+The installation completed successfully and installed:
+
+- LuaCheck `1.2.0`
+- `argparse` `0.7.2`
+- `luafilesystem` `1.9.0`
+
+The resolved executable is:
+
+```text
+%APPDATA%\LuaRocks\bin\luacheck.bat
+```
+
+The following command completed successfully:
+
+```powershell
+luacheck --version
+```
+
+The reported runtime is PUC-Rio Lua `5.4`. LuaLanes is reported as not found; LuaLanes is optional and its absence did not prevent LuaCheck from running.
+
+This validates installation of LuaCheck as a LuaRocks user package. It does not establish that every native rock can be compiled or that all standalone Lua 5.4 lint standards have been configured.
+
+## 10. Optional standalone Lua 5.4.9 — Windows
+
+### 10.1 Decision
 
 Build standalone Lua from the official Lua source distribution using WinLibs GCC.
 
@@ -377,7 +570,7 @@ Observed compiler version:
 gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.2.0
 ```
 
-### 9.2 Build workspace
+### 10.2 Build workspace
 
 The build workspace is separate from the final installation:
 
@@ -406,7 +599,7 @@ Directory responsibilities:
 - `build/` holds generated artifacts and validation executables.
 - `5.4/` holds the final installed runtime and development files.
 
-### 9.3 Installation layout
+### 10.3 Installation layout
 
 The completed installation contains:
 
@@ -440,7 +633,7 @@ The standalone compiler is built independently and does not depend on `lua54.dll
 
 The shared DLL and import library provide the components needed for external C applications to link against the Lua runtime.
 
-### 9.4 Installation scripts
+### 10.4 Installation scripts
 
 Standalone Lua installation and PATH configuration are deliberately separate operations.
 
@@ -448,6 +641,7 @@ Standalone Lua installation and PATH configuration are deliberately separate ope
 |---|---|
 | `scripts/install/windows/lua-install.ps1` | Download, checksum verification, source preparation, GCC validation, compilation, build validation, and installation |
 | `scripts/install/windows/lua-path.ps1` | Persistent user PATH configuration, current-process PATH update, and executable/runtime validation |
+| `scripts/install/windows/luarocks-install.ps1` | LuaRocks installation or existing-installation validation, compiler configuration, PATH setup, and final verification |
 
 #### `lua-install.ps1`
 
@@ -485,7 +679,27 @@ The script must be safe to run repeatedly and must not create duplicate PATH ent
 
 No machine-wide PATH modification is required.
 
-### 9.5 PATH configuration
+#### `luarocks-install.ps1`
+
+The optional LuaRocks installer is located at:
+
+```text
+scripts/install/windows/luarocks-install.ps1
+```
+
+It validates the standalone Lua installation and MinGW toolchain, checks or installs LuaRocks, configures the Make executable, updates the user PATH when needed, and verifies the resulting LuaRocks and Lua versions.
+
+**Observed validation:**
+
+- Existing-installation path: PASS. The script detected LuaRocks `3.13.0`, configured `variables.MAKE`, checked PATH entries, and completed final verification.
+- Fresh-installation path: NOT TESTED.
+- `-Force` path: NOT TESTED.
+
+Do not describe the installer as fully branch-tested until the fresh-installation and force-reinstallation paths have been exercised in a disposable environment.
+
+No machine-wide PATH modification is required.
+
+### 10.5 PATH configuration
 
 The standalone Lua executable directory is:
 
@@ -503,7 +717,7 @@ The distinction between persistent and process PATH is important:
 
 No PATH configuration is required for Neovim's embedded LuaJIT runtime.
 
-### 9.6 Verified installation results
+### 10.6 Verified installation results
 
 **Validation date:** 2026-10-30
 
@@ -569,9 +783,9 @@ This confirms that the standalone runtime and its default C module search path a
 
 This completion applies only to the optional standalone runtime installation. It does not make Lua 5.4 a requirement for the default Lua language pack or close the remaining Lua language-pack validation requirements.
 
-## 10. Module responsibilities and dependencies
+## 11. Module responsibilities and dependencies
 
-### 10.1 Relevant modules
+### 11.1 Relevant modules
 
 | Path | Responsibility |
 |---|---|
@@ -588,7 +802,7 @@ This completion applies only to the optional standalone runtime installation. It
 
 Preserve existing module interfaces. Do not create duplicate modules or rebuild working shared infrastructure merely to match the documentation.
 
-### 10.2 Dependencies by installation tier
+### 11.2 Dependencies by installation tier
 
 | Dependency | Tier | Type | Installation policy |
 |---|---|---|---|
@@ -599,9 +813,14 @@ Preserve existing module interfaces. Do not create duplicate modules or rebuild 
 | Conform.nvim | Existing infrastructure | Neovim plugin | Managed by the existing `vim.pack` workflow |
 | Tree-sitter integration and Lua parser | Existing infrastructure | Plugin and parser | Managed by the existing integration |
 | `luacheck` | Optional | External executable | Installed only when linting is wanted |
+| `busted` | Optional | Test framework | Installed only when a dedicated test framework is needed |
+| LuaUnit | Optional alternative | Test framework | Used instead of Busted when preferred |
+| LuaCov | Optional | Coverage tool | Installed only when Lua coverage is needed |
 | Lua 5.4.x | Optional | External runtime | Installed only for standalone Lua 5.4 development |
 | GCC | Optional | Compiler | Required for the selected native build workflow |
 | LuaRocks | Optional | External package manager | Installed only when project dependencies require it |
+| GCOV/LCOV | Separate native toolchain | Native coverage tools | Used for compiled native-code coverage |
+| ASan/TSan/UBSan | Separate native toolchain | Compiler instrumentation | Used for native-code diagnostics |
 
 Recorded development-environment versions:
 
@@ -610,16 +829,18 @@ Recorded development-environment versions:
 - StyLua `2.6.0`
 - Standalone Lua `5.4.9`
 - WinLibs GCC `16.2.0`
+- LuaCheck `1.2.0` (optional CLI linter)
+- LuaRocks `3.13.0` (optional package manager)
 
 These are observed versions, not minimum supported versions.
 
 Installation and executable verification instructions belong in `docs/dependencies.md`. Neovim startup must not install, update, or provision external tools.
 
-## 11. Validation procedures and results
+## 12. Validation procedures and results
 
 Validation distinguishes automated checks from interactive behavior. Passing automated checks does not, by itself, prove that every workspace scenario or failure path works.
 
-### 11.1 Automated repository checks
+### 12.1 Automated repository checks
 
 Run from the `nvim-config` repository root in PowerShell:
 
@@ -632,6 +853,22 @@ nvim --headless -u NONE -l scripts/check-syntax.lua
 
 nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 
+$FilePaths = Get-ChildItem -Path . -Recurse -Filter "*.lua" -File |
+    Where-Object {
+        $_.FullName -notmatch '[\\/](\.git|node_modules|vendor|build|dist)[\\/]'
+    } |
+    ForEach-Object { $_.FullName }
+
+foreach ($File in $FilePaths) {
+    & luac -p $File
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Lua syntax validation failed: $File"
+    }
+}
+
+& luacheck --no-config --std luajit --globals vim Snacks --no-color $FilePaths
+
 git diff --check
 ```
 
@@ -640,13 +877,15 @@ git diff --check
 | `stylua --check .` | No formatting violations | PASS |
 | `nvim --headless -u NONE -l scripts/check-syntax.lua` | All Lua files pass syntax validation | PASS — 31 files |
 | `nvim --headless -u init.lua -c "luafile scripts/smoke.lua"` | Configuration smoke checks pass | PASS |
-| `git diff --check` | No whitespace errors | PASS |
+| Repository LuaCheck command shown above | All discovered Lua files pass the LuaJIT lint profile | PASS — 33 files, 0 warnings, 0 errors; exit code 0 |
+| PowerShell `luac -p` loop | Every discovered Lua file parses successfully | PASS — 33 files |
+| `git diff --check` | No whitespace errors | PASS at the last recorded Git review; rerun after applying this document update |
 
 The smoke test passed on Neovim `0.12.6`. Reported coverage includes plugin registration, language-pack and LSP configuration, completion and snippets, formatting and linting configuration, Git/project/session registration, native grep and quickfix, native commenting, and the module-failure contract.
 
 Record command exit statuses when repeating the tests. Do not infer that an external executable works merely because a configuration smoke test passes.
 
-### 11.2 Executable and version checks
+### 12.2 Executable and version checks
 
 Run:
 
@@ -655,6 +894,7 @@ Get-Command nvim -ErrorAction SilentlyContinue
 Get-Command lua-language-server -ErrorAction SilentlyContinue
 Get-Command stylua -ErrorAction SilentlyContinue
 Get-Command luacheck -ErrorAction SilentlyContinue
+Get-Command busted -ErrorAction SilentlyContinue
 Get-Command luarocks -ErrorAction SilentlyContinue
 Get-Command lua -ErrorAction SilentlyContinue
 Get-Command luac -ErrorAction SilentlyContinue
@@ -668,17 +908,18 @@ nvim --version
 lua-language-server --version
 stylua --version
 luacheck --version
+busted --version
 luarocks --version
 lua -v
 luac -v
 git --version
 ```
 
-These commands establish executable discovery and report versions. They do not prove correct LSP attachment, successful formatting, or correct project-specific linting.
+These commands establish executable discovery and report versions. They do not prove correct LSP attachment, successful formatting, correct project-specific linting, or successful test execution.
 
 Optional executables should be checked only when the corresponding optional tool is installed.
 
-### 11.3 LuaLS attachment and configuration
+### 12.3 LuaLS attachment and configuration
 
 Open a Lua file in Neovim.
 
@@ -718,7 +959,7 @@ Expected results:
 
 `:LspInfo` is not a built-in command in this configuration. Use the native LSP APIs above instead of adding a plugin solely for that command.
 
-### 11.4 Diagnostics
+### 12.4 Diagnostics
 
 To test undefined-global diagnostics, temporarily add an intentional error:
 
@@ -738,7 +979,7 @@ Remove the deliberate error after testing.
 
 **Recorded result: PASS.**
 
-### 11.5 Completion, hover, and navigation
+### 12.5 Completion, hover, and navigation
 
 Use a Neovim API expression such as:
 
@@ -752,7 +993,7 @@ Expected: completion and hover provide relevant information, definition navigati
 
 **Recorded result: PASS** for completion, hover, definition navigation, and references.
 
-### 11.6 StyLua and Conform
+### 12.6 StyLua and Conform
 
 Inspect formatter configuration:
 
@@ -772,7 +1013,7 @@ Expected: StyLua formats the buffer using the repository's formatting configurat
 
 **Recorded result: PASS.** Conform reported StyLua as ready, and actual formatting through `:Format` succeeded. The repository-wide StyLua check also passed.
 
-### 11.7 Standalone Lua project
+### 12.7 Standalone Lua project
 
 Create a disposable project:
 
@@ -822,7 +1063,7 @@ Expected:
 
 **Recorded result: PASS**, based on the completed interactive validation.
 
-### 11.8 Project-specific `.luarc.json`
+### 12.8 Project-specific `.luarc.json`
 
 Create a disposable project:
 
@@ -879,7 +1120,7 @@ Expected:
 
 **Limitation:** The project-specific diagnostic override was verified. The `Lua 5.4` runtime override was not independently confirmed and must not be recorded as passed.
 
-### 11.9 Tree-sitter
+### 12.9 Tree-sitter
 
 In a Lua buffer, run:
 
@@ -901,7 +1142,7 @@ Also visually inspect the buffer for syntax highlighting.
 
 **Recorded result: PASS**, as confirmed by the completed filetype, mapping, parser, active-highlighter, and visual-highlighting checks.
 
-### 11.10 Standalone Lua 5.4.9 runtime
+### 12.10 Standalone Lua 5.4.9 runtime
 
 Run the following from a fresh PowerShell session:
 
@@ -925,39 +1166,145 @@ Expected:
 
 **Recorded result: PASS.** Both executables were successfully resolved and executed from a fresh PowerShell session. The persistent user PATH and Lua C module search path were validated.
 
-### 11.11 Optional LuaCheck validation
+### 12.11 Optional LuaCheck validation
 
-LuaCheck is not part of the default installation. When it is installed, validate each project with its own runtime configuration.
+LuaCheck is not part of the default installation. It is installed in the current Windows environment as an optional, explicitly invoked CLI tool.
 
-For a Neovim configuration project, verify:
+#### Repository lint command
 
-- The LuaJIT standard is accepted.
-- The `vim` global is recognized.
-- An unrelated undefined global is still reported.
+From the repository root, discover the Lua files and run the project lint profile:
 
-For a standalone Lua 5.4 project, verify:
+```powershell
+$FilePaths = Get-ChildItem -Path . -Recurse -Filter "*.lua" -File |
+    Where-Object {
+        $_.FullName -notmatch '[\\/](\.git|node_modules|vendor|build|dist)[\\/]'
+    } |
+    ForEach-Object { $_.FullName }
 
-- The installed LuaCheck version supports Lua 5.4 syntax.
-- The intended Lua 5.4 standard is accepted by the installed version.
-- Lua 5.4 library globals are recognized.
-- An unrelated undefined global is still reported.
-- `<const>` and `<close>` fixtures are parsed as expected.
+& luacheck `
+    --no-config `
+    --std luajit `
+    --globals vim Snacks `
+    --no-color `
+    $FilePaths
 
-Do not mark LuaCheck integration as passed until these tests have been run with the actual installed version.
+$LintExitCode = $LASTEXITCODE
 
-### 11.12 Optional LuaRocks validation
+"LuaCheck exit code: $LintExitCode"
+"Lua files checked: $($FilePaths.Count)"
 
-When LuaRocks is installed for a standalone Lua 5.4 project, verify:
+if ($LintExitCode -ne 0) {
+    throw "Repository LuaCheck validation failed."
+}
+```
 
-- LuaRocks resolves the intended Lua 5.4 interpreter.
-- Its configured Lua version is 5.4.
-- Its include and library paths point to the matching Lua installation.
-- A test module can be installed and loaded by that runtime.
-- Native modules use the correct compiler, architecture, and runtime DLL.
+The command deliberately uses:
 
-Do not use a successful `luarocks --version` result as proof that the package manager is configured for the correct Lua runtime.
+- `--no-config` so no untracked or machine-wide `.luacheckrc` silently changes the result.
+- `--std luajit` because the repository targets Neovim's LuaJIT runtime.
+- `--globals vim Snacks` because these are intentional globals used by the Neovim configuration.
+- No `--only 631` or warning suppression, so the complete enabled LuaCheck rule set is evaluated.
+- A file list that excludes `.git`, dependency, vendor, build, and distribution directories.
 
-### 11.13 Missing dependencies and formatter failure
+**Recorded result — 2026-11-01: PASS.**
+
+```text
+Total: 0 warnings / 0 errors in 33 files
+LuaCheck exit code: 0
+Lua files checked: 33
+```
+
+Lua syntax was also checked independently with `luac -p` across the same 33 discovered Lua files. All files parsed successfully.
+
+#### Diagnostic behavior
+
+A temporary test file containing an unused local variable (`unused_value`) and an undefined global (`undefined_variable`) was used to verify diagnostic behavior. LuaCheck reported both warnings and returned a nonzero exit code, as expected. The temporary file was removed after the test.
+
+#### Scope and limitations
+
+- LuaCheck `1.2.0` is installed through LuaRocks in the user rock tree.
+- No repository `.luacheckrc` has been created.
+- The repository lint command is a manual CLI workflow.
+- LuaCheck is not an LSP server and has not been added as a Neovim diagnostic provider, save hook, or automatic startup task.
+- The `lua54` standard name has not been tested with the installed release.
+- Lua 5.4 `<const>` and `<close>` behavior has not been independently tested.
+
+For a standalone Lua 5.4 project, first verify the installed LuaCheck release's supported standard names and syntax handling. Do not assume that `std = "lua54"` is accepted merely because the parser supports Lua 5.4 syntax.
+
+### 12.12 Optional testing framework validation
+
+Busted and LuaUnit are optional. Do not install both merely to complete the Lua language pack.
+
+If Busted is adopted, verify:
+
+- The executable is available in the intended project environment.
+- A minimal test suite runs successfully.
+- Passing and failing tests produce the expected exit status.
+- Assertions and test discovery work as expected.
+- The test runner works with the project's selected Lua runtime.
+- CI output is usable if the project requires automated reporting.
+
+If LuaUnit is selected instead, perform equivalent checks for its test discovery, assertions, exit status, runtime compatibility, and reporting.
+
+A successful version check alone does not prove that a test framework is correctly configured.
+
+### 12.13 Optional LuaCov validation
+
+When LuaCov is adopted, verify:
+
+- Coverage instrumentation works with the selected Lua runtime.
+- The test suite produces coverage data.
+- The report identifies executed and unexecuted source lines.
+- Excluded files and directories are handled as intended.
+- Coverage output can be generated in the required format.
+
+Do not treat a generated coverage report as proof of test quality. Coverage measures execution, not whether assertions are meaningful.
+
+### 12.14 Optional native-code QA validation
+
+GCOV, LCOV, and compiler sanitizers are outside the default Lua pack.
+
+When developing native Lua modules or other C/C++ components, validate the selected native toolchain independently.
+
+For coverage, verify that:
+
+- Native code is compiled with the required coverage instrumentation.
+- Test execution produces coverage data.
+- GCOV can read the generated data.
+- LCOV can collect and generate the intended report.
+
+For sanitizers, verify that:
+
+- The compiler supports the selected sanitizer.
+- The native target is compiled and linked with the appropriate instrumentation.
+- The test executable runs under the sanitizer.
+- A controlled test fixture demonstrates that the sanitizer can detect the relevant class of error.
+
+Do not assume every sanitizer is supported by every compiler, target, or Windows toolchain. Verify compatibility before making it part of a native-development workflow.
+
+### 12.15 Optional LuaRocks validation
+
+LuaRocks `3.13.0` is installed and configured for the standalone Lua `5.4.9` environment.
+
+The following checks were observed:
+
+| Check | Result |
+|---|---|
+| `luarocks --version` | PASS — reports `3.13.0` |
+| LuaRocks configuration file | PASS — `config-5.4.lua` |
+| Configured Make executable | PASS — WinLibs `mingw32-make.exe` |
+| System rock tree | PASS — `%LOCALAPPDATA%\LuaRocks\5.4` |
+| User rock tree | PASS — `%APPDATA%\LuaRocks` |
+| User PATH entries | PASS — required entries already present |
+| `luarocks --local install luacheck` | PASS — LuaCheck and its dependencies installed |
+| `luacheck --version` | PASS — LuaCheck `1.2.0`, PUC-Rio Lua `5.4` |
+| General native-rock build workflow | NOT VERIFIED |
+
+The LuaRocks installer script's existing-installation path also passed. Its fresh-installation and `-Force` branches remain untested.
+
+A successful version check alone is not sufficient to validate a package manager. For future native module projects, separately verify that the selected rock uses the intended Lua headers, libraries, compiler, architecture, and runtime DLL. The current record does not claim that a general native module build workflow has been tested.
+
+### 12.16 Missing dependencies and formatter failure
 
 These are required failure-path tests. Use an isolated environment or temporary `PATH` that excludes the relevant executable while preserving the tools needed to run the test. Do not uninstall tools from the main development environment.
 
@@ -1002,14 +1349,14 @@ The location may differ if Neovim's data directory has been customized.
 
 For all three failure-path tests, record the actual result before marking the test passed. These tests are not yet verified by the current validation record.
 
-## 12. Consolidated test status
+## 13. Consolidated test status
 
 | Test area | Status | Notes |
 |---|---|---|
 | StyLua repository check | PASS | `stylua --check .` |
-| Lua syntax checker | PASS | 31 Lua files |
+| Lua syntax checker | PASS | 33 Lua files checked with the PowerShell `luac -p` loop; the earlier Neovim script reported 31 files |
 | Headless configuration smoke test | PASS | Neovim 0.12.6 |
-| Git whitespace check | PASS | `git diff --check` |
+| Git whitespace check | PASS at last review | `git diff --check` passed before this documentation update; rerun after applying the updated file |
 | LuaLS attachment and repository root | PASS | Interactive test |
 | LuaLS diagnostics, hover, completion, and navigation | PASS | Interactive tests |
 | Manual StyLua formatting through Conform | PASS | `:Format` |
@@ -1019,17 +1366,25 @@ For all three failure-path tests, record the actual result before marking the te
 | Tree-sitter mapping, parser, and highlighting | PASS | Interactive test |
 | Standalone Lua 5.4.9 build and installation | PASS | Official source, WinLibs GCC, and external C API test |
 | Standalone Lua PATH configuration | PASS | Persistent user PATH and fresh-session checks |
-| LuaCheck optional integration | NOT VERIFIED | Not yet installed and tested as an optional tool |
+| LuaCheck repository CLI lint | PASS | LuaCheck 1.2.0; 33 files; zero warnings and errors; no `.luacheckrc` or editor integration |
 | LuaCheck Lua 5.4 standard selection | NOT VERIFIED | Confirm supported standard name in installed release |
 | LuaCheck Lua 5.4 attribute handling | NOT VERIFIED | `<const>` and `<close>` fixtures required |
-| LuaRocks optional integration | NOT VERIFIED | Not yet installed and configured |
-| LuaRocks Lua 5.4 runtime alignment | NOT VERIFIED | Matching interpreter and development paths required |
+| Busted optional integration | NOT ADOPTED | Preferred optional test framework; no project requirement established |
+| LuaUnit optional integration | NOT ADOPTED | Alternative to Busted |
+| LuaCov optional integration | NOT ADOPTED | No Lua coverage workflow established |
+| GCOV/LCOV native coverage | OUT OF SCOPE | Separate native-development toolchain |
+| ASan/TSan/UBSan | OUT OF SCOPE | Separate native-development toolchain |
+| LuaRocks optional package management | PASS — installation and configuration | LuaRocks 3.13.0 configured for Lua 5.4.9; `luacheck` installed through the user rock tree |
+| LuaRocks Lua 5.4 runtime alignment | PARTIALLY VERIFIED | Config file, Lua version, Make path, and rock trees checked; general native module build not tested |
+| `luarocks-install.ps1` existing-installation path | PASS | Detected LuaRocks 3.13.0, configured Make, checked PATH, and completed verification |
+| `luarocks-install.ps1` fresh-installation path | NOT VERIFIED | Requires a disposable environment without an existing LuaRocks installation |
+| `luarocks-install.ps1 -Force` path | NOT VERIFIED | Force-reinstallation branch has not been exercised |
 | Missing LuaLS behavior | NOT VERIFIED | Controlled failure test required |
 | Missing StyLua behavior | NOT VERIFIED | Controlled failure test required |
 | Formatter failure feedback | NOT VERIFIED | Controlled failure test required |
 | Other operating systems | NOT VERIFIED | Windows is the recorded environment |
 
-## 13. Completion criteria
+## 14. Completion criteria
 
 The **default Lua language pack** can be marked complete when:
 
@@ -1045,22 +1400,28 @@ The **default Lua language pack** can be marked complete when:
 
 Optional capabilities have separate completion criteria:
 
-- LuaCheck must be installed and validated against both LuaJIT and Lua 5.4 projects before its integration is considered complete.
-- LuaRocks must be configured and tested against the intended project runtime before its workflow is considered complete.
+- LuaCheck's repository CLI workflow is installed and validated. Broader standalone Lua 5.4 lint configuration and any editor integration require separate decisions and tests.
+- Busted or LuaUnit must be selected and validated before a dedicated test-framework workflow is considered complete.
+- LuaCov must be configured and tested against a real Lua test suite before coverage support is considered complete.
+- LuaRocks is installed and configured for Lua 5.4.9, and LuaCheck was installed through it. General native-module compilation and the installer's fresh-installation and `-Force` paths remain unverified.
+- Native coverage and sanitizer workflows must be validated against the selected compiler and native target before adoption.
 - The standalone Lua 5.4.9 Windows runtime and its C development files are already installed and validated. This does not make them mandatory for the default profile.
 
-Core LuaLS, StyLua, standalone-project, project-specific diagnostic, Tree-sitter, and standalone Lua 5.4.9 Windows runtime workflows have passed their recorded tests.
+Core LuaLS, StyLua, standalone-project, project-specific diagnostic, Tree-sitter, and standalone Lua 5.4.9 Windows runtime workflows have passed their recorded tests. The repository-wide LuaCheck CLI workflow also passes for all 33 Lua files. LuaRocks is installed and configured for the optional Lua 5.4.9 environment.
 
-The document remains **in progress** until the outstanding core failure-path checks are completed or explicitly scoped out through a documented decision. Optional capabilities remain unimplemented until separately adopted and tested.
+The document remains **in progress** until the outstanding core failure-path checks are completed or explicitly scoped out through a documented decision. Optional capabilities remain optional even when installed in the current development environment; their validation status is recorded separately.
 
-## 14. Out of scope
+## 15. Out of scope
 
-- Automatic installation of LuaLS, StyLua, LuaCheck, LuaRocks, or Tree-sitter parsers.
+- Automatic installation of LuaLS, StyLua, LuaCheck, Busted, LuaUnit, LuaCov, LuaRocks, or Tree-sitter parsers.
 - Mason or another automatic tool installer.
 - Making standalone Lua 5.4 a core dependency.
 - Making GCC a core dependency.
 - Making LuaRocks a core dependency.
 - Making LuaCheck a core dependency.
+- Making Busted or LuaUnit a core dependency.
+- Making LuaCov a core dependency.
+- Making GCOV, LCOV, ASan, TSan, or UBSan part of the default Lua pack.
 - A new language-server framework or formatter dispatcher.
 - Global suppression of undefined-global diagnostics.
 - Format-on-save without a separate decision.
@@ -1070,6 +1431,8 @@ The document remains **in progress** until the outstanding core failure-path che
 
 ## References
 
+### Neovim and editor integration
+
 - [Neovim LSP documentation](https://neovim.io/doc/user/lsp.html)
 - [Neovim Tree-sitter documentation](https://neovim.io/doc/user/treesitter.html)
 - [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)
@@ -1078,11 +1441,30 @@ The document remains **in progress** until the outstanding core failure-path che
 - [StyLua](https://github.com/JohnnyMorganz/StyLua)
 - [Conform.nvim](https://github.com/stevearc/conform.nvim)
 - [lazydev.nvim](https://github.com/folke/lazydev.nvim)
+
+### Linting and testing
+
 - [LuaCheck documentation](https://luacheck.readthedocs.io/en/stable/)
 - [LuaCheck upstream project](https://github.com/lunarmodules/luacheck)
+- [Busted documentation](https://lunarmodules.github.io/busted/)
+- [Busted upstream project](https://github.com/lunarmodules/busted)
+- [LuaUnit documentation](https://luaunit.readthedocs.io/)
+- [LuaUnit upstream project](https://github.com/bluebird75/luaunit)
+- [LuaCov upstream project](https://github.com/lunarmodules/luacov)
+
+### Package management and runtime
+
 - [LuaRocks documentation](https://luarocks.org/docs)
 - [Lua 5.4.9 official source archive](https://www.lua.org/ftp/lua-5.4.9.tar.gz)
 - [Lua 5.4 reference manual](https://www.lua.org/manual/5.4/)
 - [WinLibs](https://winlibs.com/)
+
+### Native-code QA
+
+- [GCC instrumentation options](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html)
+- [LCOV](https://github.com/linux-test-project/lcov)
+- [AddressSanitizer](https://clang.llvm.org/docs/AddressSanitizer.html)
+- [ThreadSanitizer](https://clang.llvm.org/docs/ThreadSanitizer.html)
+- [UndefinedBehaviorSanitizer](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html)
 
 Revisit this document when the shared language architecture, supported Neovim baseline, standalone Lua toolchain, or Lua tooling requirements materially change.

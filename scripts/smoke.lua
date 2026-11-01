@@ -11,7 +11,15 @@ local function check(condition, message)
 end
 
 local function check_equal(actual, expected, message)
-  check(vim.deep_equal(actual, expected), string.format("%s (expected %s, got %s)", message, vim.inspect(expected), vim.inspect(actual)))
+  check(
+    vim.deep_equal(actual, expected),
+    string.format(
+      "%s (expected %s, got %s)",
+      message,
+      vim.inspect(expected),
+      vim.inspect(actual)
+    )
+  )
 end
 
 local function check_mapping(mode, lhs, description, context)
@@ -33,10 +41,18 @@ local function check_module_failure_contract(root)
   local init_path = root .. "/init.lua"
 
   -- Inject an intentional failure in config.options.
-  local preload_options = [[lua package.preload["config.options"] = function() error("STAGE04_INTENTIONAL_MODULE_FAILURE") end]]
+  local preload_options = table.concat({
+    [[lua package.preload["config.options"] = function() ]],
+    [[error("STAGE04_INTENTIONAL_MODULE_FAILURE") ]],
+    "end",
+  })
 
   -- This marker must never appear because options fails first.
-  local preload_keymaps = [[lua package.preload["config.keymaps"] = function() print("STAGE04_UNEXPECTED_KEYMAPS_LOADED"); return true end]]
+  local preload_keymaps = table.concat({
+    [[lua package.preload["config.keymaps"] = function() ]],
+    [[print("STAGE04_UNEXPECTED_KEYMAPS_LOADED"); return true ]],
+    "end",
+  })
 
   local result = vim
     .system({
@@ -78,7 +94,10 @@ local function check_module_failure_contract(root)
     }, "\n")
   )
 
-  check(output:find("STAGE04_UNEXPECTED_KEYMAPS_LOADED", 1, true) == nil, "keymaps module does not load after options module fails\n" .. output)
+  check(
+    output:find("STAGE04_UNEXPECTED_KEYMAPS_LOADED", 1, true) == nil,
+    "keymaps module does not load after options module fails\n" .. output
+  )
 
   print("PASS module failure contract")
 end
@@ -165,11 +184,17 @@ end
 local function check_stage06_plugins()
   local mini_icons = package.loaded["mini.icons"]
 
-  check(type(mini_icons) == "table" and type(mini_icons.get) == "function", "mini.icons loaded and exposes its get() API")
+  check(
+    type(mini_icons) == "table" and type(mini_icons.get) == "function",
+    "mini.icons loaded and exposes its get() API"
+  )
 
   local which_key = package.loaded["which-key"]
 
-  check(type(which_key) == "table" and type(which_key.show) == "function", "which-key.nvim loaded and exposes its show() API")
+  check(
+    type(which_key) == "table" and type(which_key.show) == "function",
+    "which-key.nvim loaded and exposes its show() API"
+  )
 
   print("PASS Stage 06 plugin loading")
 end
@@ -398,9 +423,17 @@ local function check_stage11_formatting()
     formatters_only = {},
   })
 
-  check_equal(resolved.lua, { "fallback", "stylua" }, "Formatter preferences precede defaults and duplicate names are removed")
+  check_equal(
+    resolved.lua,
+    { "fallback", "stylua" },
+    "Formatter preferences precede defaults and duplicate names are removed"
+  )
 
-  check_equal(resolved.typescript, { "biome", "prettier", stop_after_first = true }, "stop_after_first is preserved in the resolved Conform configuration")
+  check_equal(
+    resolved.typescript,
+    { "biome", "prettier", stop_after_first = true },
+    "stop_after_first is preserved in the resolved Conform configuration"
+  )
 
   -- Verify that formatters_only excludes language-pack defaults.
   local restricted = formatting.resolve({
@@ -427,7 +460,10 @@ local function check_stage11_formatting()
   end)
 
   check(not ok, "formatters_only rejects an empty preferred formatter list")
-  check(tostring(err):find("formatters_only.lua", 1, true) ~= nil, "Invalid formatters_only configuration reports the filetype")
+  check(
+    tostring(err):find("formatters_only.lua", 1, true) ~= nil,
+    "Invalid formatters_only configuration reports the filetype"
+  )
 
   -- Capture setup configuration without changing the live Conform setup.
   -- All monkey patches and package.loaded changes are restored even on error.

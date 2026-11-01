@@ -1,3 +1,4 @@
+
 -- Stage 10: Language-pack registry.
 -- Discover language packs from this configuration only.
 -- Stage 11: Aggregate language-specific metadata without changing setup behavior.
@@ -28,7 +29,10 @@ function M.setup()
   for _, name in ipairs(discover_packs()) do
     local pack = require("langs." .. name)
 
-    assert(type(pack.setup) == "function", string.format("Language pack 'langs.%s' must provide setup()", name))
+    assert(
+      type(pack.setup) == "function",
+      string.format("Language pack 'langs.%s' must provide setup()", name)
+    )
 
     pack.setup()
   end
@@ -46,12 +50,25 @@ function M.collect(field)
     local metadata = pack[field]
 
     if metadata ~= nil then
-      assert(type(metadata) == "table", string.format("Language pack 'langs.%s': '%s' must be a table", name, field))
+      assert(
+        type(metadata) == "table",
+        string.format("Language pack 'langs.%s': '%s' must be a table", name, field)
+      )
 
       for key, value in pairs(metadata) do
-        assert(type(key) == "string" and key ~= "", string.format("Language pack 'langs.%s': '%s' keys must be non-empty strings", name, field))
+        assert(
+          type(key) == "string" and key ~= "",
+          string.format(
+            "Language pack 'langs.%s': '%s' keys must be non-empty strings",
+            name,
+            field
+          )
+        )
 
-        assert(rawget(merged, key) == nil, string.format("Language packs define '%s' for '%s' more than once", field, key))
+        assert(
+          rawget(merged, key) == nil,
+          string.format("Language packs define '%s' for '%s' more than once", field, key)
+        )
 
         merged[key] = value
       end

@@ -9,4 +9,9 @@ vim.pack.add({
   },
 })
 
-require("lazydev").setup({})
+require("lazydev").setup({
+  library = {
+    -- Load luv definitions when using vim.uv.
+    { path = "${3rd}/luv/library", words = { "vim%.uv" } },
+  },
+})
