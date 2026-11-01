@@ -1,7 +1,7 @@
 -- Stage 13: Python language pack.
--- ty is an external language server; Neovim owns LSP activation.
--- Ruff is an external formatter and CLI linter.
--- Editor linting remains subject to the Stage 11 admission review.
+-- ty provides Python language intelligence and type analysis.
+-- Ruff provides native LSP lint diagnostics and CLI linting.
+-- Ruff formatting is handled separately through Conform.
 
 local M = {
   formatters = {
@@ -10,9 +10,10 @@ local M = {
 }
 
 function M.setup()
-  -- Use the server definition supplied by nvim-lspconfig.
+  -- Use the server definitions supplied by nvim-lspconfig.
   -- Neovim's native LSP API owns configuration and activation.
   vim.lsp.enable("ty")
+  vim.lsp.enable("ruff")
 end
 
 return M

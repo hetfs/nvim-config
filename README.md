@@ -17,7 +17,7 @@ The project prioritizes a minimal installation, explicit plugin evaluation, repr
 Additional requirements depend on the implemented workflows:
 
 - **Tree-sitter:** Tree-sitter CLI, GNU tar, cURL, and a compatible C compiler for parser-related installation and compilation workflows.
-- **LSP:** `lua-language-server` for the current Lua language-server integration, and `ty` for the Python language-server workflow.
+- **LSP:** `lua-language-server` for the Lua language-server integration and `ty` for the Python language-server workflow.
 - **Formatting:** [StyLua](https://github.com/JohnnyMorganz/StyLua) for Lua formatting, [Ruff](https://docs.astral.sh/ruff/) for Python formatting and linting, and Prettier for the data-language workflows. Conform provides the Neovim-side formatting interface; it does not install formatter executables.
 - **Optional Lua linting:** [LuaCheck](https://github.com/lunarmodules/luacheck) for standalone Lua linting. It is not a Neovim diagnostics integration or a startup dependency.
 - **Data language packs:** YAML Language Server, JSON Language Server, Prettier, `jq`, and Taplo for the implemented YAML, JSON, JSONC, JSON5, jq, and TOML workflows. `jq-lsp` is optional.
@@ -65,7 +65,7 @@ The project follows a 17-stage roadmap. Stages 05, 06, 08, 09, and 11 have compl
 
 **Stage 12 is in progress.** Gitsigns, `project.nvim`, and `mini.sessions` are implemented. Interactive checks for Git workflows, project navigation, and session save/restore have passed, as have the Stage 12 smoke-test checks on Neovim 0.12.6. Documentation alignment, dependency and keymap references, and remaining closeout requirements are still outstanding.
 
-**Stage 13 is in progress.** The Lua language pack is complete against its current acceptance criteria, including repository-wide Lua syntax and LuaCheck validation. The data-language pack implements YAML, JSON, JSONC, JSON5, jq, and TOML support; its external tools have been installed and verified on Windows. Python configuration is implemented and undergoing testing. Remaining baseline language packs and outstanding language-specific validation are tracked separately; implementation alone does not constitute completion.
+**Stage 13 is in progress.** The Lua and Python language packs are validated against their defined acceptance criteria. The data-language pack implements YAML, JSON, JSONC, JSON5, jq, and TOML support, and its external tools have been installed and verified on Windows. Remaining baseline language packs and outstanding language-specific validation are tracked separately. Implementation alone does not constitute completion.
 
 Later stages may be developed and validated independently without treating unfinished earlier stages as complete.
 
@@ -85,7 +85,7 @@ Later stages may be developed and validated independently without treating unfin
 | 10 | Completion and Snippets | Interactive verification in progress |
 | 11 | Manual Formatting | Complete |
 | 12 | Git, Root, and Sessions | In progress — implementation and initial validation passed; closeout outstanding |
-| 13 | Language Packs | In progress — Lua complete; data pack implemented; Python testing in progress; remaining language validation outstanding |
+| 13 | Language Packs | In progress — Lua and Python validated; data pack implemented; remaining language validation outstanding |
 | 14 | Debugging | Planned |
 | 15 | UI Polish | Planned |
 | 16 | Performance | Planned |
@@ -215,7 +215,13 @@ The Lua pack configures LuaLS, StyLua formatting, and Lua-specific language sett
 
 **Python**
 
-The Python pack uses `ty` for language-server functionality and Ruff for formatting and linting. Python tooling installation and interactive validation are in progress; the pack should not be marked complete until its defined checks pass.
+The Python pack uses `ty` for language-server functionality and Ruff for formatting and linting. Python support is validated against its defined Stage 13 scope.
+
+The validated workflow includes the `uv` project workflow, Ty language-server functionality and diagnostics, Ruff CLI linting, Ruff editor diagnostics, Ty and Ruff coexistence, fresh-start attachment, Ruff formatting through Conform, automatic completion, and Tree-sitter highlighting. Formatting remains separate from LSP diagnostics.
+
+Python-specific smoke tests are intentionally skipped. Manual completion shortcut configuration belongs to Stage 10.
+
+See [Python Support](docs/python-support.md) for the Python architecture, tooling, dependencies, configuration, and validation details.
 
 **Data formats**
 
@@ -276,6 +282,7 @@ nvim-config/
 │   ├── plugin-inventory.md
 │   ├── plugin-admission-policy.md
 │   ├── keymaps.md
+│   ├── python-support.md
 │   ├── data-pack.md
 │   ├── yaml-support.md
 │   ├── json-support.md
@@ -382,9 +389,9 @@ Use the `-c "luafile scripts/smoke.lua"` invocation shown above. Do not substitu
 
 ```powershell
 nvim --headless -u init.lua `
-  -c "lua print('colorscheme:', vim.g.colors_name)" `
-  -c "lua print('catppuccin module:', package.loaded['catppuccin'] ~= nil)" `
-  -c "qa!"
+    -c "lua print('colorscheme:', vim.g.colors_name)" `
+    -c "lua print('catppuccin module:', package.loaded['catppuccin'] ~= nil)" `
+    -c "qa!"
 ```
 
 Expected values:

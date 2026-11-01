@@ -1,326 +1,736 @@
-# Stage 13 — Language Packs: Design Decision
+# Language Support
 
-- **Status:** Accepted — design direction only; implementation is gated
-- **Date:** 2026-10-27
-- **Scope:** Language-server configuration, formatting, language-pack architecture, and external dependency planning
-- **Implementation status:** Not started
-- **Plugin admission:** No new plugins approved
+## Purpose
 
-## 1. Context
+This document is the central index of language support in `nvim-config`.
 
-Stage 13 extends the existing language-pack architecture to support the project's approved language baseline while preserving its native-first principles.
+It defines the language inventory, separates core language support from optional language packs, records the intended tooling direction, and links language-specific implementation details to their dedicated documentation.
 
-The architecture already provides the following responsibilities:
+The goal is to provide practical language support without turning the configuration into a large, tightly coupled plugin collection.
 
-- Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs for language-server configuration and activation.
-- The existing `nvim-lspconfig` installation for maintained language-server definitions where applicable.
-- The project-local `lua/langs/` registry for deterministic language-pack discovery and aggregation of language-specific metadata.
-- `lua/config/lsp.lua` for shared LSP lifecycle behavior.
-- `lua/config/keymaps.lua` for centralized user-facing keymaps.
-- Conform.nvim as the existing formatting integration.
-- External tools managed independently of Neovim plugin installation.
+> **Minimum installation. Compose the rest.**
 
-Stage 13 must extend these responsibilities without duplicating shared infrastructure, introducing another LSP framework, or treating proposed dependencies as installed capabilities.
+## 1. Support Model
 
-The design must also distinguish three separate concerns:
+Language support is divided into two groups:
 
-1. **Neovim integration:** Configuration, activation, formatting, and diagnostic behavior.
-2. **External dependencies:** Language servers, formatters, linters, parsers, and supporting runtimes.
-3. **Language-pack validation:** Repeatable checks that establish whether each configuration works as intended.
+1. **Core language support** — the baseline languages maintained as part of the main configuration.
+2. **Optional language packs** — additional language ecosystems enabled only when explicitly selected.
 
-A language pack is not complete merely because its configuration loads or its executable is installed.
+Some capabilities require separate admission decisions. These include additional linters, renderers, debuggers, and other specialized tools. Their evaluation does not automatically make them part of a language pack.
 
-## 2. Decision
+### Core language support
 
-### 2.1 Language baseline and build order
+Core language packs belong under:
 
-The Stage 13 evaluation baseline covers these 11 language groups in the following implementation order:
+`lua/langs/`
 
-1. Lua
-2. Python
-3. YAML
-4. JSON
-5. Shell scripting
-6. PowerShell
-7. HTML
-8. CSS
-9. JavaScript and TypeScript
-10. Markdown
-11. Rust
+They are discovered by the language registry and follow the shared configuration, dependency, formatting, LSP, Tree-sitter, and validation contracts.
 
-This sequence defines the preferred build and validation order for Stage 13. Language packs should be implemented in this order, subject to the earlier-stage closeout gates and the dependency decisions for each language.
+### Optional language support
 
-The build order is not a dependency-priority ranking. It does not establish that every language server, formatter, linter, parser, or external executable has been selected, installed, or validated.
+Optional language packs belong under:
 
-Language-specific implementation details must remain in their respective language-pack modules and documentation. This design decision defines shared architectural boundaries rather than replacing those documents.
+`lua/langs/optional/`
 
-### 2.2 Dependency selection policy
+They must be explicitly enabled through:
 
-The language-server and tool matrix below records proposed candidates for evaluation. A candidate is not an approved installation instruction.
+`lua/config/languages.lua`
 
-Before admitting a candidate, verify:
+An optional pack must not load simply because its file exists. Optional packs must also avoid duplicate ownership of filetypes already assigned to core packs.
 
-- The current server identifier and configuration contract.
-- Supported filetypes and relevant language features.
-- Required executable names and installation methods.
-- Runtime and platform requirements.
-- Compatibility with the installed Neovim version and `nvim-lspconfig` definitions, where applicable.
-- Integration with the existing language registry, formatter configuration, and root-detection behavior.
-- Repeatable validation procedures.
+### Important distinction
 
-The final selection for each language must be documented in its language-specific support document before implementation is considered complete.
+A language pack is not the same as a plugin or an external executable.
 
-## 3. Proposed language and dependency matrix
+A pack may use an existing plugin, a language server, a formatter, a linter, or a Tree-sitter parser. These dependencies are managed independently and must be justified by the capabilities they provide.
 
-The matrix follows the preferred Stage 13 build order. All entries are evaluation candidates, not approved installation instructions.
+## 2. Design Principles
 
-| Build order | Language group | Language-server candidate | Formatter candidate | Additional CLI tooling |
-|---:|---|---|---|---|
-| 1 | Lua | `lua_ls` | StyLua | None selected |
-| 2 | Python | Astral `ty` | Ruff (`ruff format`) | Ruff (`ruff check`) |
-| 3 | YAML | `yamlls` | Prettier | Native LSP diagnostics initially |
-| 4 | JSON | `jsonls` | Prettier | Native LSP diagnostics initially |
-| 5 | Shell scripting | `bashls` | `shfmt` | ShellCheck evaluation candidate |
-| 6 | PowerShell | PowerShell Editor Services (PSES) | LSP-provided formatting through PSES | PSScriptAnalyzer |
-| 7 | HTML | `html` | Prettier | Native LSP diagnostics initially |
-| 8 | CSS | `cssls` | Prettier | Native LSP diagnostics initially |
-| 9 | JavaScript / TypeScript | `ts_ls` | Prettier | Defer lint-tool selection |
-| 10 | Markdown | Marksman | Prettier | No standalone lint integration selected |
-| 11 | Rust | `rust-analyzer` | `rustfmt` | Cargo |
+The language-support architecture follows these principles:
 
-**Important distinctions:**
+- Prefer Neovim's built-in capabilities before introducing additional plugins.
+- Use the existing `vim.pack` plugin-management workflow.
+- Do not introduce Mason as the default external-tool installer.
+- Keep language-specific configuration inside focused language-pack modules.
+- Keep shared infrastructure outside individual language packs.
+- Separate plugin installation from external executable installation.
+- Use Neovim's native LSP configuration and activation APIs.
+- Keep formatter selection explicit and deterministic.
+- Keep linting separate from formatting.
+- Keep Tree-sitter configuration centralized.
+- Keep optional packs explicitly enabled.
+- Validate each language pack independently.
+- Add one language pack per implementation commit.
+- Preserve visible errors for invalid configuration and missing required definitions.
+- Report missing executables accurately.
+- Do not enable format-on-save by default.
+- Do not enable LSP formatting fallback by default.
 
-- `ty` is an evaluation candidate for Python language-server functionality. Its capabilities and compatibility with the intended Python workflow must be verified before adoption.
-- Ruff provides Python formatting and linting capabilities. It does not replace the language server.
-- PowerShell formatting uses the existing PSES-based approach under evaluation. Do not assume that a standalone formatter executable exists or introduce one without evidence.
-- Native LSP diagnostics are not equivalent to standalone CLI linting.
-- A formatter candidate does not imply that format-on-save is enabled.
-- The matrix does not authorize installing additional plugins or automatically installing external tools.
+A language pack must earn its place through a clear responsibility, a documented dependency contract, representative fixtures, and repeatable validation.
 
-The language-specific documents remain the authoritative sources for final server, formatter, and dependency decisions.
+## 3. Language Categories
 
-## 4. Architecture and responsibility boundaries
+The inventory uses eight categories to organize language support consistently.
 
-### 4.1 Language packs
-
-Language-specific modules under `lua/langs/` own language-specific configuration and metadata.
-
-Where applicable, a language pack may declare:
-
-- Language-server configuration and activation.
-- Supported filetypes.
-- Formatter metadata consumed by the existing registry.
-- Language-specific prerequisites.
-- Language-specific commands or editing workflows where separately justified.
-- Validation requirements and expected behavior.
-
-The existing registry remains responsible for deterministic discovery and metadata aggregation.
-
-Stage 13 must not introduce a second registry, duplicate language-pack setup paths, or create another mechanism for discovering language-specific configuration.
-
-Each language pack must follow the existing module conventions and keep its configuration separate from unrelated language packs.
-
-### 4.2 Shared LSP infrastructure
-
-The existing native LSP configuration and shared lifecycle behavior remain in place.
-
-Language packs must not duplicate common attachment behavior, redefine centralized keymaps unnecessarily, or introduce another LSP framework.
-
-Server configuration should reuse maintained `nvim-lspconfig` definitions where appropriate while preserving Neovim's native LSP APIs.
-
-Language-specific behavior belongs in the relevant pack. Shared lifecycle behavior belongs in `lua/config/lsp.lua`.
-
-Any proposed change to these boundaries requires a demonstrated technical need and a separate review.
-
-### 4.3 Formatting
-
-Conform.nvim remains the sole formatting integration.
-
-Language packs may declare formatter defaults, while existing user preferences continue to be resolved through:
-
-- `lua/config/format.lua`
-- `lua/config/languages.lua`
-
-Formatter selection must remain explicit and consistent with the existing registry contract.
-
-Formatting behavior must be validated independently of language-server startup. The presence of a language server must not be treated as proof that formatting works.
-
-Format-on-save remains disabled by default unless a separate accepted decision changes that policy.
-
-### 4.4 Linting
-
-The Neovim linting-integration decision remains unresolved.
-
-Before selecting an integration, review Stage 11's existing scope, implementation, candidate policy, executable requirements, filetype coverage, diagnostic overlap, and validation requirements.
-
-Stage 13 must not introduce a linting integration plugin or another linting framework.
-
-Installing a standalone CLI linter does not authorize integrating it into Neovim. Likewise, the existence of LSP diagnostics does not establish that standalone linting requirements have been satisfied.
-
-The selected approach must document which tool produces each diagnostic, how it is invoked, and how overlapping diagnostics will be avoided.
-
-### 4.5 Project roots and working directories
-
-Reuse the existing project.nvim direction and root-detection architecture.
-
-Do not introduce another project-root plugin or a new root abstraction without a demonstrated requirement and a separately reviewed decision.
-
-Language-server root markers must be evaluated against representative repositories and the current project behavior.
-
-Root detection must remain distinct from changing Neovim's working directory. Attaching a language server to a project must not implicitly change the user's working directory unless a separately accepted decision explicitly requires that behavior.
-
-### 4.6 Tree-sitter
-
-Reuse the existing Tree-sitter integration.
-
-Evaluate additional parser requirements only where they provide a defined benefit to the selected language baseline.
-
-Parser availability, compiler prerequisites, highlighting behavior, language-server installation, and formatter installation are separate concerns. Passing one validation does not establish that the others work.
-
-## 5. External dependency policy
-
-Language servers, formatters, linters, parsers, and supporting runtimes are external dependencies unless explicitly documented otherwise.
-
-The project will:
-
-- Keep external executable installation separate from Neovim plugin installation.
-- Avoid installing tools automatically during Neovim startup.
-- Keep tool installation scripts and dependency manifests separate from language-pack configuration.
-- Document executable names, installation methods, runtime requirements, and verification commands.
-- Avoid adding a package manager or tool-installation plugin solely to simplify language setup.
-- Verify external tool availability independently of plugin configuration.
-- Document platform-specific limitations and supported installation methods.
-- Avoid adding a dependency when an existing tool adequately satisfies the requirement.
-- Distinguish required dependencies from optional tools.
-- Ensure dependency checks report missing tools clearly without silently installing them.
-
-Where installation scripts are provided, they must follow the project's existing dependency-management conventions and remain independently testable.
-
-The language-pack configuration must not assume that an executable is available merely because its name appears in a manifest or documentation file.
-
-## 6. Language-pack validation requirements
-
-Every admitted language must be validated against representative files and repositories.
-
-Validation must cover the following areas.
-
-| Area | Required verification |
+| Category | Scope |
 |---|---|
-| Filetype detection | Representative files receive the expected Neovim filetypes. |
-| Server configuration | The server configuration is valid and compatible with the installed Neovim version. |
-| Server attachment | The intended server starts and attaches to the correct buffers. |
-| Language features | Relevant diagnostics and language features behave as expected. |
-| Formatting | The intended formatter is selected and produces valid, expected output. |
-| External dependencies | Required executables and supporting runtimes are available and correctly identified. |
-| Root detection | Representative repositories produce the expected project roots without unintended working-directory changes. |
-| Keymaps | Existing centralized mappings continue to work without unnecessary duplication or conflicts. |
-| Tree-sitter | Required parsers are available and provide the expected highlighting behavior. |
-| Documentation | Installation, prerequisites, configuration, and verification instructions match the implementation. |
-| Regression checks | Existing language packs and shared configuration continue to pass their established checks. |
+| General-purpose programming | Languages used for application development, scripting, and general software engineering |
+| Systems programming | Languages used for low-level development, systems software, and performance-sensitive applications |
+| Shell and automation | Shell languages and automation scripting |
+| Web development | Browser-facing languages, markup, stylesheets, and web application development |
+| Data and configuration | Structured data, configuration formats, and data-processing languages |
+| Markup and documentation | Documentation formats and technical publishing |
+| Query languages | Database and query-oriented languages |
+| Infrastructure and build tools | Container definitions, build systems, and infrastructure configuration |
 
-Not every language requires every optional capability. Any omitted capability must be intentional and documented rather than assumed to work.
+The categories describe the language's primary role. They do not determine whether a pack is core or optional.
 
-### 6.1 Automated validation
+## 4. Core Language Inventory
 
-Headless smoke tests should validate the contracts that can be tested reliably without an interactive session, including:
+The following eleven language groups define the Stage 13 baseline.
 
-- Language-pack discovery and metadata aggregation.
-- Configuration loading and registration.
-- Expected filetype and formatter mappings.
-- Missing-dependency handling.
-- Failure behavior and regression protection.
-- Relevant syntax and configuration checks.
+The implementation order is intentional and must be preserved.
 
-Tests must not require network access or install external dependencies as a side effect.
+| Order | Language group | Category | Status |
+|---:|---|---|---|
+| 1 | Lua | General-purpose programming | Validated |
+| 2 | Python | General-purpose programming | Validated |
+| 3 | YAML | Data and configuration | Validated |
+| 4 | JSON | Data and configuration | Validated |
+| 5 | Shell | Shell and automation | Planned |
+| 6 | PowerShell | Shell and automation | Planned |
+| 7 | HTML | Web development | Planned |
+| 8 | CSS | Web development | Planned |
+| 9 | JavaScript and TypeScript | Web development | Planned |
+| 10 | Markdown | Markup and documentation | Planned |
+| 11 | Rust | Systems programming | Planned |
 
-### 6.2 Interactive validation
+The shared data pack also provides support for JSONC, JSON5, jq, and TOML. These capabilities extend the data pack without adding new entries to the eleven-group baseline.
 
-Headless tests do not replace interactive verification of actual language-server attachment or editing behavior.
+### 4.1 Lua
 
-For each language, perform the applicable interactive checks, including:
+**Language pack:** `lua/langs/lua.lua`
 
-- Opening representative files and confirming the intended server attaches.
-- Confirming diagnostics and relevant language features.
-- Invoking formatting and inspecting the resulting changes.
-- Verifying project-root behavior in representative repositories.
-- Confirming that existing keymaps and shared workflows remain functional.
+<badge color="success">Validated</badge>
 
-A language pack must not be marked complete solely because its module loads or its smoke tests pass.
+Lua is the first core language pack and provides the baseline for the shared language architecture.
 
-## 7. Implementation gates
+| Capability | Selection |
+|---|---|
+| Language server | LuaLS (`lua_ls`) |
+| Formatter | StyLua |
+| Linter | LuaCheck as an optional standalone CLI tool |
+| Tree-sitter parser | `lua` |
+| LSP configuration | Neovim native LSP API |
 
-Stage 13 implementation must not bypass outstanding requirements from earlier stages.
+LuaLS is configured through Neovim's native LSP API. Plugin-provided server definitions may be used where appropriate, but Neovim owns configuration and activation.
 
-Before implementation begins, preserve and address the applicable closeout requirements.
+LuaCheck is not part of the editor's LSP or diagnostics workflow unless a separate admission decision is made.
 
-### Stage 04 — Native workflows
+**Documentation:** See the Lua support documentation and the relevant dependency entries.
 
-- Resolve the outstanding native commenting workflow.
-- Verify the actual `gc` and `gcc` behavior before documenting those mappings as implemented.
-- Align the documentation with verified behavior.
+### 4.2 Python
 
-### Stage 10 — Completion and snippets
+**Language pack:** `lua/langs/python.lua`
 
-- Complete interactive verification of completion behavior.
-- Verify snippet expansion and placeholder navigation.
-- Verify the expected pairing behavior.
-- Document any remaining limitations before closeout.
+<badge color="success">Validated</badge>
 
-### Stage 12 — Git, roots, and sessions
+Python language support is complete for the defined Stage 13 scope.
 
-- Complete outstanding documentation.
-- Align dependency and keymap documentation with the implementation.
-- Complete the required stage-closeout checks.
+| Capability | Selection |
+|---|---|
+| Project and tool workflow | `uv` |
+| Language server | Astral Ty |
+| Language-server diagnostics | Ty |
+| Linter | Ruff CLI (`ruff check`) |
+| Native LSP diagnostics | Ruff diagnostic publication and clearing |
+| Formatter | Ruff (`ruff format`) through Conform |
+| Tree-sitter parser | `python` |
+| Completion | Existing automatic completion integration |
 
-Planning, documenting, or evaluating Stage 13 does not declare any earlier stage complete.
+The following Python workflows have passed validation:
 
-The implementation gate is satisfied only when the applicable earlier-stage requirements have been addressed and their status is supported by verification evidence.
+- The `uv` project workflow.
+- Ty language-server functionality and diagnostics.
+- Ruff CLI linting through `ruff check`.
+- Ruff native LSP diagnostic publication and clearing.
+- Ty and Ruff coexistence without conflicting diagnostic behavior.
+- Language-server attachment after a fresh Neovim start.
+- Ruff formatting through the shared Conform integration.
+- Automatic completion.
+- Tree-sitter syntax highlighting.
 
-## 8. Implementation and acceptance criteria
+Formatting and LSP diagnostics remain separate responsibilities. Ruff formatting runs through Conform; it is not part of the LSP diagnostic workflow.
 
-Stage 13 implementation may proceed only within the accepted architecture and the dependency decisions established for each language.
+Python-specific smoke tests are intentionally skipped. Their omission does not change the completed status of the defined Python scope.
 
-The preferred implementation sequence is the order defined in Section 2.1 and reflected in Section 3.
+Manual completion shortcut configuration belongs to Stage 10 and is not part of this Stage 13 language-support implementation.
 
-A language pack is eligible for acceptance when:
+### 4.3 YAML
 
-1. Its configuration follows the existing registry and module conventions.
-2. Its language-server configuration uses the existing native LSP architecture.
-3. Its formatter configuration uses Conform.nvim and the existing formatter-preference mechanism.
-4. Required external dependencies and optional tools are documented separately.
-5. Missing dependencies produce clear, actionable feedback.
-6. Automated checks pass for the relevant configuration contracts.
-7. Interactive validation confirms the applicable language features and editing workflows.
-8. Existing shared configuration and previously accepted language packs remain functional.
-9. Documentation reflects the implemented behavior and provides repeatable verification steps.
+**Language pack:** `lua/langs/data.lua`
 
-The Stage 13 implementation must not be considered complete until the applicable language packs satisfy these criteria and the required evidence has been reviewed.
+<badge color="success">Validated</badge>
 
-## 9. Explicit non-goals
+YAML is part of the shared data-language pack rather than a separate `yaml.lua` pack.
 
-This decision does not authorize:
+| Capability | Selection |
+|---|---|
+| Language server | YAML Language Server (`yamlls`) |
+| Formatter | Prettier |
+| Tree-sitter parser | `yaml` |
 
-- A new LSP framework or a replacement for Neovim's native LSP APIs.
-- A second language registry or duplicate language-pack setup paths.
-- New plugins for linting, dependency installation, or project-root detection.
-- Automatic external tool installation during Neovim startup.
-- Enabling format-on-save by default.
-- Treating proposed dependencies as installed or validated capabilities.
-- Declaring earlier stages complete without their required verification.
-- Expanding the language baseline without a documented and reviewed scope decision.
+The pack accounts for YAML-related filetypes, including Docker Compose and other supported YAML variants.
 
-## 10. Decision summary
+Schema configuration, diagnostics, formatting, and parser behavior are part of the completed YAML support.
 
-Stage 13 extends the existing language-pack architecture without replacing its shared infrastructure.
+### 4.4 JSON and related data formats
 
-Language-specific configuration remains modular. Shared LSP lifecycle behavior, formatter preferences, keymaps, project-root behavior, and Tree-sitter integration remain centralized in their existing components.
+**Language pack:** `lua/langs/data.lua`
 
-The preferred build order is Lua, Python, YAML, JSON, Shell scripting, PowerShell, HTML, CSS, JavaScript and TypeScript, Markdown, and Rust.
+<badge color="success">Validated</badge>
 
-External tools are managed separately from Neovim plugins. Candidate selection requires explicit evaluation, and implementation requires repeatable automated checks and applicable interactive verification.
+The shared data pack owns JSON, JSONC, JSON5, jq, and TOML support.
 
-**Accepted:** Architectural direction, responsibility boundaries, dependency policy, preferred build order, and implementation gates.
+#### JSON formats
 
-**Not yet approved:** Individual candidate dependencies that have not completed evaluation, new plugin admissions, and implementation changes.
+| Format | Language server | Formatter | Parser |
+|---|---|---|---|
+| JSON | JSON Language Server (`jsonls`) | Prettier | `json` |
+| JSONC | JSON Language Server (`jsonls`) | Prettier | `json` |
+| JSON5 | Not configured | Prettier | `json5` |
 
-**Current status:** Design accepted. Implementation not started. Earlier-stage closeout requirements remain in force.
+JSON and JSONC use the JSON Language Server. JSON5 deliberately uses Tree-sitter and Prettier without JSON Language Server attachment.
+
+#### jq
+
+| Capability | Selection |
+|---|---|
+| Language server | jq language server (`jq-lsp`) |
+| Execution | Native `vim.system()` integration |
+| Tree-sitter parser | `jq` |
+
+jq support is complete within the shared data pack.
+
+Execution uses Neovim's native process interface rather than introducing a separate execution framework.
+
+#### TOML
+
+| Capability | Selection |
+|---|---|
+| Language server | Taplo |
+| Formatter | Taplo |
+| Tree-sitter parser | `toml` |
+
+TOML support is complete within the shared data pack.
+
+Parser configuration and parser availability remain distinct validation concerns. The configured parser must be available and usable in the running Neovim installation.
+
+#### Data-pack completion scope
+
+The following formats and tools are complete:
+
+- YAML
+- JSON
+- JSONC
+- JSON5
+- jq
+- TOML
+
+The shared pack must preserve clear filetype ownership, formatter selection, server attachment rules, parser configuration, and dependency reporting for each supported format.
+
+### 4.5 Shell
+
+**Planned language pack:** `lua/langs/shell.lua`
+
+| Capability | Candidate |
+|---|---|
+| Language server | Bash Language Server (`bashls`) |
+| Formatter | `shfmt` |
+| Tree-sitter parser | `bash` |
+
+The shell pack covers shell scripting, including Bash.
+
+Validation must cover filetype detection, server attachment, formatter execution, and representative shell scripts.
+
+General terminal integration and command-line tooling are separate from language support.
+
+### 4.6 PowerShell
+
+**Planned language pack:** `lua/langs/powershell.lua`
+
+| Capability | Selection |
+|---|---|
+| Language server | PowerShell Editor Services (`powershell_es`) |
+| Formatter | PSES formatter through the LSP |
+| Linter and diagnostics | PSScriptAnalyzer through PSES |
+| Tree-sitter parser | `powershell` |
+
+PowerShell is a core language pack and must be validated on the target Windows environment.
+
+PSES provides formatting through its formatter functionality. This differs from packs that use a standalone formatter executable.
+
+The implementation must not claim that a separate CLI formatter exists when formatting is provided through PSES.
+
+### 4.7 HTML
+
+**Planned language pack:** `lua/langs/html.lua` or the agreed core web-pack structure.
+
+HTML belongs to the core baseline.
+
+| Capability | Selection |
+|---|---|
+| Language server | HTML language server |
+| Formatter | Prettier |
+| Tree-sitter parser | `html` |
+
+Emmet is opt-in. It must not be enabled automatically merely because HTML support is present.
+
+The implementation must validate HTML filetype detection, language-server behavior, formatting, and parser functionality.
+
+### 4.8 CSS
+
+**Planned language pack:** `lua/langs/css.lua` or the agreed core web-pack structure.
+
+CSS belongs to the core baseline.
+
+| Capability | Selection |
+|---|---|
+| Language server | CSS language server |
+| Formatter | Prettier |
+| Tree-sitter parser | `css` |
+
+CSS support must be independently validated. Sharing Prettier with HTML or JavaScript does not remove the need for CSS-specific checks.
+
+### 4.9 JavaScript and TypeScript
+
+**Planned language pack:** `lua/langs/typescript.lua` or the agreed core web-pack structure.
+
+| Capability | Selection |
+|---|---|
+| Language server | TypeScript Language Server (`ts_ls`) |
+| Formatter | Prettier |
+| Tree-sitter parsers | `javascript`, `typescript`, `tsx` |
+
+The pack owns the following filetypes:
+
+- `javascript`
+- `javascriptreact`
+- `typescript`
+- `typescriptreact`
+
+The implementation must not allow optional web support to duplicate these filetypes.
+
+Lint-tool selection remains a separate decision. Prettier formatting must not be treated as evidence that linting has been configured.
+
+### 4.10 Markdown
+
+**Planned language pack:** `lua/langs/markdown.lua`
+
+| Capability | Selection |
+|---|---|
+| Language server | Marksman |
+| Formatter | Prettier |
+| Tree-sitter parsers | `markdown`, `markdown_inline` |
+| Linter | Separate admission decision |
+| Renderer | Separate admission decision |
+
+Markdown language support must remain independent of Markdown linting and rendering.
+
+The core Markdown pack must validate:
+
+- Markdown filetype detection.
+- Marksman attachment and diagnostics.
+- Prettier formatting.
+- Both required Tree-sitter parsers.
+- Representative Markdown fixtures.
+- The manual formatting workflow.
+
+`markdownlint-cli2` remains subject to its own linting admission decision.
+
+Markdown rendering remains subject to an independent compatibility evaluation. Neither linting nor rendering should block the core Markdown pack.
+
+### 4.11 Rust
+
+**Planned language pack:** `lua/langs/rust.lua`
+
+| Capability | Selection |
+|---|---|
+| Language server | Rust Analyzer (`rust_analyzer`) |
+| Formatter | `rustfmt` |
+| Tree-sitter parser | `rust` |
+
+Rust support must validate the Rust toolchain, server attachment, formatter behavior, parser availability, and representative Rust projects.
+
+The language pack must use the shared LSP and formatting infrastructure rather than introducing a separate management workflow.
+
+## 5. Optional Language Inventory
+
+Optional language packs extend the core baseline. They are not automatically enabled and must not be treated as installed or supported merely because they appear in this index.
+
+They must be explicitly selected through `lua/config/languages.lua`.
+
+| Optional pack | Category | Scope | Decision |
+|---|---|---|---|
+| Typst | Markup and documentation | Typst documents and technical publishing | Confirmed for evaluation |
+| SQL | Query languages | SQL editing and database-oriented workflows | Pending tooling decision |
+| Go | General-purpose programming | Go application development | Candidate |
+| Java | General-purpose programming | Java and JVM development | Candidate |
+| Zig | Systems programming | Zig development | Candidate |
+| Kotlin | General-purpose programming | Kotlin and JVM development | Pending tooling decision |
+| Julia | General-purpose programming | Scientific and technical computing | Candidate |
+| Docker | Infrastructure and build tools | Dockerfiles and container definitions | Pending tooling decision |
+| CMake | Infrastructure and build tools | CMake build configuration | Pending tooling decision |
+
+### Optional-pack rules
+
+- Optional packs live under `lua/langs/optional/`.
+- Optional packs must be explicitly enabled.
+- An enabled pack without a matching implementation file is a configuration error.
+- Optional packs must follow the same metadata and validation contracts as core packs.
+- Optional packs must not claim filetypes already owned by core packs.
+- Optional dependencies must not be installed automatically.
+- A pack must have a clear use case and a defined validation path before admission.
+
+### Typst
+
+Typst is confirmed as an optional language-support target.
+
+Its implementation, dependencies, parser requirements, formatter selection, and documentation must be evaluated independently.
+
+Confirmation of Typst as a target does not mean its tools or plugins are already admitted or installed.
+
+### SQL
+
+SQL tooling remains undecided.
+
+The language server and formatter must be selected after evaluating the intended database-agnostic workflow, project requirements, and external dependencies.
+
+### Go
+
+Go may use `gopls` and the standard Go formatting toolchain.
+
+The implementation must validate the required Go runtime and toolchain rather than assuming that Neovim alone provides them.
+
+### Java
+
+Java tooling must be evaluated against the intended JVM workflow and project requirements.
+
+The language server, runtime, formatter, and project-root behavior must be verified before implementation.
+
+### Zig
+
+Zig support requires an evaluation of the available language-server and formatter options against the selected Zig toolchain.
+
+### Kotlin
+
+Kotlin tooling remains undecided.
+
+The implementation must account for the intended Kotlin/JVM workflow and its runtime and project requirements.
+
+### Julia
+
+Julia support requires a defined runtime, language-server workflow, and formatter decision.
+
+### Docker
+
+Docker support covers Dockerfiles and related container configuration.
+
+The implementation must establish filetype ownership and evaluate the language server and formatter before admission.
+
+### CMake
+
+CMake support covers `CMakeLists.txt` and `.cmake` files.
+
+Tool selection must be based on verified installation requirements and actual project needs.
+
+## 6. Shared Language-Pack Architecture
+
+Language-specific configuration must remain modular while shared behavior stays centralized.
+
+| Component | Responsibility |
+|---|---|
+| `lua/langs/init.lua` | Discover core packs, initialize them, and collect metadata |
+| `lua/langs/*.lua` | Define core language packs |
+| `lua/langs/optional/*.lua` | Define explicitly enabled optional packs |
+| `lua/config/languages.lua` | User-facing optional-pack selection and formatter preferences |
+| `lua/config/format.lua` | Shared Conform formatting workflow |
+| `lua/config/lsp.lua` | Shared native LSP behavior |
+| `lua/plugins/treesitter.lua` | Centralized Tree-sitter configuration |
+| `docs/dependencies.md` | External tools, runtimes, installation, and verification |
+| `docs/plugin-inventory.md` | Plugin admission and inventory |
+| `scripts/smoke.lua` | Automated configuration and regression checks |
+
+### Registry contract
+
+The language registry is responsible for discovering language packs, invoking their setup functions, and collecting declared metadata.
+
+A language pack must provide a `setup()` function.
+
+Metadata collection must detect duplicate ownership rather than silently allowing one pack to overwrite another.
+
+Language packs should declare capabilities. They should not independently reimplement the shared LSP, formatting, or Tree-sitter infrastructure.
+
+### Optional-pack activation
+
+Optional packs must remain opt-in.
+
+The registry must not load every file in `lua/langs/optional/` automatically. Only explicitly enabled packs should be initialized.
+
+Invalid optional-pack names must produce visible errors.
+
+## 7. Formatting Contract
+
+All language packs must use the existing formatting architecture in `lua/config/format.lua` and the Conform integration.
+
+The default workflow is manual:
+
+```vim
+:Format
+```
+
+The associated keymap is:
+
+```text
+<leader>cf
+```
+
+The formatting contract is:
+
+- Format-on-save is disabled by default.
+- LSP formatting fallback is disabled by default.
+- Formatter selection is deterministic.
+- User preferences are resolved ahead of pack defaults.
+- Duplicate formatter entries are removed.
+- Exclusive formatter preferences must not fall back to pack defaults.
+- Missing formatters must be reported clearly.
+- Formatting must not silently report success when no formatter runs.
+
+Language packs must declare formatter metadata. They must not independently configure a second formatting framework.
+
+## 8. LSP Contract
+
+Language servers use Neovim's native LSP configuration and activation APIs.
+
+The project must not introduce a separate language-server manager.
+
+The shared LSP configuration owns common behavior, while language packs provide language-specific server setup and metadata.
+
+Requirements:
+
+- Use valid server identifiers.
+- Verify server definitions and executable requirements.
+- Keep shared LSP keymaps centralized.
+- Avoid duplicate server ownership.
+- Validate server attachment using representative fixtures.
+- Report unavailable executables accurately.
+- Keep project-root behavior consistent with the existing root-management architecture.
+
+A configured server is not proof that it is installed, starts successfully, or attaches to a buffer.
+
+## 9. Tree-sitter Contract
+
+Tree-sitter configuration remains centralized in:
+
+`lua/plugins/treesitter.lua`
+
+Language packs must not independently initialize or reconfigure the shared Tree-sitter plugin.
+
+For every supported language, verify:
+
+- The parser is included in the configured parser set.
+- The parser can be installed or is already available.
+- Neovim can create a syntax tree for a representative fixture.
+- Highlighting works where enabled.
+- Parser names match the actual Tree-sitter configuration.
+
+Parser availability, syntax-tree parsing, and highlighting are separate validation results.
+
+A parser name appearing in a configuration file is not proof that the parser works.
+
+## 10. Linting and Rendering Gates
+
+Some tools require separate admission decisions and must not be bundled into core language support without evaluation.
+
+### Markdown linting
+
+`markdownlint-cli2` is a candidate for Markdown linting.
+
+Its admission must establish:
+
+- Executable and runtime requirements.
+- Rule policy and configuration ownership.
+- Direct CLI or Neovim integration.
+- Whether `nvim-lint` is required.
+- Useful diagnostics on valid and invalid fixtures.
+- Dependency documentation.
+
+Markdown formatting and linting remain separate responsibilities.
+
+### Markdown rendering
+
+`md-render.nvim` is a rendering candidate, not an automatically admitted dependency.
+
+The initial compatibility target is:
+
+- Windows.
+- Neovim 0.12.6.
+- WezTerm.
+
+The isolated evaluation must cover normal Markdown content, tables, code blocks, local images, remote images, scrolling, resizing, preview cleanup, and preservation of the source buffer.
+
+Image rendering must be tested in the actual target terminal. A text-only preview does not satisfy a requirement for inline image rendering.
+
+The renderer must not become a dependency of the core Markdown pack until the isolated compatibility evaluation passes.
+
+## 11. External Dependencies
+
+External executables and language runtimes are managed independently of Neovim plugin installation.
+
+`docs/dependencies.md` is the central reference for external tools and runtimes.
+
+For every language, document applicable requirements:
+
+- Language server.
+- Formatter.
+- Linter.
+- Runtime or compiler.
+- Required executable names.
+- Installation method.
+- Platform requirements.
+- Verification commands.
+- Required, optional, or pending status.
+
+Do not silently install tools because a language pack references them.
+
+Do not require every language runtime merely to start Neovim. Missing language-specific dependencies should affect only the corresponding features where practical, with clear diagnostics.
+
+## 12. Language-Pack Acceptance Criteria
+
+A language pack is complete only when its implementation and validation evidence support that status.
+
+| Area | Required evidence |
+|---|---|
+| Filetype | Neovim assigns the expected filetype |
+| Registry | The pack is discovered and its metadata is valid |
+| LSP | Server definition, executable, attachment, and diagnostics are verified |
+| Formatting | The intended formatter is selected and its output is checked |
+| Linting | Lint behavior is validated when included |
+| Tree-sitter | Required parser is available and usable |
+| Dependencies | External tools and runtimes are documented and checked |
+| Fixtures | Representative source files exercise real language constructs |
+| Status | `:LangStatus` reports relevant support and dependency state |
+| Regression | Applicable automated smoke tests and syntax checks pass |
+
+Not every language requires a separate linter.
+
+A language pack must not claim a capability that has not been selected, integrated, and validated.
+
+### Status terminology
+
+Use these terms consistently:
+
+| Status | Meaning |
+|---|---|
+| Planned | Included in the agreed support scope but not implemented |
+| Implemented | Configuration and required files exist |
+| Validated | Defined automated and interactive checks have passed |
+| Admitted | The relevant plugin or tool has passed its separate admission decision |
+| Deferred | Work is intentionally postponed |
+| Rejected | The candidate was evaluated and not accepted |
+
+These statuses are not interchangeable.
+
+An installed tool does not prove that its integration works. A configured language server does not prove that it attaches successfully. A documented plan does not prove implementation.
+
+The status in the inventory describes the language-support implementation. Admission status for individual optional tools and plugins remains separate.
+
+### Python validation exception
+
+Python-specific smoke tests are intentionally skipped.
+
+The completed Python status is based on the defined manual and interactive validation scope documented in the Python section. The general acceptance criteria do not imply that Python-specific automated smoke tests have passed.
+
+Manual completion shortcut configuration belongs to Stage 10. It is not a Stage 13 Python acceptance requirement.
+
+## 13. Implementation Order
+
+The core baseline must follow the agreed order:
+
+| Order | Language group | Current status | Required completion evidence |
+|---:|---|---|---|
+| 1 | Lua | Validated | LuaLS, StyLua, parser, syntax checks, and language-specific validation |
+| 2 | Python | Validated | `uv` project workflow, Ty diagnostics, Ruff CLI linting, Ruff LSP diagnostics, coexistence, fresh-start attachment, Conform formatting, automatic completion, and Tree-sitter highlighting |
+| 3 | YAML | Validated | Filetypes, YAML Language Server, Prettier, parser, and fixtures |
+| 4 | JSON | Validated | JSON/JSONC/JSON5 ownership, server behavior, Prettier, parsers, and fixtures |
+| 5 | Shell | Planned | Bash server, `shfmt`, parser, and representative scripts |
+| 6 | PowerShell | Planned | PSES, PSScriptAnalyzer, formatting, Windows validation, and parser |
+| 7 | HTML | Planned | Filetype, server, Prettier, parser, and fixture |
+| 8 | CSS | Planned | Filetype, server, Prettier, parser, and fixture |
+| 9 | JavaScript/TypeScript | Planned | `ts_ls`, Prettier, filetype ownership, parsers, and fixtures |
+| 10 | Markdown | Planned | Marksman, Prettier, both Markdown parsers, and fixtures |
+| 11 | Rust | Planned | Rust Analyzer, `rustfmt`, toolchain, parser, and fixture |
+
+The shared data pack also has completed support for JSONC, JSON5, jq, and TOML. These formats are additional data-pack capabilities and do not change the eleven-group implementation order.
+
+Implement and validate one language pack at a time.
+
+If a pack fails its acceptance criteria, resolve the failure before moving to the next pack.
+
+Optional packs follow only after their individual admission and implementation decisions.
+
+## 14. Documentation Ownership
+
+This index does not replace language-specific support documentation.
+
+| Document | Responsibility |
+|---|---|
+| `docs/langs-support.md` | Central language inventory and support index |
+| `docs/dependencies.md` | External tools, runtimes, and installation |
+| `docs/plugin-inventory.md` | Plugin inventory and admission status |
+| `docs/architecture.md` | Shared configuration architecture |
+| `docs/roadmap.md` | Overall project stages and progress |
+| Language-specific support documents | Detailed implementation, configuration, dependencies, and validation |
+
+Update the index when a language is added, removed, promoted, deferred, or validated.
+
+Do not mark a language as complete until its dedicated documentation and validation evidence support that status.
+
+## 15. Definition of Done
+
+The language-support index and Stage 13 work are ready for completion when:
+
+- All eleven core language groups have been implemented and validated.
+- Existing Lua support remains correct.
+- Python's `uv`, Ty, Ruff linting, Ruff LSP diagnostics, Conform formatting, completion, and Tree-sitter workflows are validated.
+- YAML and JSON support meet their individual acceptance criteria.
+- JSONC, JSON5, jq, and TOML support remain covered by the shared data-pack acceptance criteria.
+- Shell and PowerShell support pass their platform-specific checks.
+- HTML and CSS remain part of the core baseline.
+- JavaScript and TypeScript have clear filetype ownership.
+- Markdown's core workflow is independent of linting and rendering decisions.
+- Rust support is validated against its toolchain.
+- Optional packs remain explicitly enabled.
+- Typst's optional-pack implementation and dependencies are independently evaluated.
+- The shared registry rejects invalid configuration and duplicate metadata.
+- Formatter preferences and exclusive formatter lists are tested.
+- Manual formatting remains the default.
+- Format-on-save and LSP formatting fallback remain disabled by default.
+- Required Tree-sitter parsers and LSP definitions are verified.
+- External dependencies are documented accurately.
+- `:LangStatus` provides useful support and dependency information.
+- Applicable automated smoke tests and syntax checks pass.
+- The language index, dependency documentation, plugin inventory, and roadmap reflect verified status.
+
+Python-specific smoke tests remain intentionally skipped and are not represented as completed automated checks.
+
+## Guiding Principles
+
+> **Minimum installation. Compose the rest.**
+
+> **Approval is not installation.**
+
+Every language pack and optional component must justify its responsibility, dependencies, configuration, and validation requirements.
+
+The objective is not to support every language by default. It is to maintain a reliable, modular baseline and make additional support available through deliberate, independently validated decisions.

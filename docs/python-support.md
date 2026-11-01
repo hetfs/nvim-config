@@ -1,10 +1,10 @@
 # Python Support
 
-**Status:** In progress
+**Status:** Complete
 **Stage:** 13 — Language Packs
 **Test environment:** Windows, Neovim 0.12.6
 
-Python support uses `uv` for project and environment management, `ty` for language-server diagnostics, Ruff for linting and formatting, Neovim's native LSP client for editor integration, Conform for formatting integration, and the existing Tree-sitter installation for syntax highlighting.
+Python support uses `uv` for project and environment management, `ty` for language-server functionality and type diagnostics, Ruff for linting and formatting, Neovim's native LSP client for editor integration, Conform for formatting integration, and the existing Tree-sitter installation for syntax highlighting.
 
 The implementation follows the repository's native-first approach: tools are installed and managed outside Neovim, external executables are discovered through the environment, and plugin responsibilities remain explicit.
 
@@ -14,9 +14,11 @@ The implementation follows the repository's native-first approach: tools are ins
 |---|---|
 | Python project and environment management | `uv` |
 | Language server and type diagnostics | `ty` |
+| Editor lint diagnostics | Ruff native language server |
 | Native LSP client | Neovim built-in LSP |
 | LSP server definitions | `nvim-lspconfig` |
 | Standalone linting | Ruff (`ruff check .`) |
+| Editor lint integration | Ruff native LSP (`ruff server`) |
 | Formatting | Ruff through Conform's `ruff_format` formatter |
 | Project configuration | `pyproject.toml` |
 | Dependency lockfile | `uv.lock`, when maintained by the project |
@@ -24,9 +26,23 @@ The implementation follows the repository's native-first approach: tools are ins
 | External-tool discovery | Environment and project virtual environment |
 | Tool installation from Neovim | Not permitted |
 | Mason | Not used |
-| Editor-side Ruff lint integration | Deferred pending a separate admission review |
 
 The language pack must not install Python tools as a side effect of opening Neovim. Python tooling should be installed and managed through the user's external development workflow.
+
+### Responsibility boundaries
+
+The Python tooling has deliberately separated responsibilities:
+
+- **uv:** Project, environment, dependency, and tool execution management.
+- **Ty:** Python language-server functionality and type diagnostics.
+- **Ruff LSP:** Editor-side lint diagnostics.
+- **Ruff CLI:** Standalone linting.
+- **Conform:** Formatting integration through `ruff_format`.
+- **Tree-sitter:** Syntax parsing and highlighting.
+
+Ty and Ruff run as separate LSP clients. Ruff's language server does not replace Ty, and Ty does not replace Ruff's linting functionality.
+
+Ruff's LSP integration is used for diagnostics only. Formatting remains a separate Conform workflow.
 
 ## 2. Tool responsibilities
 
@@ -101,35 +117,65 @@ The language pack must:
 
 The tested scenarios have validated server discovery, activation, attachment, diagnostics, project-root detection, definition, references, automatic completion, and hover.
 
-Startup/restart reattachment remains unverified.
+Fresh-start attachment has also been verified.
 
-### Ruff — linting
+### Ruff — native LSP linting
 
-Ruff is the standalone Python linting tool.
+Ruff provides editor-side lint diagnostics through its native language server.
 
-The baseline command is:
+The integration uses the maintained Ruff server definition supplied by `nvim-lspconfig`.
+
+The upstream definition was inspected at:
+
+```text
+nvim-lspconfig/lsp/ruff.lua
+```
+
+The installed definition specifies:
+
+```lua
+cmd = { "ruff", "server" }
+filetypes = { "python" }
+root_markers = {
+  "pyproject.toml",
+  "ruff.toml",
+  ".ruff.toml",
+  ".git",
+}
+```
+
+The language pack enables Ruff through Neovim's native LSP API:
+
+```lua
+vim.lsp.enable("ruff")
+```
+
+Ruff and Ty are enabled independently. Both clients can attach to the same Python buffer.
+
+Ruff's responsibilities include:
+
+- Publishing lint diagnostics in Python buffers.
+- Updating diagnostics when source code changes.
+- Clearing diagnostics when reported violations are corrected.
+- Following the project's Ruff configuration and applicable project root.
+
+Ruff's standalone CLI remains available:
 
 ```powershell
 ruff check .
 ```
 
-When Ruff is managed by the project through `uv`, the project-aware alternative is:
+When Ruff is managed by the project through `uv`, use:
 
 ```powershell
 uv run ruff check .
 ```
 
-Ruff CLI linting has been validated.
+**Editor lint integration is approved, implemented, and validated for the tested scenarios.**
 
-Editor-side Ruff lint integration is **not approved** and must not be treated as implemented.
+The runtime validation confirmed that Ruff publishes an `F841` diagnostic for an unused local variable and clears that diagnostic after the source is corrected and saved.
 
-Before admitting editor lint integration, review:
-
-- How lint diagnostics are published and cleared.
-- Whether the same diagnostics would be duplicated by another integration.
-- How stale diagnostics behave after source changes.
-- Whether the integration follows the project's root and environment.
-- Whether the added integration provides enough value to justify its complexity.
+No separate `ruff-lsp` package or `nvim-lint` integration is required.
 
 ### Ruff — formatting
 
@@ -147,6 +193,16 @@ Formatting is explicit. Do not enable format-on-save or introduce an LSP formatt
 
 Where the project manages Ruff with `uv`, validate the formatter in that same project environment as well.
 
+**Formatting separation is an explicit architectural requirement:**
+
+- Ruff LSP handles editor lint diagnostics.
+- Conform invokes `ruff_format` for formatting.
+- Ruff LSP must not become the formatting provider.
+- No LSP formatting fallback is enabled.
+- Format-on-save remains disabled by default.
+
+The addition of Ruff LSP must not change the existing Conform configuration or transfer formatting responsibility to the language server.
+
 ### Tree-sitter — syntax highlighting
 
 Python reuses the existing Stage 08 Tree-sitter setup.
@@ -162,9 +218,9 @@ The Python parser installation and highlighting have been verified in the curren
 | Python | Python runtime | Python 3.14.7 used in the temporary project |
 | `uv` | Project, environment, and dependency management | Version 0.13.6; temporary project workflow validated |
 | `ty` | Language server and type diagnostics | Global version 0.0.92 and project-managed version 0.0.95 tested |
-| Ruff | Standalone linting and formatting | Version 0.17.3; CLI linting and Conform formatting validated |
+| Ruff | CLI linting, native LSP diagnostics, and formatting | Version 0.17.3; CLI, LSP diagnostics, and Conform formatting validated |
 | Neovim 0.12+ | Native LSP and configuration APIs | Tested on Neovim 0.12.6 |
-| `nvim-lspconfig` | Maintained `ty` server definition | Installed definition inspected and confirmed |
+| `nvim-lspconfig` | Maintained `ty` and `ruff` server definitions | Installed definitions inspected and confirmed |
 | Conform | Formatting integration | `ruff_format` workflow validated |
 | `nvim-treesitter` | Python syntax highlighting | Parser and highlighting verified |
 
@@ -220,22 +276,28 @@ Do not assume every Python project uses the same Python version, dependency grou
 | `uv` installation and discovery | Passed | Version 0.13.6 discovered |
 | Temporary project initialization | Passed | Project metadata and virtual environment created |
 | `uv sync` | Passed | Project environment synchronized |
-| `uv run` tool execution | Passed | Ruff and ty executed successfully |
-| Project dependency installation | Passed | Ruff and ty added as development dependencies |
+| `uv run` tool execution | Passed | Ruff and Ty executed successfully |
+| Project dependency installation | Passed | Ruff and Ty added as development dependencies |
 | Lockfile synchronization | Passed | `uv sync --locked` recreated the environment successfully |
-| Project-managed tool execution | Passed | Ruff 0.17.3 and ty 0.0.95 executed from the project environment |
-| `ty` executable discovery | Passed in tested scenarios | Server executable discovered |
+| Project-managed tool execution | Passed | Ruff 0.17.3 and Ty 0.0.95 executed from the project environment |
+| `ty` executable discovery | Passed | Server executable discovered in tested scenarios |
 | Upstream `ty` server definition | Passed | Installed `nvim-lspconfig` definition inspected |
-| Native LSP activation and attachment | Passed | `ty` activated and attached to a Python buffer |
-| Project-root detection | Passed in temporary project | `ty` reported the temporary project's root directory |
-| Undefined-name diagnostics | Passed | Expected diagnostic produced |
-| Incompatible-type diagnostics | Passed | Expected type diagnostic produced |
-| Clean-source diagnostics | Passed | Diagnostics cleared after intentional errors were corrected |
+| Upstream Ruff server definition | Passed | Installed `nvim-lspconfig` definition inspected |
+| Native LSP activation and attachment | Passed | Ty and Ruff activated and attached to a Python buffer |
+| Project-root detection | Passed | Ty reported the temporary project's root directory |
+| Undefined-name diagnostics | Passed | Expected Ty diagnostic produced |
+| Incompatible-type diagnostics | Passed | Expected Ty type diagnostic produced |
+| Clean-source diagnostics | Passed | Ty diagnostics cleared after intentional errors were corrected |
 | Automatic completion | Passed | Completion suggestions appeared while typing |
 | Definition navigation (`gd`) | Passed | Jumped to the function definition |
 | References (`gr`) | Passed | Reference navigation opened |
-| Hover | Passed directly | `vim.lsp.buf.hover()` displayed the function signature |
-| Ruff CLI linting | Passed | Standalone linting worked |
+| Hover | Passed | `vim.lsp.buf.hover()` displayed the function signature |
+| Ruff CLI linting | Passed | Standalone linting detected the expected violation |
+| Ruff LSP activation and attachment | Passed | Ruff attached to the Python buffer |
+| Ruff diagnostic publication | Passed | Ruff published an `F841` unused-variable diagnostic in Neovim |
+| Ruff diagnostic clearing | Passed | Diagnostic disappeared after the unused variable was removed and the file was saved |
+| Ty and Ruff coexistence | Passed | Both LSP clients attached to the same Python buffer |
+| Fresh-start attachment | Passed | Both `ty` and `ruff` attached after a fresh Neovim startup |
 | Ruff formatting through Conform | Passed | `ruff_format` workflow worked |
 | Python Tree-sitter parser | Passed | Parser was installed and inspected successfully |
 | Python Tree-sitter highlighting | Passed | Highlighting was active after restart and opening a Python file |
@@ -244,16 +306,14 @@ These results describe the tested scenarios. They do not establish that every Py
 
 The `uv` results came from a temporary validation project. They establish that the tested workflow works, not that every project in the repository already has the required metadata or dependency declarations.
 
-### Remaining checks
+### Out-of-scope checks
 
-| Check | Status | Purpose |
+| Check | Status | Scope decision |
 |---|---|---|
-| Startup/restart attachment | Outstanding | Confirm the server is discovered and attaches reliably after restarting Neovim |
-| Manual Ctrl+Space completion | Unverified | Confirm the manual completion trigger works as intended |
-| Editor-side Ruff lint integration | Deferred | Complete the separate admission review before implementing it |
+| Manual completion shortcut | Not configured | Shortcut configuration belongs to Stage 10, not the Python language pack |
 | Python-specific smoke tests | Intentionally skipped | No Python-specific smoke suite is being added at this time |
 
-Project-root detection and the temporary `uv` workflow are no longer outstanding.
+Automatic completion has been validated. A manual completion shortcut is not a requirement for completing this language pack.
 
 Python-specific smoke tests are intentionally excluded from the current validation scope. Their absence should not be represented as a passing test or as an implementation failure.
 
@@ -291,6 +351,8 @@ Confirm that synchronization uses the project's dependency declarations and lock
 
 ### C. Validate standalone linting and formatting
 
+Run Ruff linting:
+
 ```powershell
 ruff check .
 ```
@@ -303,19 +365,21 @@ In Neovim, run:
 
 Verify that formatting uses Ruff through Conform and does not depend on a hardcoded executable path.
 
+Formatting must remain independent of Ruff's LSP diagnostic functionality.
+
 ### D. Validate LSP diagnostics
 
 1. Open a Python file in the intended project.
 2. Confirm that `ty` starts and attaches.
-3. Introduce an undefined name and verify the diagnostic.
-4. Introduce an incompatible type and verify the diagnostic.
-5. Correct the intentional errors.
-6. Confirm that the diagnostics clear.
-7. Restart Neovim and verify attachment again.
+3. Confirm that Ruff starts and attaches.
+4. Introduce an undefined name and verify the Ty diagnostic.
+5. Introduce an incompatible type and verify the Ty diagnostic.
+6. Introduce an unused local variable and verify the Ruff diagnostic.
+7. Correct the intentional errors.
+8. Confirm that the corresponding diagnostics clear.
+9. Restart Neovim and verify that both servers attach again.
 
-The diagnostic checks, project-root detection, and initial attachment have already passed in the tested scenarios. Repeat them only if a relevant change to the LSP configuration or diagnostic handling warrants regression testing.
-
-Startup/restart attachment remains outstanding.
+The diagnostic checks, project-root detection, initial attachment, diagnostic publication and clearing, and fresh-start attachment have passed in the tested scenarios.
 
 ### E. Validate Tree-sitter
 
@@ -333,30 +397,38 @@ This language pack must preserve the following boundaries:
 
 - `uv` manages the Python project environment and dependencies.
 - `ty` provides language-server functionality and type diagnostics.
-- Ruff provides standalone linting and formatting.
-- Conform integrates formatting into Neovim.
+- Ruff provides standalone linting and editor lint diagnostics.
+- Ruff's native LSP server must not take over formatting.
+- Conform integrates formatting through `ruff_format`.
 - Neovim's native LSP client handles language-server communication.
-- `nvim-lspconfig` provides the maintained `ty` server definition.
+- `nvim-lspconfig` provides the maintained `ty` and Ruff server definitions.
 - Tree-sitter reuses the existing parser infrastructure.
 - External tools are installed and updated outside Neovim.
 - Tool discovery must not rely on hardcoded machine-specific paths.
-- Editor-side Ruff lint integration remains deferred until separately reviewed.
+- Format-on-save remains disabled by default.
+- LSP formatting fallback remains disabled.
 - Python-specific smoke tests remain outside the current scope.
+- Manual completion shortcut configuration remains outside Stage 13.
 
 ## 9. Completion criteria
 
-Python support can be marked complete when:
+Python support is complete because the following criteria have been validated:
 
-- `uv` discovery and the intended project workflow are validated.
-- `ty` reliably discovers the correct executable, starts, attaches, and uses the intended project root.
-- Diagnostics are produced for intentional errors and cleared when the source is corrected.
-- Startup/restart attachment is verified.
-- Ruff linting and Conform formatting work with the intended environment.
+- `uv` discovery and the intended project workflow work in the tested environment.
+- `ty` discovers the correct executable, starts, attaches, and uses the intended project root.
+- Ty diagnostics are produced for intentional errors and cleared when the source is corrected.
+- Ruff discovers the correct executable and publishes editor diagnostics.
+- Ruff diagnostics clear when the reported violations are corrected.
+- Both LSP servers attach after a fresh Neovim startup.
+- Automatic completion works.
+- Ruff CLI linting and Conform formatting work with the intended environment.
+- Formatting remains separate from LSP diagnostics, with formatting fallback disabled.
 - Python Tree-sitter highlighting works through the existing shared configuration.
-- Applicable repository checks pass.
-- The editor-side linting decision is documented, with no unapproved integration presented as implemented.
+- Applicable tested repository and language workflows pass.
 
-A Python-specific smoke-test suite is not a completion requirement under the current decision to skip it.
+Ruff's editor linting integration has been approved and validated for the tested scenarios.
+
+A Python-specific smoke-test suite is not a completion requirement under the current decision to skip it. Manual completion shortcut configuration is also not a Python language-pack completion requirement.
 
 ## References
 
@@ -370,4 +442,4 @@ A Python-specific smoke-test suite is not a completion requirement under the cur
 
 ---
 
-**Current status:** Python project and environment management with `uv`, core `ty` language-server functionality, project-root detection, diagnostics, Ruff CLI linting, Ruff formatting, and Tree-sitter highlighting have passed their tested scenarios. Startup/restart attachment remains outstanding. Manual Ctrl+Space completion remains unverified. Editor-side Ruff lint integration remains deferred, and Python-specific smoke tests are intentionally skipped.
+**Current status:** Python language support is complete for the defined Stage 13 scope. The tested `uv` project workflow, Ty language-server functionality and diagnostics, Ruff CLI linting, Ruff native LSP diagnostic publication and clearing, Ty and Ruff coexistence, fresh-start attachment, Ruff formatting through Conform, automatic completion, and Tree-sitter highlighting have passed. Formatting remains separate from LSP diagnostics. Python-specific smoke tests are intentionally skipped. Manual completion shortcut configuration belongs to Stage 10.

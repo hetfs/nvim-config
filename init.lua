@@ -74,6 +74,7 @@ end
 
 -- Core options and appearance.
 require("config.options")
+require("config.filetypes")
 require("plugins.colorscheme")
 require("plugins.icons")
 
