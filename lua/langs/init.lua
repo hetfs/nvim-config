@@ -1,7 +1,8 @@
 
--- Stage 10: Language-pack registry.
+-- Stage 09: Language-pack registry.
 -- Discover language packs from this configuration only.
--- Stage 11: Aggregate language-specific metadata without changing setup behavior.
+-- Stage 11: Aggregate metadata from enabled language packs.
+-- Activation is controlled by lua/config/languages.lua.
 
 local M = {}
 
@@ -25,8 +26,50 @@ local function discover_packs()
   return packs
 end
 
+local function get_enabled_packs()
+  local config = require("config.languages")
+
+  assert(type(config) == "table", "Language configuration must return a table")
+  assert(type(config.packs) == "table", "Language configuration must define a 'packs' table")
+
+  local discovered = discover_packs()
+  local known = {}
+
+  for _, name in ipairs(discovered) do
+    known[name] = true
+  end
+
+  -- Validate activation entries, including disabled entries.
+  for name, enabled in pairs(config.packs) do
+    assert(
+      type(name) == "string" and name ~= "",
+      "Language-pack configuration keys must be non-empty strings"
+    )
+
+    assert(
+      type(enabled) == "boolean",
+      string.format("Language-pack configuration for '%s' must be boolean", name)
+    )
+
+    assert(
+      known[name],
+      string.format("Unknown language pack '%s' in language configuration", name)
+    )
+  end
+
+  local packs = {}
+
+  for _, name in ipairs(discovered) do
+    if config.packs[name] == true then
+      packs[#packs + 1] = name
+    end
+  end
+
+  return packs
+end
+
 function M.setup()
-  for _, name in ipairs(discover_packs()) do
+  for _, name in ipairs(get_enabled_packs()) do
     local pack = require("langs." .. name)
 
     assert(
@@ -38,14 +81,15 @@ function M.setup()
   end
 end
 
--- Collect metadata declared by language packs.
--- Each key must have exactly one owning pack; silent overrides are not allowed.
+-- Collect metadata declared by enabled language packs.
+-- Each key must have exactly one owning pack.
+-- Disabled packs do not contribute metadata.
 function M.collect(field)
   assert(type(field) == "string" and field ~= "", "field must be a non-empty string")
 
   local merged = {}
 
-  for _, name in ipairs(discover_packs()) do
+  for _, name in ipairs(get_enabled_packs()) do
     local pack = require("langs." .. name)
     local metadata = pack[field]
 
@@ -58,11 +102,7 @@ function M.collect(field)
       for key, value in pairs(metadata) do
         assert(
           type(key) == "string" and key ~= "",
-          string.format(
-            "Language pack 'langs.%s': '%s' keys must be non-empty strings",
-            name,
-            field
-          )
+          string.format("Language pack 'langs.%s': '%s' keys must be non-empty strings", name, field)
         )
 
         assert(
@@ -79,3 +119,4 @@ function M.collect(field)
 end
 
 return M
+

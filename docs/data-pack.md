@@ -2,11 +2,13 @@
 
 ## Overview
 
-The Stage 13 data-language pack provides support for structured data formats in Neovim.
+The Stage 13 data-language pack provides structured-data support in Neovim.
 
-It brings YAML, JSON, JSONC, JSON5, jq, and TOML support together in `lua/langs/data.lua`.
+The current implementation brings YAML, JSON, JSONC, JSON5, jq, and TOML support together in `lua/langs/data.lua`.
 
-The pack uses existing Neovim capabilities and approved plugins to provide language-server features, formatting, syntax highlighting, and native jq execution.
+It uses Neovim's native capabilities and approved plugins to provide language-server features, formatting, syntax highlighting, and native jq execution.
+
+This document describes the implemented configuration, its dependencies, installation workflow, and validation status. It also records possible areas for future expansion without defining their architecture or implementation.
 
 ### Supported formats
 
@@ -23,18 +25,24 @@ The JSON Language Server handles JSON and JSONC. JSON5 deliberately uses Tree-si
 
 ## Design principles
 
-- Keep related data-language configuration in one pack.
-- Use native Neovim LSP configuration and activation.
+The current implementation follows these principles:
+
+- Keep the supported data formats together in the existing data-language pack.
+- Use Neovim's native LSP configuration and activation APIs.
 - Use Conform as the formatting interface.
 - Use Tree-sitter for syntax highlighting and folding.
 - Enable optional language servers only when their executables are available.
 - Keep jq execution separate from formatting.
 - Avoid unnecessary plugins and configuration modules.
 - Do not install external tools automatically during Neovim startup.
+- Keep external tool installation in the Windows installation scripts.
+- Validate actual language-server and editor behavior separately from executable discovery.
 
-## Architecture
+These principles describe the current implementation. They do not prevent a future review of the pack's organization as data-language support grows.
 
-The implementation is contained in:
+## Current architecture
+
+The implementation is contained in one module:
 
 ```text
 lua/
@@ -82,7 +90,7 @@ The pack registers the following filetypes:
 | jq | `jq` |
 | TOML | `toml` |
 
-The YAML variants are supported by the same YAML parser and language server.
+The YAML variants use the same YAML parser and language server.
 
 JSONC uses the JSON Tree-sitter parser. JSON5 uses its dedicated parser.
 
@@ -113,7 +121,7 @@ The configured filetypes are:
 - `yaml.gitlab`
 - `yaml.helm-values`
 
-SchemaStore integration remains disabled. Project-owned schemas and modelines are preferred.
+SchemaStore integration remains disabled. Project-owned schemas and modelines are preferred over enabling a global schema integration by default.
 
 ### JSON Language Server
 
@@ -126,11 +134,11 @@ SchemaStore integration remains disabled. Project-owned schemas and modelines ar
 | LSP formatting | Disabled |
 | Schema associations | Empty |
 
-JSON5 is deliberately excluded from the server's filetypes.
+The JSON Language Server handles standard JSON and JSONC files.
 
-The JSON Language Server provides diagnostics for JSON and JSONC documents.
+JSON5 is intentionally excluded from its configured filetypes. It uses its dedicated Tree-sitter parser and Prettier formatting instead.
 
-JSON Schema associations and schema validation have not yet been configured or validated.
+JSON Schema associations and validation have not yet been configured and validated.
 
 ### jq Language Server
 
@@ -139,11 +147,14 @@ JSON Schema associations and schema validation have not yet been configured or v
 | Server | `jqls` |
 | Executable | `jq-lsp` |
 | Filetype | `jq` |
-| Availability | Optional |
+| Activation | Conditional |
+| Formatting | Not configured |
 
-The pack enables the jq language server only when `jq-lsp` is available.
+The jq language server is optional.
 
-No LSP formatting is configured for jq.
+It is enabled only when `jq-lsp` is available through `PATH`. Its absence does not prevent the rest of the data-language pack from loading.
+
+The jq language server provides support for jq filter source files. It is separate from the jq command-line tool used to process JSON data.
 
 ### Taplo
 
@@ -153,36 +164,25 @@ No LSP formatting is configured for jq.
 | Executable | `taplo` |
 | Filetype | `toml` |
 | Command | `taplo lsp stdio` |
+| Root markers | `.taplo.toml`, `taplo.toml`, `.git` |
+| Diagnostics | Syntax diagnostics |
 
-Taplo provides TOML language-server support, including syntax diagnostics.
-
-Its root markers are:
-
-```lua
-{
-  ".taplo.toml",
-  "taplo.toml",
-  ".git",
-}
-```
+Taplo provides TOML language-server support and formatting.
 
 ## Formatting
 
-Conform handles formatting for supported data filetypes.
+The pack exposes formatter metadata to the existing Conform configuration.
 
-| Filetype | Formatter |
+### Formatter assignments
+
+| Format | Formatter |
 |---|---|
-| YAML | Prettier |
-| `yaml.docker-compose` | Prettier |
-| `yaml.ansible` | Prettier |
-| `yaml.gitlab` | Prettier |
-| `yaml.helm-values` | Prettier |
+| YAML and YAML variants | Prettier |
 | JSON | Prettier |
 | JSONC | Prettier |
 | JSON5 | Prettier |
 | TOML | Taplo |
-
-jq is intentionally excluded from the formatter registry.
+| jq | None |
 
 The jq executable processes JSON data using jq expressions. It does not format jq filter source files.
 
@@ -194,6 +194,12 @@ Formatting is manual through the existing Conform workflow:
 
 ```vim
 :Format
+```
+
+The formatting keymap is:
+
+```text
+<leader>cf
 ```
 
 Formatting on save remains disabled by default.
@@ -329,11 +335,13 @@ Tree-sitter parsers are managed through the existing Tree-sitter configuration.
 
 All external executables must be available through `PATH` for their respective features to work.
 
+The optional status of `jq-lsp` means its absence does not prevent the pack from operating. The jq command-line executable remains required for jq execution.
+
 ## Windows installation scripts
 
 External tools for the data-language pack are installed through dedicated PowerShell scripts.
 
-The single entry point is:
+The current installation structure is:
 
 ```text
 scripts/
@@ -381,7 +389,7 @@ Run this script after adding or updating the individual data-pack installation s
 
 ### Verify executable discovery in Neovim
 
-Installation is complete when the external tools are installed and verified. The next step is to confirm that Neovim can discover their executables.
+After installation, confirm that Neovim can discover the executables.
 
 Run the following commands inside Neovim:
 
@@ -407,6 +415,8 @@ This check verifies executable discovery only. Language-server attachment and fe
 ## Validation
 
 The data-language pack was tested with Neovim 0.12.6.
+
+The following results distinguish tested behavior from work that remains pending.
 
 ### YAML
 
@@ -513,6 +523,8 @@ The following items remain outside the validated implementation:
 
 These items should be evaluated independently before being added to the supported feature set.
 
+A pending item must not be treated as an implemented or validated feature.
+
 ## Deliberate exclusions
 
 The data-language pack does not include:
@@ -525,31 +537,105 @@ The data-language pack does not include:
 - jqfmt integration.
 - LSP formatting fallback.
 - Formatting on save by default.
-- Additional data-language execution plugins.
+- Extra data-language execution plugins.
 
-These boundaries keep data-language support centralized while allowing each tool to own its specific responsibility.
+These exclusions reflect the current implementation and its design decisions. They can be reconsidered through a separate evaluation when a concrete requirement emerges.
 
-## Format-specific documentation
+## Future growth considerations
 
-The following documents provide detailed configuration, installation, usage, and validation information for each supported format:
+The current pack covers a focused set of structured-data formats and tools. Additional data technologies may be evaluated as the configuration grows.
 
-- [YAML support](yaml-support.md)
-- [JSON support](json-support.md)
-- [jq support](jq-support.md)
-- [TOML support](toml-support.md)
+This section records possible areas for future investigation. It does not establish implementation commitments, pack boundaries, or a new architecture.
 
-All four documents are located in the `docs/` directory alongside `data-pack.md`.
+### Structured data formats
+
+Potential formats to evaluate:
+
+- XML
+- INI
+- JSON5 extensions or related JSON variants
+- JSON Schema
+- CUE
+
+### Tabular data
+
+Potential formats and workflows:
+
+- CSV
+- TSV
+- Delimited text inspection and editing
+
+### Configuration and infrastructure formats
+
+Potential technologies:
+
+- HCL
+- Nix
+- Properties files
+- Terraform configuration
+
+### Query and transformation languages
+
+Potential tools and languages:
+
+- yq
+- JMESPath
+- Additional jq workflows
+
+### API and schema definitions
+
+Potential technologies:
+
+- OpenAPI
+- AsyncAPI
+- Protocol Buffers
+- Avro
+
+### Data query languages
+
+Potential technologies:
+
+- SQL
+- GraphQL
+
+### Evaluation criteria
+
+Each candidate should be evaluated before it is added to the supported baseline.
+
+The evaluation should establish:
+
+1. Whether the technology has a distinct editing workflow.
+2. Which filetypes and file extensions need support.
+3. Whether a language server is available and actively maintained.
+4. Which formatter, linter, parser, or execution tools are required.
+5. Whether existing shared infrastructure can provide the required integration.
+6. Whether the technology needs dedicated installation and validation scripts.
+7. Whether the feature belongs in the existing data pack or warrants a separate pack.
+8. Whether the added maintenance cost is justified by the expected benefit.
+
+The current `data.lua` implementation remains unchanged by this future-growth list. Decisions about decomposition or independent activation should be made only after evaluating actual requirements.
+
+## Related documentation
+
+The format-specific documentation is maintained separately:
+
+- `yaml-support.md`
+- `json-support.md`
+- `jq-support.md`
+- `toml-support.md`
+
+These documents are located under `docs/` alongside `data-pack.md`.
 
 ## References
 
 - [YAML Language Server](https://github.com/redhat-developer/yaml-language-server)
 - [Prettier](https://prettier.io/)
 - [JSON Language Server](https://github.com/microsoft/vscode/tree/main/extensions/json-language-features/server)
-- [jq official website](https://jqlang.org/)
+- [jq](https://jqlang.org/)
 - [jq manual](https://jqlang.org/manual/)
 - [jq-lsp](https://github.com/wader/jq-lsp)
 - [Taplo documentation](https://taplo.tamasfe.dev/)
-- [Taplo GitHub repository](https://github.com/tamasfe/taplo)
+- [Taplo repository](https://github.com/tamasfe/taplo)
 - [Neovim LSP documentation](https://neovim.io/doc/user/lsp.html)
 - [Conform.nvim](https://github.com/stevearc/conform.nvim)
 - [nvim-treesitter](https://github.com/nvim-treesitter)

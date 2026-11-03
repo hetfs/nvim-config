@@ -1,11 +1,15 @@
-
 -- Stage 09: Lua language pack.
 -- LuaLS is an external executable; Neovim owns LSP configuration and activation.
 -- Stage 11: Formatter metadata is declared by the language pack.
+-- Tree-sitter parser ownership is declared by filetype.
 
 local M = {
   formatters = {
     lua = { "stylua" },
+  },
+
+  parser_by_filetype = {
+    lua = "lua",
   },
 }
 
@@ -112,11 +116,7 @@ function M.setup()
         return
       end
 
-      config.settings = vim.tbl_deep_extend(
-        "force",
-        config.settings or {},
-        lua_settings()
-      )
+      config.settings = vim.tbl_deep_extend("force", config.settings or {}, lua_settings())
     end,
   })
 

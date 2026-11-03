@@ -2,6 +2,7 @@
 -- Neovim owns LSP configuration and activation.
 -- Conform owns formatting through the shared formatter registry.
 -- jq execution is handled natively through vim.system().
+-- Tree-sitter parser ownership is declared by filetype.
 
 local M = {
   formatters = {
@@ -45,12 +46,31 @@ local M = {
     },
   },
 
+  -- Tree-sitter parsers used by this pack.
   parsers = {
     "yaml",
     "json",
     "json5",
     "jq",
     "toml",
+  },
+
+  -- Map supported filetypes to their Tree-sitter parsers.
+  -- The language-pack registry collects this metadata
+  -- only from enabled packs.
+  parser_by_filetype = {
+    yaml = "yaml",
+    ["yaml.docker-compose"] = "yaml",
+    ["yaml.ansible"] = "yaml",
+    ["yaml.gitlab"] = "yaml",
+    ["yaml.helm-values"] = "yaml",
+
+    json = "json",
+    jsonc = "json",
+    json5 = "json5",
+
+    jq = "jq",
+    toml = "toml",
   },
 
   -- Server names consumed by vim.lsp.enable().
@@ -211,6 +231,11 @@ function M.run(filter, opts)
         return
       end
 
+      if not vim.api.nvim_buf_is_valid(source_buf) then
+        notify("The source buffer is no longer available.", vim.log.levels.WARN)
+        return
+      end
+
       show_output(source_win, result.stdout or "", opts.raw)
     end)
   end)
@@ -294,20 +319,21 @@ function M.setup()
   -- Server definition is provided by nvim-lspconfig.
   enable("taplo")
 
-  -- jq command.
-  -- Use :Jq! for raw output (-r).
-  vim.api.nvim_create_user_command("Jq", function(command)
-    M.run(command.args, {
-      line1 = command.range > 0 and command.line1 or nil,
-      line2 = command.range > 0 and command.line2 or nil,
-      raw = command.bang,
+  -- Register the jq command only once.
+  if vim.fn.exists(":Jq") == 0 then
+    vim.api.nvim_create_user_command("Jq", function(command)
+      M.run(command.args, {
+        line1 = command.range > 0 and command.line1 or nil,
+        line2 = command.range > 0 and command.line2 or nil,
+        raw = command.bang,
+      })
+    end, {
+      nargs = "*",
+      range = true,
+      bang = true,
+      desc = "Run jq on the current buffer or selected range",
     })
-  end, {
-    nargs = "*",
-    range = true,
-    bang = true,
-    desc = "Run jq on the current buffer or selected range",
-  })
+  end
 end
 
 return M

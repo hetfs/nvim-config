@@ -1,5 +1,7 @@
--- Stage 12: Project root detection and navigation.
--- project.nvim manages project roots, working directories, and history.
+-- Stage 12: Project root detection and history.
+-- project.nvim detects roots and tracks recent projects.
+-- Snacks Picker handles project switching.
+-- Working-directory changes remain explicit.
 
 vim.pack.add({
   {
@@ -11,54 +13,37 @@ vim.pack.add({
 local project = require("project")
 
 project.setup({
-  -- Detect project roots automatically.
-  manual_mode = false,
-
-  -- Keep working-directory changes explicit.
+  -- Detect projects without automatically changing the working directory.
+  manual_mode = true,
   enable_autochdir = false,
-  scope_chdir = "global",
 
-  -- Detect roots using Git and supported marker files.
+  -- Explicit project switches use the global working directory.
+  scope_chdir = "global",
+  silent_chdir = true,
+
+  -- Git-based root detection.
   use_git = true,
 
-  -- Integrate with the existing LSP configuration.
+  -- LSP-based root detection.
   lsp = {
     enabled = true,
     use_pattern_matching = false,
     no_fallback = false,
   },
 
-  -- Keep project.nvim picker integrations independent from
-  -- Snacks Picker and fzf-lua.
-})
+  -- Recent project history.
+  history = {
+    size = 100,
+  },
 
--- Avoid the empty-history warning during shutdown.
--- project.nvim registers a VimLeavePre callback that writes history
--- even when there are no recent or current-session projects.
-local project_history = require("project.util.history")
-
--- Replace project.nvim's unconditional shutdown callback with a
--- guarded callback that writes history only when projects exist.
-for _, autocmd in
-  ipairs(vim.api.nvim_get_autocmds({
-    group = "project.nvim",
-    event = "VimLeavePre",
-  }))
-do
-  vim.api.nvim_del_autocmd(autocmd.id)
-end
-
-vim.api.nvim_create_autocmd("VimLeavePre", {
-  group = vim.api.nvim_create_augroup("nvim_config_project_history", {
-    clear = true,
-  }),
-  desc = "Persist project history when projects exist",
-  callback = function()
-    -- Avoid triggering an additional history write while checking.
-    local projects = project_history.get_recent_projects(false, false, false)
-
-    if #projects > 0 then
-      project_history.write_history()
-    end
-  end,
+  -- Snacks Picker integration.
+  snacks = {
+    enabled = true,
+    opts = {
+      sort = "newest",
+      hidden = false,
+      title = "Select Project",
+      layout = "select",
+    },
+  },
 })
