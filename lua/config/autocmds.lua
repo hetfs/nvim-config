@@ -1,4 +1,4 @@
- -- Native autocommands.
+-- Native autocommands.
 
 local group = vim.api.nvim_create_augroup("nvim_config", {
   clear = true,
@@ -42,23 +42,28 @@ vim.api.nvim_create_autocmd("BufReadPost", {
   group = group,
   desc = "Restore previous cursor position",
   callback = function(event)
+    local buf = event.buf
+
     -- Ignore special buffers.
-    if vim.bo[event.buf].buftype ~= "" then
+    if vim.bo[buf].buftype ~= "" then
       return
     end
 
-    local win = vim.api.nvim_get_current_win()
+    local mark = vim.api.nvim_buf_get_mark(buf, '"')
+    local line_count = vim.api.nvim_buf_line_count(buf)
 
-    -- Ensure the current window displays the event buffer.
-    if vim.api.nvim_win_get_buf(win) ~= event.buf then
+    if mark[1] < 1 or mark[1] > line_count then
       return
     end
 
-    local mark = vim.api.nvim_buf_get_mark(event.buf, '"')
-    local line_count = vim.api.nvim_buf_line_count(event.buf)
+    -- Restore the position in a window displaying this buffer.
+    local wins = vim.fn.win_findbuf(buf)
 
-    if mark[1] > 0 and mark[1] <= line_count then
-      pcall(vim.api.nvim_win_set_cursor, win, mark)
+    for _, win in ipairs(wins) do
+      if vim.api.nvim_win_is_valid(win) then
+        pcall(vim.api.nvim_win_set_cursor, win, mark)
+        break
+      end
     end
   end,
 })
@@ -117,6 +122,28 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 -- ============================================================
+-- Shell
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+  group = group,
+  desc = "Configure Shell buffers",
+  pattern = {
+    "sh",
+    "bash",
+  },
+  callback = function()
+    vim.opt_local.shiftwidth = 4
+    vim.opt_local.tabstop = 4
+    vim.opt_local.softtabstop = 4
+    vim.opt_local.expandtab = true
+
+    vim.opt_local.foldmethod = "expr"
+    vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+  end,
+})
+
+-- ============================================================
 -- File Saving
 -- ============================================================
 
@@ -124,12 +151,18 @@ vim.api.nvim_create_autocmd("BufWritePre", {
   group = group,
   desc = "Create missing parent directories before saving",
   callback = function(event)
+    local file = event.file
+
     -- Ignore URI-based buffers.
-    if event.match:match("^%a[%w+.-]*://") then
+    if file:match("^%a[%w+.-]*://") then
       return
     end
 
-    local dir = vim.fn.fnamemodify(event.file, ":p:h")
+    if file == "" then
+      return
+    end
+
+    local dir = vim.fn.fnamemodify(file, ":p:h")
 
     if vim.fn.isdirectory(dir) == 1 then
       return

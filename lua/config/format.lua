@@ -121,7 +121,10 @@ local function get_format_on_save_config(language_config)
 
   if timeout_ms == nil then
     timeout_ms = 500
-  elseif type(timeout_ms) ~= "number" or timeout_ms < 1 or timeout_ms % 1 ~= 0 then
+  elseif type(timeout_ms) ~= "number"
+    or timeout_ms < 1
+    or timeout_ms % 1 ~= 0
+  then
     fail("config.languages.format_on_save.timeout_ms must be a positive integer")
   end
 
@@ -192,7 +195,6 @@ function M.resolve(defaults, preferences)
   end)
 
   validate_boolean_map(stop_after_first, "config.languages.formatters.stop_after_first")
-
   validate_boolean_map(formatters_only, "config.languages.formatters.formatters_only")
 
   -- formatters_only requires an explicit, non-empty preferred list.
@@ -201,7 +203,11 @@ function M.resolve(defaults, preferences)
       local configured = preferred[filetype]
 
       if not configured or #configured == 0 then
-        fail(string.format("formatters_only.%s is true, but preferred.%s has no formatter names", filetype, filetype))
+        fail(string.format(
+          "formatters_only.%s is true, but preferred.%s has no formatter names",
+          filetype,
+          filetype
+        ))
       end
     end
   end
@@ -241,7 +247,10 @@ function M.resolve(defaults, preferences)
       local configured = result[filetype]
 
       if not configured or #configured == 0 then
-        fail(string.format("stop_after_first.%s is true, but no formatter is configured for that filetype", filetype))
+        fail(string.format(
+          "stop_after_first.%s is true, but no formatter is configured for that filetype",
+          filetype
+        ))
       end
 
       configured.stop_after_first = true
@@ -256,7 +265,7 @@ function M.format()
   local bufnr = vim.api.nvim_get_current_buf()
   local filetype = vim.bo[bufnr].filetype
   local display_filetype = filetype ~= "" and filetype or "unknown"
-  local configured = formatters_by_ft[filetype]
+  local configured = formatters_by_ft and formatters_by_ft[filetype]
 
   if not configured or #configured == 0 then
     vim.notify(
@@ -318,6 +327,14 @@ function M.setup()
 
   local conform_config = {
     formatters_by_ft = formatters_by_ft,
+
+    formatters = {
+      powershell_formatter = require("config.formatters.powershell_formatter"),
+
+      -- Register under the name used by the Shell language packs.
+      shfmt = require("config.formatters.shell_formatter"),
+    },
+
     default_format_opts = {
       lsp_format = "never",
     },
@@ -330,6 +347,7 @@ function M.setup()
 
   vim.api.nvim_create_user_command("Format", M.format, {
     desc = "Format current buffer",
+    force = true,
   })
 end
 

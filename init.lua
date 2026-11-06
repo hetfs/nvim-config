@@ -94,6 +94,8 @@ require("plugins.treesitter")
 
 -- LSP server definitions and Lua development support.
 require("plugins.lsp")
+require("plugins.powershell")
+require("plugins.shell").setup()
 require("plugins.lazydev")
 
 -- Completion and snippets.
@@ -104,12 +106,16 @@ require("plugins.mini-pairs")
 -- General configuration and native LSP behavior.
 require("config.keymaps")
 require("config.lsp")
+
+-- Optional shared LSP integrations.
+require("lsp.servers.emmet").setup()
+
+-- Language packs.
 require("langs").setup()
 
 -- Formatting (Conform reads formatter metadata from language packs).
 require("plugins.conform")
 require("config.format").setup()
-
 require("config.autocmds")
 
 -- Sessions

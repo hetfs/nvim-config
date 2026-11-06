@@ -2,12 +2,16 @@
 --
 -- Language packs own their default formatter definitions.
 -- This module allows users to customize formatter selection,
--- language-pack activation, and formatting policy.
+-- language-pack activation, tool integration, and formatting policy.
 --
 -- Policy:
 --   packs:
 --     Enable or disable individual language packs.
 --     Only explicitly enabled packs are initialized.
+--
+--   tools:
+--     Enable or disable optional shared tools independently
+--     of language-pack activation.
 --
 --   formatters:
 --     preferred:
@@ -32,12 +36,22 @@ return {
   packs = {
     lua = true,
     python = true,
-    data = true,
+    data = false,
+    c = true,
+    cpp = true,
+    html = true,
+    css = true,
+    javascript = true,
+    typescript = true,
+    powershell = true,
+    shell = true,
+  },
 
-    -- html = false,
-    -- css = false,
-    -- javascript = false,
-    -- typescript = false,
+  -- Optional shared tool integrations.
+  --
+  -- These are independent of language-pack activation.
+  tools = {
+    emmet = false,
   },
 
   formatters = {

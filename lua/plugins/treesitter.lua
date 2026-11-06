@@ -43,16 +43,37 @@ local filetype_parsers = require("langs").collect("parser_by_filetype")
 
 -- Validate the registry metadata before creating the autocmd.
 for filetype, parser in pairs(filetype_parsers) do
-  assert(type(filetype) == "string" and filetype ~= "", "Tree-sitter filetype mappings must use non-empty string keys")
+  assert(
+    type(filetype) == "string" and filetype ~= "",
+    "Tree-sitter filetype mappings must use non-empty string keys"
+  )
 
-  assert(type(parser) == "string" and parser ~= "", string.format("Tree-sitter parser mapping for '%s' must be a non-empty string", tostring(filetype)))
+  assert(
+    type(parser) == "string" and parser ~= "",
+    string.format(
+      "Tree-sitter parser mapping for '%s' must be a non-empty string",
+      tostring(filetype)
+    )
+  )
 end
 
 -- Track installations to avoid duplicate requests.
 local pending = {}
 
+-- Check for the actual parser binary before attempting to load it.
 local function parser_available(parser)
-  return pcall(vim.treesitter.language.add, parser)
+  local files = vim.api.nvim_get_runtime_file(
+    "parser/" .. parser .. ".*",
+    false
+  )
+
+  if #files == 0 then
+    return false
+  end
+
+  local ok = pcall(vim.treesitter.language.add, parser)
+
+  return ok
 end
 
 local function start_highlighting(buf, parser)
@@ -70,7 +91,15 @@ local function start_highlighting(buf, parser)
   local ok, err = pcall(vim.treesitter.start, buf, parser)
 
   if not ok then
-    vim.notify(string.format("Could not start Tree-sitter for '%s': %s", parser, err), vim.log.levels.WARN, { title = "Tree-sitter" })
+    vim.notify(
+      string.format(
+        "Could not start Tree-sitter for '%s': %s",
+        parser,
+        err
+      ),
+      vim.log.levels.WARN,
+      { title = "Tree-sitter" }
+    )
   end
 end
 
@@ -97,7 +126,10 @@ local function wait_for_parser(parser, state)
       pending[parser] = nil
 
       vim.notify(
-        string.format("Installation of the '%s' parser did not complete within 5 minutes. Check :TSLog.", parser),
+        string.format(
+          "Installation of the '%s' parser did not complete within 5 minutes. Check :messages and the nvim-treesitter installation logs.",
+          parser
+        ),
         vim.log.levels.WARN,
         { title = "Tree-sitter" }
       )
@@ -139,7 +171,15 @@ local function ensure_parser(buf, parser)
   if not ok then
     pending[parser] = nil
 
-    vim.notify(string.format("Could not install the '%s' parser: %s", parser, err), vim.log.levels.ERROR, { title = "Tree-sitter" })
+    vim.notify(
+      string.format(
+        "Could not install the '%s' parser: %s",
+        parser,
+        err
+      ),
+      vim.log.levels.ERROR,
+      { title = "Tree-sitter" }
+    )
 
     return
   end

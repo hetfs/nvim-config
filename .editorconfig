@@ -23,7 +23,7 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
-max_line_length = 120
+max_line_length = 160
 
 # -----------------------------------------------------------
 # Python, C, C++, and Grammar Files
@@ -56,13 +56,16 @@ indent_size = 2
 # -----------------------------------------------------------
 # Bash and POSIX Shell
 # -----------------------------------------------------------
-[*.sh]
+[*.{sh,bash}]
 indent_style = space
 indent_size = 4
+switch_case_indent = true
+binary_next_line = true
 
 [.bashrc]
 indent_style = space
 indent_size = 4
+
 
 [.bash_profile]
 indent_style = space

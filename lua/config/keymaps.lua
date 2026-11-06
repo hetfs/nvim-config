@@ -352,4 +352,23 @@ end, {
   desc = "Run jq filter",
 })
 
-return M
+-- ============================================================
+-- Central LSP operations.
+-- ============================================================
+
+map("n", "<leader>rn", vim.lsp.buf.rename, {
+  desc = "LSP: Rename symbol",
+})
+
+map("n", "<leader>ca", vim.lsp.buf.code_action, {
+  desc = "LSP: Code actions",
+})
+
+-- ============================================================
+-- Shell
+-- ============================================================
+
+vim.keymap.set("n", "<leader>cw", "<cmd>ShellcheckWiki<CR>", {
+  desc = "Open ShellCheck wiki",
+
+})return M
