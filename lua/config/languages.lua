@@ -36,7 +36,7 @@ return {
   packs = {
     lua = true,
     python = true,
-    data = false,
+    data = true,
     c = true,
     cpp = true,
     html = true,
@@ -45,6 +45,7 @@ return {
     typescript = true,
     powershell = true,
     shell = true,
+    rust = true,
   },
 
   -- Optional shared tool integrations.
@@ -52,8 +53,13 @@ return {
   -- These are independent of language-pack activation.
   tools = {
     emmet = false,
+
+    -- Use Clippy instead of cargo check for rust-analyzer diagnostics.
+    -- Requires: rustup component add clippy
+    rust_clippy = false,
   },
 
+  -- Formatter preferences.
   formatters = {
     -- Preferred formatter order, keyed by filetype.
     preferred = {},

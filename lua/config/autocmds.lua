@@ -175,3 +175,24 @@ vim.api.nvim_create_autocmd("BufWritePre", {
     end
   end,
 })
+
+-- ============================================================
+-- Rust
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+  group = group,
+  desc = "Configure Rust buffers",
+  pattern = "rust",
+  callback = function(event)
+    vim.opt_local.shiftwidth = 4
+    vim.opt_local.tabstop = 4
+    vim.opt_local.softtabstop = 4
+    vim.opt_local.expandtab = true
+
+    vim.opt_local.foldmethod = "expr"
+    vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+
+    require("config.keymaps").rust(event.buf)
+  end,
+})

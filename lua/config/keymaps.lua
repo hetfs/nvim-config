@@ -1,4 +1,3 @@
-
 -- Native Neovim keymaps.
 -- Keep mappings centralized and describe them for discoverability.
 -- Add workflow mappings only after their implementation and validation.
@@ -289,12 +288,7 @@ function M.lsp(bufnr)
 
   lmap("n", "gD", vim.lsp.buf.declaration, "Go to declaration")
 
-  lmap(
-    { "n", "i" },
-    "<leader>ck",
-    vim.lsp.buf.signature_help,
-    "Signature help"
-  )
+  lmap({ "n", "i" }, "<leader>ck", vim.lsp.buf.signature_help, "Signature help")
 end
 
 -- ============================================================
@@ -312,11 +306,22 @@ function M.gitsigns(bufnr)
     })
   end
 
+  -- Hunk operations
   git_map("<leader>ghs", gs.stage_hunk, "Stage hunk")
   git_map("<leader>ghr", gs.reset_hunk, "Reset hunk")
   git_map("<leader>ghp", gs.preview_hunk, "Preview hunk")
-  git_map("<leader>ghb", gs.blame_line, "Blame line")
+  git_map("<leader>ghb", function()
+    gs.blame_line({ full = true })
+  end, "Blame line")
+
+  -- Buffer operations
+  git_map("<leader>ghS", gs.stage_buffer, "Stage buffer")
+  git_map("<leader>ghR", gs.reset_buffer, "Reset buffer")
   git_map("<leader>ghd", gs.diffthis, "Diff buffer")
+
+  -- Git visualization
+  git_map("<leader>gb", gs.toggle_current_line_blame, "Toggle line blame")
+  git_map("<leader>gw", gs.toggle_word_diff, "Toggle word diff")
 end
 
 -- ============================================================
@@ -370,5 +375,24 @@ map("n", "<leader>ca", vim.lsp.buf.code_action, {
 
 vim.keymap.set("n", "<leader>cw", "<cmd>ShellcheckWiki<CR>", {
   desc = "Open ShellCheck wiki",
+})
 
-})return M
+-- ============================================================
+-- Rust
+-- ============================================================
+
+-- Register buffer-local Cargo workflow mappings.
+function M.rust(bufnr)
+  local function rust_map(lhs, command, description)
+    map("n", lhs, command, {
+      buffer = bufnr,
+      desc = "Rust: " .. description,
+    })
+  end
+
+  rust_map("<leader>cr", "<cmd>Cargo run<CR>", "Run project")
+  rust_map("<leader>cb", "<cmd>Cargo build<CR>", "Build project")
+  rust_map("<leader>ct", "<cmd>Cargo test<CR>", "Run tests")
+  rust_map("<leader>cc", "<cmd>Cargo check<CR>", "Check project")
+end
+return M

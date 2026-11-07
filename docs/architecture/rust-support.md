@@ -3,855 +3,346 @@
 **Stage:** 13 – Language Packs
 **Pack:** `rust`
 **Tier:** Core
-**Status:** Implementation specification; integration validation pending
+**Status:** Implementation complete; validation passed; Stage 13 accepted
 
-This document defines Rust language support for the Neovim configuration. It covers standalone Rust crates and Cargo workspaces, using `rust-analyzer` for language intelligence and `rustfmt` through Conform for formatting.
+This document records the Rust language-pack architecture, implementation, and validation results for the `nvim-config` project.
 
-The implementation follows the project's native-first architecture. It uses Neovim's built-in LSP client, native filetype detection, Treesitter, native inlay hints, and terminal buffers. Existing plugins are reused; no new plugin dependencies are introduced.
+The implementation supports standalone Rust crates and Cargo workspaces. It uses `rust-analyzer` for language intelligence, `rustfmt` through Conform for formatting, the existing Treesitter integration, and a native `:Cargo` command for common Cargo workflows.
+
+This is not the Rust toolchain installation guide. The installation guide owns Rustup, compiler, linker, Windows SDK, and operating-system prerequisites. This document owns the Neovim-side Rust integration.
+
+Keep this document separate from `rust-win-install-guide.md`, which documents Windows toolchain installation, and the user-facing Rust language-pack documentation.
+
+The implementation follows the project's native-first architecture. It reuses Neovim's built-in LSP client, existing language registry, Conform integration, Treesitter infrastructure, terminal buffers, and centralized keymaps. It introduces no new plugin dependency and performs no tool installation during Neovim startup.
 
 ## 1. Goals and design principles
 
-- **Native-first:** Use `vim.lsp.config`, `vim.lsp.enable`, native filetype detection, Treesitter, native inlay hints, and terminal buffers.
+- **Native-first:** Use `vim.lsp.config`, `vim.lsp.enable`, native filetype detection, Treesitter, and terminal buffers.
 - **Language intelligence:** Use `rust-analyzer` for completion, hover, navigation, references, rename, code actions, and diagnostics.
-- **External formatting:** Use `rustfmt` through Conform. Pass the Rust crate's edition explicitly.
-- **Manual formatting:** Expose `:Format` and `<leader>cf`. Format-on-save remains disabled by default.
-- **LSP formatting disabled:** `rust-analyzer` must not compete with Conform as the formatting authority.
-- **Optional Clippy:** Allow `rust-analyzer` to use Clippy for diagnostics without introducing `nvim-lint`.
-- **Workspace awareness:** Use one language-server root per Cargo workspace rather than starting a separate server for every member crate.
-- **Edition awareness:** Resolve the crate edition, including workspace-inherited editions.
-- **Cross-platform:** Support Windows, Linux, and macOS without shell-specific command construction.
-- **No unnecessary dependencies:** Reuse the existing plugin inventory and external-tool management strategy.
-- **Testability:** Keep root detection, edition resolution, and configuration checks independent of an installed Rust toolchain.
+- **External formatting:** Use `rustfmt` through the existing Conform integration.
+- **Manual formatting:** Preserve the existing `:Format` workflow. Format-on-save remains disabled by default.
+- **Single formatting authority:** Conform owns Rust formatting. Rust-analyzer formatting capabilities are disabled for Rust buffers.
+- **Optional Clippy:** Allow rust-analyzer to run Clippy when the optional component is installed and enabled.
+- **Workspace awareness:** Resolve Cargo workspace roots so workspace members share one rust-analyzer project root.
+- **Cross-platform:** Support Windows, Linux, and macOS without constructing shell-specific command strings.
+- **Existing ownership:** Reuse the current language registry, formatter resolver, LSP lifecycle, Treesitter setup, and centralized keymaps.
+- **Testability:** Keep root resolution and configuration behavior independently testable.
+- **Explicit dependencies:** Detect missing external tools and report actionable diagnostics. Never install tools during startup.
 
-## 2. Component inventory
+## 2. Scope and non-goals
 
-| Concern | Component | Type |
+### In scope
+
+- `rust-analyzer` configuration and activation through the native LSP API.
+- Rust filetype and Treesitter parser registration.
+- `rustfmt` formatting through Conform.
+- Cargo workspace and standalone crate root resolution.
+- A native `:Cargo` command for common Cargo workflows.
+- Optional Clippy integration.
+- Offline configuration tests and real-toolchain integration tests.
+
+### Deferred or out of scope
+
+- Rust toolchain installation and operating-system prerequisites.
+- CodeLLDB and DAP setup; debugging belongs to Stage 14.
+- A new Rust-specific plugin.
+- Automatic tool installation or updates.
+- A second TOML parser or formatter.
+- Native inlay-hint configuration.
+- Experimental rust-analyzer extension commands.
+- Full Cargo manifest parsing in Lua.
+
+## 3. Component inventory
+
+| Concern | Component | Ownership |
 |---|---|---|
+| Compiler | `rustc` | External Rust toolchain |
+| Build and package manager | `cargo` | External Rust toolchain |
 | Language server | `rust-analyzer` | External tool |
-| LSP integration | `nvim-lspconfig` | Existing plugin; server definitions only |
-| LSP configuration | `vim.lsp.config` | Neovim native |
-| Formatter | `rustfmt` | External tool |
+| LSP server definitions | `nvim-lspconfig` | Existing plugin; definitions only |
+| LSP configuration and activation | `vim.lsp.config`, `vim.lsp.enable` | Neovim native |
+| Formatter | `rustfmt` | External Rust toolchain |
 | Formatter integration | Conform | Existing plugin |
-| Parser | `rust` | Treesitter |
-| Manifest parser | `toml` | Existing data pack |
-| Linter | Clippy through rust-analyzer | Optional external tool |
-| Build and test commands | Cargo | Rust toolchain |
-| Inlay hints | `vim.lsp.inlay_hint` | Neovim native |
-| Macro expansion | rust-analyzer extension request | Optional integration |
-| Cargo manifest navigation | rust-analyzer extension request | Optional integration |
-| External documentation | rust-analyzer extension request | Optional integration |
-| Debugging | CodeLLDB | Stage 14 |
+| Rust parser | `rust` | Existing Treesitter infrastructure |
+| Cargo manifest parser | Existing TOML support | Existing data-language pack |
+| Optional linter | Clippy through rust-analyzer | Optional external component |
+| Build and test terminal | Neovim terminal and job API | Neovim native |
+| Debugging | CodeLLDB and DAP | Stage 14 |
 
-`Cargo.toml` and `Cargo.lock` belong to the existing data-language pack. Rust support must not register a second TOML parser or formatter.
+`Cargo.toml` and `Cargo.lock` are TOML files. The existing data-language pack owns TOML parsing and formatting. Rust support must not register a second TOML parser or formatter.
 
-## 3. File ownership
+## 4. File ownership and integration boundaries
 
-The implementation uses the following files:
+The following paths describe the current implementation.
 
 ```text
 lua/
 ├── langs/
 │   ├── init.lua
 │   └── rust.lua
-│
 └── config/
     ├── languages.lua
-    ├── filetypes.lua
+    ├── autocmds.lua
+    ├── format.lua
+    ├── lsp.lua
     ├── rust.lua
     └── keymaps.lua
 
 scripts/
-└── smoke.lua
+├── test-rust-clippy.lua
+├── test-rust-edition.lua
+├── test-rust-lsp.lua
+├── test-rust-parser.lua
+└── test-rust-roots.lua
 
 docs/
-├── languages.md
-└── rust-support.md
+└── architecture/
+    ├── rust-support.md
+    └── rust-win-install-guide.md
 ```
 
 | File | Responsibility |
 |---|---|
-| `lua/langs/rust.lua` | Rust pack metadata, workspace-root detection, edition detection, and LSP setup |
-| `lua/langs/init.lua` | Language-pack registry and setup lifecycle |
-| `lua/config/languages.lua` | Conform formatter registration |
-| `lua/config/filetypes.lua` | Rust buffer-local settings |
-| `lua/config/rust.lua` | Cargo command and optional rust-analyzer commands |
-| `lua/config/keymaps.lua` | Centralized Rust keymaps |
-| `scripts/smoke.lua` | Offline configuration and helper tests |
-| `docs/languages.md` | Core language-pack inventory |
-| `docs/rust-support.md` | Rust implementation and validation documentation |
+| `lua/langs/rust.lua` | Rust pack metadata, Cargo root resolution, rust-analyzer configuration, and Rust-specific LSP behavior |
+| `lua/langs/init.lua` | Existing language-pack registry and setup lifecycle |
+| `lua/config/languages.lua` | Language-pack enablement and optional Rust Clippy setting |
+| `lua/config/format.lua` | Existing Conform configuration and Rust formatter override |
+| `lua/config/autocmds.lua` | Rust buffer-local editor settings and Rust keymap registration |
+| `lua/config/rust.lua` | Native `:Cargo` command |
+| `lua/config/lsp.lua` | Shared LSP attachment behavior |
+| `lua/config/keymaps.lua` | Centralized LSP and Rust keymaps |
+| `lua/plugins/treesitter.lua` | Existing parser installation and highlighting lifecycle |
+| `scripts/test-rust-*.lua` | Focused Rust configuration and integration tests |
 
-Do not create a second language-pack registry or introduce another plugin-loading mechanism.
+Do not create a second language registry, plugin-loading path, or formatter lifecycle for Rust.
 
-## 4. External dependencies
+### 4.1 Preserve existing shared behavior
 
-Rust support uses the Rust toolchain installed through `rustup`.
+Rust configuration preserves the existing Stage 09 LSP behavior:
 
-### 4.1 Required components
+- Shared `LspAttach` handling continues to call `require("config.keymaps").lsp(event.buf)`.
+- Centralized LSP keymaps and diagnostics configuration remain unchanged.
+- The language registry retains its existing setup and metadata contracts.
+- Conform retains its existing formatter resolver and precedence rules.
+- Format-on-save remains disabled by default.
+- LSP formatting fallback remains disabled by default.
 
-Install the required components:
+Rust-specific behavior must not replace shared behavior.
 
-```sh
-rustup component add rust-analyzer rustfmt rust-src
-```
+## 5. External tool contract
 
-Verify the tools:
+The Rust language pack expects the external toolchain to be installed and available in the environment from which Neovim is launched.
 
-```sh
-rust-analyzer --version
-rustfmt --version
-cargo --version
-```
-
-The Rust toolchain also supplies `rustc`.
-
-### 4.2 Optional components
-
-Clippy is optional:
-
-```sh
-rustup component add clippy
-```
-
-Verify:
-
-```sh
-cargo clippy --version
-```
-
-Clippy is not required for basic Rust language support.
-
-### 4.3 Dependency ownership
-
-The Rust pack declares its external requirements through its language metadata.
-
-| Tool | Requirement | Purpose |
+| Executable or component | Requirement | Used for |
 |---|---|---|
 | `rust-analyzer` | Required | Language server |
 | `rustfmt` | Required | Formatting |
-| `cargo` | Required | Build, test, and project management |
-| `rustc` | Required through Rust toolchain | Compilation |
-| `rust-src` | Required | Rust standard-library source |
-| `clippy` | Optional | Additional diagnostics |
+| `cargo` | Required | Build, check, test, run, and package workflows |
+| `rustc` | Required through the Rust toolchain | Compilation |
+| `rust-src` | Recommended | Standard-library source navigation |
+| Clippy | Optional | Additional diagnostics |
 
-Do not install Rust components automatically during Neovim startup.
+The separate Rust installation guide owns provisioning and operating-system-specific setup.
 
-The existing external dependency installation scripts remain responsible for provisioning tools. Rust support only detects missing executables and reports actionable diagnostics.
+The pack may check executable availability and report missing requirements. It must not invoke `rustup component add`, download binaries, modify PATH, or install prerequisites automatically.
 
-Windows, Linux, and macOS should use the same `rustup` component-management workflow.
+### 5.1 Runtime diagnostics
 
-## 5. Implementation
+Distinguish between:
 
-### 5.1 `lua/langs/rust.lua`
+- **Configuration validation:** Checks Lua configuration and helper behavior without launching Rust tools.
+- **Toolchain validation:** Checks that required executables are discoverable.
+- **Integration validation:** Launches rust-analyzer, rustfmt, and Cargo against real projects.
 
-This module owns Rust pack metadata, project-root discovery, edition detection, and language-server configuration.
+An offline configuration test must not fail solely because an external executable is unavailable.
+
+## 6. Rust language-pack implementation
+
+### 6.1 Pack metadata
+
+Rust is registered through the existing language registry.
+
+The Rust module declares:
+
+- Formatter metadata for `rustfmt`.
+- Parser metadata mapping the `rust` filetype to the `rust` Treesitter parser.
+
+The registry remains responsible for collecting metadata and invoking enabled pack setup.
+
+Do not add a separate Rust activation mechanism or introduce metadata fields that the registry does not consume.
+
+The current language configuration enables the Rust pack:
 
 ```lua
-local M = {}
-
-M.rust = {
-  servers = { "rust_analyzer" },
-  parsers = { "rust" },
-  filetypes = { "rust" },
-  formatters = {
-    rust = { "rustfmt" },
-  },
-  tools = {
-    "rust-analyzer",
-    "rustfmt",
-    "cargo",
-  },
+packs = {
+    rust = true,
 }
+```
 
-local function join(...)
-  return vim.fs.joinpath(...)
-end
+Optional Clippy configuration is controlled separately:
 
-local function read_lines(path)
-  local ok, lines = pcall(vim.fn.readfile, path)
-  return ok and lines or {}
-end
+```lua
+tools = {
+    rust_clippy = false,
+}
+```
 
-local function manifest_has_workspace(dir)
-  for _, line in ipairs(read_lines(join(dir, "Cargo.toml"))) do
-    if line:match("^%s*%[workspace%]%s*#?") then
-      return true
-    end
-  end
+### 6.2 Project-root detection
 
-  return false
-end
+The Rust root resolver supports:
 
---- Find the nearest crate root.
---- Supports Cargo.toml and rust-project.json.
-local function find_crate(path)
-  return vim.fs.root(path, {
-    "Cargo.toml",
-    "rust-project.json",
-  })
-end
+1. Standalone crates containing `Cargo.toml`.
+2. Member crates inside Cargo workspaces.
+3. Projects described by `rust-project.json`.
+4. Files outside recognized Rust projects.
 
---- Find the nearest Cargo workspace root.
---- Fall back to the nearest crate when no workspace exists.
-function M.find_root(path)
-  local crate = find_crate(path)
+For Cargo projects, the resolver uses:
 
-  if not crate then
-    return nil
-  end
+```text
+cargo locate-project --workspace --message-format plain --manifest-path <manifest>
+```
 
-  -- A rust-project.json project without Cargo.toml.
-  if vim.fn.filereadable(join(crate, "Cargo.toml")) == 0 then
-    return crate
-  end
+This delegates workspace resolution to Cargo rather than attempting to reproduce Cargo's manifest semantics in Lua.
 
-  -- Check the nearest crate first.
-  if manifest_has_workspace(crate) then
-    return crate
-  end
+The resolver:
 
-  -- Search parent directories for a workspace manifest.
-  for dir in vim.fs.parents(crate) do
-    if manifest_has_workspace(dir) then
-      return dir
-    end
-  end
+1. Finds the nearest enclosing `Cargo.toml` or `rust-project.json`.
+2. Uses the directory containing `rust-project.json` when that marker is the applicable project root.
+3. Uses `cargo locate-project --workspace` to resolve the Cargo workspace manifest.
+4. Normalizes the resulting path.
+5. Falls back to the nearest Cargo manifest directory when Cargo cannot be used for the lookup.
 
-  return crate
-end
+The LSP root callback uses asynchronous process execution for Cargo root resolution. It verifies that the buffer remains valid and that its path has not changed before passing the resolved root to Neovim's LSP lifecycle.
 
---- Read the package edition from a Cargo manifest.
---- Returns the edition value or nil.
-local function manifest_edition(path)
-  local section
-  local package_edition
-  local workspace_edition
-  local inherits_workspace = false
+The synchronous root helper is reserved for explicit workflows and tests. It is not the normal LSP startup path.
 
-  for _, line in ipairs(read_lines(path)) do
-    local header = line:match("^%s*%[([^%]]+)%]")
+The resolver does not implement a general TOML parser. Cargo owns workspace interpretation, including workspace membership and exclusion rules.
 
-    if header then
-      section = header
-    else
-      local edition = line:match(
-        '^%s*edition%s*=%s*"(%d+)"'
-      )
+### 6.3 Edition resolution and formatting
 
-      if edition and section == "package" then
-        package_edition = edition
-      elseif edition and section == "workspace.package" then
-        workspace_edition = edition
-      end
+Conform owns Rust formatting through `rustfmt`.
 
-      if section == "package"
-        and line:match(
-          "^%s*edition%s*=%s*{%s*workspace%s*=%s*true%s*}"
-        )
-      then
-        inherits_workspace = true
-      end
-    end
-  end
+The current formatter configuration supplies:
 
-  if package_edition then
-    return package_edition
-  end
-
-  if inherits_workspace then
-    return nil, true
-  end
-
-  return workspace_edition
-end
-
---- Resolve the Rust edition for a source file.
---- Supports explicit package editions and workspace inheritance.
---- Defaults to 2021 when no edition can be resolved.
-function M.edition(path)
-  local crate = vim.fs.root(path, { "Cargo.toml" })
-
-  if not crate then
-    return "2021"
-  end
-
-  local edition, inherits = manifest_edition(
-    join(crate, "Cargo.toml")
-  )
-
-  if edition then
-    return edition
-  end
-
-  if inherits then
-    local root = M.find_root(path)
-
-    if root then
-      local workspace_edition = manifest_edition(
-        join(root, "Cargo.toml")
-      )
-
-      if workspace_edition then
-        return workspace_edition
-      end
-    end
-  end
-
-  return "2021"
-end
-
-function M.setup()
-  vim.lsp.config("rust_analyzer", {
-    filetypes = M.rust.filetypes,
-
-    root_dir = function(bufnr, on_dir)
-      local path = vim.api.nvim_buf_get_name(bufnr)
-      local root = M.find_root(path)
-
-      if root then
-        on_dir(root)
-      end
-    end,
-
-    settings = {
-      ["rust-analyzer"] = {
-        cargo = {
-          allFeatures = false,
-          buildScripts = {
-            enable = true,
-          },
-          -- Use a separate rust-analyzer target directory.
-          -- This reduces Cargo.lock contention with normal builds.
-          targetDir = true,
-        },
-
-        procMacro = {
-          enable = true,
-        },
-
-        check = {
-          command = vim.g.config_rust_clippy
-              and "clippy"
-            or "check",
-        },
-
-        diagnostics = {
-          enable = true,
-        },
-      },
+```lua
+rustfmt = {
+    options = {
+        default_edition = "2024",
     },
-
-    on_attach = function(client, bufnr)
-      -- Conform is the authoritative Rust formatter.
-      client.server_capabilities.documentFormattingProvider = false
-      client.server_capabilities.documentRangeFormattingProvider = false
-
-      if vim.g.config_rust_inlay_hints
-        and client:supports_method("textDocument/inlayHint")
-      then
-        vim.lsp.inlay_hint.enable(true, {
-          bufnr = bufnr,
-        })
-      end
-    end,
-  })
-
-  vim.lsp.enable("rust_analyzer")
-end
-
-return M
-```
-
-**Implementation notes**
-
-1. `find_root()` searches for a workspace manifest before falling back to the nearest crate.
-2. This prevents separate rust-analyzer roots for ordinary Cargo workspace members.
-3. Standalone crates use their own `Cargo.toml`.
-4. Projects based on `rust-project.json` can use that file as their project marker.
-5. Edition resolution supports explicit package editions and `edition.workspace = true`.
-6. The manifest reader is intentionally lightweight. It handles conventional package and workspace edition declarations, not every possible TOML syntax. The data pack's TOML parser remains the authoritative parser for TOML documents.
-7. `targetDir = true` uses a separate rust-analyzer target subdirectory. This reduces contention at the cost of duplicated build artifacts.
-8. Formatting capabilities are disabled on attach so that Conform remains authoritative.
-
-**Important LSP integration rule**
-
-The Rust-specific `on_attach` replaces an inherited `on_attach` when the server configuration is merged. If Stage 09 defines a shared callback, preserve it explicitly:
-
-```lua
-local shared_on_attach = vim.lsp.config["*"].on_attach
-```
-
-Then invoke it from the Rust callback if that is how the existing shared LSP architecture is structured.
-
-Do not duplicate shared LSP behavior or silently discard common attachment functionality.
-
-### 5.2 Register Rust in the language registry
-
-The Rust pack must be registered through the existing language registry.
-
-Call:
-
-```lua
-require("langs.rust").setup()
-```
-
-from the registry's established setup lifecycle.
-
-Keep the registry's existing `setup()` and `collect(field)` contracts. Do not introduce a Rust-specific plugin-loading path.
-
-### 5.3 `lua/config/languages.lua`
-
-Rust formatting belongs in the existing Conform configuration.
-
-Import the Rust pack:
-
-```lua
-local rust = require("langs.rust")
-
-local rust_formatters = rust.rust.formatters
-```
-
-Merge its formatter metadata into the existing formatter map:
-
-```lua
-formatters_by_ft = vim.tbl_extend(
-  "force",
-  data.formatters,
-  web_formatters,
-  ts_formatters,
-  c_formatters,
-  rust_formatters
-),
-```
-
-Add the Rust formatter configuration to the existing `formatters` table:
-
-```lua
-formatters = {
-  -- Preserve existing formatter definitions.
-
-  rustfmt = {
-    prepend_args = function(_, ctx)
-      return {
-        "--edition",
-        rust.edition(ctx.filename),
-      }
-    end,
-  },
 },
 ```
 
-If the existing configuration already contains a `formatters` table, extend that table rather than defining another one.
+The formatter uses the project edition when it can resolve it from the Cargo project configuration. Otherwise, it uses the configured fallback edition.
 
-#### Why the edition argument matters
+Edition validation covers:
 
-`rustfmt` needs to know which Rust edition it should parse.
+- Explicit package edition handling.
+- Workspace-inherited edition handling.
+- The configured fallback when no project edition is available.
+- The final rustfmt argument list.
 
-When formatting through stdin, do not rely on its default edition. An older default can cause valid modern Rust syntax, including asynchronous syntax, to be interpreted incorrectly.
+The workspace-inherited edition validation passed. The earlier exploratory assertion that expected the fallback edition for the workspace fixture was incorrect; the observed formatter arguments contained the expected workspace edition.
 
-Passing the edition explicitly ensures that formatting uses the edition declared by the crate.
+Cargo remains the authority for package and workspace edition semantics. Do not introduce a custom TOML parser solely to reproduce that behavior.
 
-#### Conform argument validation
+The formatter preserves Conform's stdin/stdout behavior. It must not independently rewrite the source file.
 
-The configuration assumes Conform's built-in `rustfmt` formatter preserves its required stdout emission argument when `prepend_args` is applied.
+Existing formatting policies remain unchanged:
 
-Verify the resolved formatter command against the installed Conform version. Do not assume that adding `--edition` guarantees a valid command.
+- `:Format` remains the manual formatting entry point.
+- `<leader>cf` remains governed by centralized keymaps.
+- Format-on-save remains disabled by default.
+- LSP formatting fallback remains disabled by default.
 
-The resolved invocation must:
+### 6.4 rust-analyzer configuration
 
-- Execute `rustfmt`.
-- Pass the detected edition.
-- Preserve the formatter's stdin/stdout behavior.
-- Return formatted source through stdout.
-- Avoid modifying the source file directly during Conform formatting.
-
-If the installed formatter definition does not preserve the required arguments, define an explicit formatter command consistent with the installed Conform API.
-
-Validate with:
-
-```vim
-:ConformInfo
-```
-
-Then format a real Rust source file:
-
-```vim
-:Format
-```
-
-### 5.4 `lua/config/filetypes.lua`
-
-Rust uses Neovim's built-in `.rs` filetype detection.
-
-No additional filetype registration is required.
-
-Add the following buffer-local configuration to the existing file:
+Configure and enable rust-analyzer through Neovim's native LSP API:
 
 ```lua
-vim.api.nvim_create_autocmd("FileType", {
-  group = vim.api.nvim_create_augroup(
-    "config_rust",
-    { clear = true }
-  ),
-
-  pattern = "rust",
-  desc = "Rust buffer-local settings",
-
-  callback = function()
-    vim.opt_local.shiftwidth = 4
-    vim.opt_local.tabstop = 4
-    vim.opt_local.softtabstop = 4
-    vim.opt_local.expandtab = true
-
-    vim.opt_local.foldmethod = "expr"
-    vim.opt_local.foldexpr =
-      "v:lua.vim.treesitter.foldexpr()"
-  end,
+vim.lsp.config("rust_analyzer", {
+    -- Rust-specific settings and callbacks.
 })
+
+vim.lsp.enable("rust_analyzer")
 ```
 
-These are editor defaults. `rustfmt` remains responsible for formatting output.
+`nvim-lspconfig` supplies the server definition. Do not use the legacy `require("lspconfig").rust_analyzer.setup(...)` interface.
 
-Do not add a custom `commentstring`. Native Neovim commenting should handle Rust comments.
+The current configuration:
 
-The Treesitter Rust parser must be included in the Stage 13 parser installation and configuration.
+- Uses the Rust root resolver.
+- Enables Cargo build-script support.
+- Enables procedural macro support.
+- Keeps `cargo.allFeatures` disabled.
+- Uses `check.command = "check"` by default.
+- Uses `check.command = "clippy"` when the optional Clippy setting is enabled and the executable is available.
+- Preserves shared LSP attachment behavior.
 
-### 5.5 `lua/config/rust.lua`
-
-This module provides:
-
-- `:Cargo` for executing Cargo commands.
-- `:RustExpandMacro` for macro expansion.
-- `:RustOpenCargoToml` for manifest navigation.
-- `:RustOpenDocs` for external documentation.
-
-The Cargo command is the core functionality. The three rust-analyzer extension commands are optional integrations because their request methods and response formats can change between server versions.
+The effective settings include:
 
 ```lua
-local M = {}
-
-local function notify(msg, level)
-  vim.notify(
-    "rust: " .. msg,
-    level or vim.log.levels.INFO
-  )
-end
-
-local function client()
-  local clients = vim.lsp.get_clients({
-    bufnr = 0,
-    name = "rust_analyzer",
-  })
-
-  if #clients == 0 then
-    notify(
-      "rust_analyzer is not attached to this buffer",
-      vim.log.levels.WARN
-    )
-    return nil
-  end
-
-  return clients[1]
-end
-
---- Run cargo in the project root using a terminal split.
-function M.cargo(args)
-  if #args == 0 then
-    notify(
-      "usage: :Cargo <subcommand> [args]",
-      vim.log.levels.WARN
-    )
-    return
-  end
-
-  local root = require("langs.rust").find_root(
-    vim.api.nvim_buf_get_name(0)
-  )
-
-  if not root then
-    notify(
-      "no Cargo project found above this buffer",
-      vim.log.levels.WARN
-    )
-    return
-  end
-
-  if vim.fn.executable("cargo") == 0 then
-    notify(
-      "cargo not found on PATH",
-      vim.log.levels.WARN
-    )
-    return
-  end
-
-  local cmd = { "cargo" }
-  vim.list_extend(cmd, args)
-
-  vim.cmd("botright 14new")
-
-  local bufnr = vim.api.nvim_get_current_buf()
-
-  vim.keymap.set("n", "q", "<cmd>close<cr>", {
-    buffer = bufnr,
-    desc = "Close Cargo terminal",
-  })
-
-  local job = vim.fn.jobstart(cmd, {
-    cwd = root,
-    term = true,
-  })
-
-  if job <= 0 then
-    vim.cmd("close")
-    notify(
-      "failed to start cargo process",
-      vim.log.levels.ERROR
-    )
-  end
-end
-
---- Display the macro expansion under the cursor.
-function M.expand_macro()
-  local c = client()
-
-  if not c then
-    return
-  end
-
-  local params = vim.lsp.util.make_position_params(
-    0,
-    c.offset_encoding
-  )
-
-  c:request(
-    "rust-analyzer/expandMacro",
-    params,
-    function(err, result)
-      if err then
-        notify(
-          err.message or "macro expansion request failed",
-          vim.log.levels.ERROR
-        )
-        return
-      end
-
-      if type(result) ~= "table"
-        or type(result.expansion) ~= "string"
-      then
-        notify(
-          "no macro expansion returned",
-          vim.log.levels.WARN
-        )
-        return
-      end
-
-      vim.schedule(function()
-        vim.cmd("botright vnew")
-
-        local buf = vim.api.nvim_get_current_buf()
-
-        vim.bo[buf].buftype = "nofile"
-        vim.bo[buf].bufhidden = "wipe"
-        vim.bo[buf].swapfile = false
-        vim.bo[buf].filetype = "rust"
-
-        vim.api.nvim_buf_set_lines(
-          buf,
-          0,
-          -1,
-          false,
-          vim.split(result.expansion, "\n", {
-            plain = true,
-          })
-        )
-
-        vim.keymap.set("n", "q", "<cmd>close<cr>", {
-          buffer = buf,
-          desc = "Close macro expansion",
-        })
-      end)
-    end,
-    0
-  )
-end
-
---- Open the Cargo.toml associated with the current document.
-function M.open_cargo_toml()
-  local c = client()
-
-  if not c then
-    return
-  end
-
-  local params = {
-    textDocument = vim.lsp.util.make_text_document_params(0),
-  }
-
-  c:request(
-    "experimental/openCargoToml",
-    params,
-    function(err, result)
-      if err then
-        notify(
-          err.message or "Cargo.toml request failed",
-          vim.log.levels.ERROR
-        )
-        return
-      end
-
-      if type(result) ~= "table" then
-        notify(
-          "no Cargo.toml location returned",
-          vim.log.levels.WARN
-        )
-        return
-      end
-
-      vim.schedule(function()
-        local ok, open_err = pcall(
-          vim.lsp.util.show_document,
-          result,
-          c.offset_encoding,
-          { focus = true }
-        )
-
-        if not ok then
-          notify(
-            tostring(open_err),
-            vim.log.levels.ERROR
-          )
-        end
-      end)
-    end,
-    0
-  )
-end
-
---- Open documentation for the symbol under the cursor.
-function M.open_docs()
-  local c = client()
-
-  if not c then
-    return
-  end
-
-  local params = vim.lsp.util.make_position_params(
-    0,
-    c.offset_encoding
-  )
-
-  c:request(
-    "experimental/externalDocs",
-    params,
-    function(err, result)
-      if err then
-        notify(
-          err.message or "external documentation request failed",
-          vim.log.levels.ERROR
-        )
-        return
-      end
-
-      local url
-
-      if type(result) == "string" then
-        url = result
-      elseif type(result) == "table" then
-        url = result.web or result.local_
-      end
-
-      if type(url) ~= "string"
-        or not url:match("^https?://")
-      then
-        notify(
-          "no valid external documentation URL returned",
-          vim.log.levels.WARN
-        )
-        return
-      end
-
-      local ok, open_err = pcall(vim.ui.open, url)
-
-      if not ok or open_err then
-        notify(
-          tostring(open_err),
-          vim.log.levels.ERROR
-        )
-      end
-    end,
-    0
-  )
-end
-
-local subcommands = {
-  "build",
-  "check",
-  "clippy",
-  "doc",
-  "fmt",
-  "run",
-  "test",
-  "tree",
-  "update",
-}
-
-function M.setup()
-  vim.api.nvim_create_user_command(
-    "Cargo",
-    function(cmd)
-      M.cargo(cmd.fargs)
-    end,
-    {
-      nargs = "+",
-
-      complete = function(arglead)
-        return vim.tbl_filter(function(sub)
-          return vim.startswith(sub, arglead)
-        end, subcommands)
-      end,
-
-      desc = "Run Cargo in the project root",
-    }
-  )
-
-  vim.api.nvim_create_user_command(
-    "RustExpandMacro",
-    M.expand_macro,
-    {
-      desc = "Expand the Rust macro under the cursor",
-    }
-  )
-
-  vim.api.nvim_create_user_command(
-    "RustOpenCargoToml",
-    M.open_cargo_toml,
-    {
-      desc = "Open the owning Cargo.toml",
-    }
-  )
-
-  vim.api.nvim_create_user_command(
-    "RustOpenDocs",
-    M.open_docs,
-    {
-      desc = "Open documentation for the symbol under the cursor",
-    }
-  )
-end
-
-return M
+cargo = {
+    allFeatures = false,
+    buildScripts = {
+        enable = true,
+    },
+},
+procMacro = {
+    enable = true,
+},
+check = {
+    command = check_command,
+},
 ```
 
-#### Load the module
+Do not enable `cargo.targetDir = true` by default. A separate target directory duplicates build artifacts and consumes additional disk space. Consider it only after reproducing a real build-contention problem.
 
-Load the Rust command module through the existing configuration initialization sequence:
+### 6.5 Rust-specific LSP attachment behavior
+
+The Rust module uses a dedicated `LspAttach` autocmd group.
+
+When `rust-analyzer` attaches, it disables:
+
+- `documentFormattingProvider`
+- `documentRangeFormattingProvider`
+
+This keeps Conform as the only Rust formatting authority.
+
+The Rust-specific callback must not replace the shared LSP attachment callback or duplicate shared keymaps and diagnostics.
+
+### 6.6 Rust buffer settings
+
+Neovim's built-in `.rs` filetype detection is used. No additional filetype detector is required.
+
+The existing autocmd configuration applies these Rust buffer-local defaults:
 
 ```lua
-require("config.rust").setup()
+vim.opt_local.shiftwidth = 4
+vim.opt_local.tabstop = 4
+vim.opt_local.softtabstop = 4
+vim.opt_local.expandtab = true
+
+vim.opt_local.foldmethod = "expr"
+vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 ```
 
-Keep command registration explicit and consistent with the existing direct module-loading architecture.
+These are editor defaults. `rustfmt` owns formatted output.
 
-#### Usage
+The same Rust `FileType` callback registers the Rust-specific buffer-local keymaps:
+
+```lua
+require("config.keymaps").rust(event.buf)
+```
+
+Do not add a custom `commentstring` unless native commenting is demonstrated to be incorrect for Rust.
+
+### 6.7 Native Cargo command
+
+The project implements an optional native `:Cargo` command in `lua/config/rust.lua`.
+
+It is registered only when the Rust language pack is enabled.
+
+Examples:
 
 ```vim
 :Cargo build
@@ -862,836 +353,366 @@ Keep command registration explicit and consistent with the existing direct modul
 :Cargo fmt
 ```
 
-The command uses an argument list rather than shell-string construction.
+The implementation:
 
-This avoids manual shell quoting and supports Windows PowerShell, Windows Command Prompt, Linux shells, and macOS shells.
+- Resolves the Cargo project root.
+- Checks that Cargo is executable.
+- Passes arguments as a list rather than a shell-concatenated string.
+- Opens a dedicated terminal split.
+- Sets the terminal working directory to the resolved project root.
+- Preserves terminal output after the process exits.
+- Reports failures to start the terminal job.
 
-The terminal split uses the detected Cargo project root as its working directory.
+The helper is a convenience wrapper, not a replacement for Cargo.
 
-**Extension compatibility:** The three `Rust*` extension commands must be tested against the installed rust-analyzer. Their request names and response contracts are not guaranteed by the standard LSP protocol. Unsupported requests must produce notifications rather than silently failing.
+Completed terminal buffers are intentionally preserved so that command output remains available. The Cargo helper's process lifecycle and exit-status requirements were reviewed as part of the completed design work. Do not claim that a generalized terminal lifecycle or additional exit-status UI is implemented unless it is added separately.
 
-### 5.6 `lua/config/keymaps.lua`
+Do not add macro expansion, Cargo manifest navigation, or external documentation commands to the initial core implementation. These depend on rust-analyzer extension methods rather than standard LSP requests.
 
-All user-facing mappings remain centralized.
+### 6.8 Centralized keymaps
 
-Add:
+All Rust keymaps are defined in `lua/config/keymaps.lua`, through the Rust-specific `M.rust(bufnr)` function.
+
+They are registered as **buffer-local normal-mode mappings** when the Rust `FileType` autocmd runs. They are not global mappings and do not appear in non-Rust buffers.
+
+| Mode | Key | Command | Description |
+|---|---|---|---|
+| Normal | `<leader>cr` | `:Cargo run` | Rust: Run project |
+| Normal | `<leader>cb` | `:Cargo build` | Rust: Build project |
+| Normal | `<leader>ct` | `:Cargo test` | Rust: Run tests |
+| Normal | `<leader>cc` | `:Cargo check` | Rust: Check project |
+
+The mappings dispatch to the native `:Cargo` command. They do not execute Cargo directly or duplicate its root-resolution and terminal logic.
+
+The mappings use available entries in the existing `<leader>c` namespace:
+
+- `<leader>cd` remains the diagnostics workflow.
+- `<leader>cq` remains the diagnostics quickfix workflow.
+- `<leader>cf` remains the manual formatting workflow.
+- `<leader>ca` remains the code-action workflow.
+- `<leader>ck` remains the signature-help workflow.
+
+The Rust mappings do not override these existing shared mappings.
+
+Do not define Rust keymaps inside `lua/langs/rust.lua` or `lua/config/rust.lua`.
+
+## 7. Optional features
+
+| Feature | Default | Current status |
+|---|---:|---|
+| Clippy diagnostics | Disabled | Implemented as an opt-in rust-analyzer check command |
+| Native inlay hints | Disabled | Deferred; not implemented |
+| Format-on-save | Disabled | Governed by global formatting policy |
+| LSP formatting fallback | Disabled | Conform remains authoritative |
+| All Cargo features | Disabled | Configured off |
+| Separate rust-analyzer target directory | Disabled | Deferred |
+
+### 7.1 Clippy
+
+Clippy is optional and controlled by:
 
 ```lua
-vim.keymap.set(
-  "n",
-  "<leader>cm",
-  "<cmd>RustExpandMacro<cr>",
-  {
-    desc = "Expand Rust macro",
-  }
-)
+tools = {
+    rust_clippy = false,
+}
 ```
 
-Before adding the mapping, inspect the existing `<leader>c` namespace.
-
-Only change the mapping if it conflicts with an established keymap. Preserve the description.
-
-Do not define additional Rust mappings inside `lua/config/rust.lua`.
-
-## 6. Optional configuration
-
-All optional Rust features remain disabled by default.
-
-Configure these values in the existing options module before the language registry initializes.
-
-```lua
-vim.g.config_rust_clippy = false
-vim.g.config_rust_inlay_hints = false
-
-vim.g.config_format_on_save = false
-vim.g.config_lsp_format_fallback = false
-```
-
-| Option | Default | Description |
-|---|---|---|
-| `config_rust_clippy` | `false` | Use Clippy as rust-analyzer's check command |
-| `config_rust_inlay_hints` | `false` | Enable native Rust inlay hints |
-| `config_format_on_save` | `false` | Enable the existing global format-on-save mechanism |
-| `config_lsp_format_fallback` | `false` | Enable the existing global LSP formatting fallback |
-
-### 6.1 Clippy
-
-When enabled:
-
-```lua
-vim.g.config_rust_clippy = true
-```
-
-The server uses:
+When enabled and available, rust-analyzer uses:
 
 ```lua
 check = {
-  command = "clippy",
+    command = "clippy",
 }
 ```
 
-This allows rust-analyzer to collect Clippy diagnostics through its normal check mechanism.
-
-Clippy must be installed separately:
-
-```sh
-rustup component add clippy
-```
-
-Do not introduce `nvim-lint` for this integration.
-
-### 6.2 Native inlay hints
-
-When enabled:
+Otherwise, the normal check command remains:
 
 ```lua
-vim.g.config_rust_inlay_hints = true
+check = {
+    command = "check",
+}
 ```
 
-Neovim enables native inlay hints when rust-analyzer attaches and supports the corresponding LSP method.
+The implementation checks executable availability before enabling Clippy. It must not repeatedly launch a missing command.
 
-The feature remains optional because inlay hints can add visual noise in some workflows.
+Do not introduce `nvim-lint`. Clippy diagnostics are collected through rust-analyzer's check mechanism.
 
-### 6.3 Formatting policy
+### 7.2 Native inlay hints
 
-Conform remains the authoritative Rust formatter.
+Native inlay hints are deferred.
 
-The Rust LSP configuration disables formatting capabilities.
+Do not document them as an implemented feature or add a configuration option until the implementation and its lifecycle have been designed.
 
-Do not introduce an automatic LSP formatting fallback for Rust.
+### 7.3 Formatting policy
 
-Format-on-save remains disabled until explicitly enabled through the existing global formatting policy.
+Conform owns Rust formatting. Rust-analyzer formatting capabilities remain disabled.
 
-## 7. Treesitter configuration
+Do not add an automatic LSP formatting fallback for Rust.
 
-The Rust parser belongs in the existing Stage 13 Treesitter parser inventory.
+## 8. Treesitter
 
-Parser:
+The Rust pack declares the `rust` parser through the existing language registry.
 
-```lua
-"rust"
-```
+The existing Treesitter integration discovers parser metadata from enabled language packs and installs missing parsers when the corresponding filetype is opened.
 
-The implementation uses Treesitter for:
+Rust support must not introduce a separate parser installation mechanism or require manual parser installation as the normal workflow.
+
+Rust Treesitter support provides:
 
 - Syntax highlighting.
 - Syntax-aware folding.
-- Structural editing support provided by existing native workflows.
-
-Do not install a separate Rust-specific highlighting plugin.
-
-The `toml` parser remains owned by the data-language pack.
-
-## 8. Smoke tests
-
-Rust smoke tests must validate configuration and helper behavior without requiring Rust executables.
-
-Append the following tests to the existing `scripts/smoke.lua` structure.
-
-```lua
--- Rust support
-do
-  local function check(name, ok, msg)
-    if not ok then
-      error(
-        ("rust: %s failed: %s"):format(
-          name,
-          msg or ""
-        )
-      )
-    end
-  end
-
-  local j = vim.fs.joinpath
-
-  local function write(path, lines)
-    vim.fn.mkdir(vim.fs.dirname(path), "p")
-    vim.fn.writefile(lines, path)
-  end
-
-  -- Filetype detection.
-  vim.cmd("filetype on")
-
-  check(
-    "Rust filetype",
-    vim.filetype.match({
-      filename = "main.rs",
-    }) == "rust"
-  )
-
-  -- Language-server configuration.
-  local cfg = vim.lsp.config["rust_analyzer"]
-
-  check(
-    "LSP configuration",
-    cfg ~= nil,
-    "rust_analyzer configuration missing"
-  )
-
-  check(
-    "LSP root_dir",
-    type(cfg.root_dir) == "function"
-  )
-
-  check(
-    "LSP on_attach",
-    type(cfg.on_attach) == "function"
-  )
-
-  check(
-    "LSP formatting disabled",
-    cfg.on_attach ~= nil,
-    "Rust attachment callback missing"
-  )
-
-  -- Optional defaults.
-  check(
-    "Clippy disabled by default",
-    not vim.g.config_rust_clippy
-  )
-
-  check(
-    "Inlay hints disabled by default",
-    not vim.g.config_rust_inlay_hints
-  )
-
-  check(
-    "Format-on-save disabled by default",
-    not vim.g.config_format_on_save
-  )
-
-  check(
-    "LSP fallback disabled by default",
-    not vim.g.config_lsp_format_fallback
-  )
-
-  if not vim.g.config_rust_clippy then
-    check(
-      "default check command",
-      cfg.settings["rust-analyzer"].check.command == "check"
-    )
-  end
-
-  -- Conform integration.
-  local conform_ok, conform = pcall(require, "conform")
-
-  if conform_ok then
-    check(
-      "Rust formatter registration",
-      vim.deep_equal(
-        conform.formatters_by_ft.rust,
-        { "rustfmt" }
-      )
-    )
-
-    local formatter =
-      require("config.languages").formatters.rustfmt
-
-    check(
-      "rustfmt edition callback",
-      type(formatter.prepend_args) == "function"
-    )
-  end
-
-  -- FileType autocmd.
-  local autocmds = vim.api.nvim_get_autocmds({
-    group = "config_rust",
-  })
-
-  check(
-    "Rust autocmd",
-    #autocmds > 0
-  )
-
-  -- User commands.
-  for _, cmd in ipairs({
-    "Cargo",
-    "RustExpandMacro",
-    "RustOpenCargoToml",
-    "RustOpenDocs",
-  }) do
-    check(
-      "command " .. cmd,
-      vim.fn.exists(":" .. cmd) == 2,
-      cmd .. " missing"
-    )
-  end
-
-  -- Centralized keymap.
-  local map = vim.fn.maparg(
-    "<leader>cm",
-    "n",
-    false,
-    true
-  )
-
-  check(
-    "Rust keymap description",
-    map and map.desc and map.desc ~= ""
-  )
-
-  -- Buffer-local options.
-  vim.cmd("enew")
-  vim.bo.filetype = "rust"
-
-  check(
-    "expandtab",
-    vim.bo.expandtab == true
-  )
-
-  check(
-    "shiftwidth",
-    vim.bo.shiftwidth == 4
-  )
-
-  check(
-    "tabstop",
-    vim.bo.tabstop == 4
-  )
-
-  check(
-    "softtabstop",
-    vim.bo.softtabstop == 4
-  )
-
-  vim.cmd("bwipeout!")
-
-  -- Root and edition detection.
-  local rust = require("langs.rust")
-
-  -- Workspace with an inherited member edition.
-  local ws = vim.fn.tempname()
-
-  write(
-    j(ws, "Cargo.toml"),
-    {
-      "[workspace]",
-      'members = ["crates/foo"]',
-      "",
-      "[workspace.package]",
-      'edition = "2024"',
-    }
-  )
-
-  write(
-    j(ws, "crates", "foo", "Cargo.toml"),
-    {
-      "[package]",
-      'name = "foo"',
-      'edition.workspace = true',
-    }
-  )
-
-  write(
-    j(ws, "crates", "foo", "src", "lib.rs"),
-    { "" }
-  )
-
-  local member_file = j(
-    ws,
-    "crates",
-    "foo",
-    "src",
-    "lib.rs"
-  )
-
-  check(
-    "workspace root",
-    rust.find_root(member_file) == ws,
-    tostring(rust.find_root(member_file))
-  )
-
-  check(
-    "inherited workspace edition",
-    rust.edition(member_file) == "2024",
-    rust.edition(member_file)
-  )
-
-  -- Standalone crate.
-  local solo = vim.fn.tempname()
-
-  write(
-    j(solo, "Cargo.toml"),
-    {
-      "[package]",
-      'name = "solo"',
-      'edition = "2018"',
-    }
-  )
-
-  write(
-    j(solo, "src", "main.rs"),
-    { "" }
-  )
-
-  local solo_file = j(
-    solo,
-    "src",
-    "main.rs"
-  )
-
-  check(
-    "standalone crate root",
-    rust.find_root(solo_file) == solo
-  )
-
-  check(
-    "standalone crate edition",
-    rust.edition(solo_file) == "2018"
-  )
-
-  -- Default edition.
-  local default = vim.fn.tempname()
-
-  write(
-    j(default, "Cargo.toml"),
-    {
-      "[package]",
-      'name = "default"',
-    }
-  )
-
-  write(
-    j(default, "src", "main.rs"),
-    { "" }
-  )
-
-  local default_file = j(
-    default,
-    "src",
-    "main.rs"
-  )
-
-  check(
-    "default crate edition",
-    rust.edition(default_file) == "2021"
-  )
-
-  -- File outside a Cargo project.
-  local none = vim.fn.tempname()
-
-  write(
-    j(none, "main.rs"),
-    { "" }
-  )
-
-  local outside_file = j(none, "main.rs")
-
-  check(
-    "no Cargo root",
-    rust.find_root(outside_file) == nil
-  )
-
-  check(
-    "default edition outside project",
-    rust.edition(outside_file) == "2021"
-  )
-
-  -- Formatter edition argument.
-  if conform_ok then
-    local args_fn =
-      require("config.languages").formatters.rustfmt.prepend_args
-
-    local args = args_fn(nil, {
-      filename = member_file,
-    })
-
-    check(
-      "rustfmt edition argument",
-      args[1] == "--edition"
-        and args[2] == "2024",
-      vim.inspect(args)
-    )
-  end
-
-  -- Cleanup temporary projects.
-  for _, dir in ipairs({
-    ws,
-    solo,
-    default,
-    none,
-  }) do
-    vim.fn.delete(dir, "rf")
-  end
-
-  -- Cargo command must reject buffers outside Cargo projects.
-  vim.cmd("enew")
-
-  local notified = false
-  local original_notify = vim.notify
-
-  local ok, err = xpcall(function()
-    vim.notify = function()
-      notified = true
-    end
-
-    require("config.rust").cargo({
-      "check",
-    })
-  end, debug.traceback)
-
-  vim.notify = original_notify
-
-  check(
-    "Cargo guard execution",
-    ok,
-    err
-  )
-
-  check(
-    "Cargo project guard",
-    notified,
-    ":Cargo should warn outside a Cargo project"
-  )
-
-  vim.cmd("bwipeout!")
-end
-```
-
-### 8.1 Optional tool detection
-
-At the end of the smoke test, report missing external tools without failing the offline test suite:
-
-```lua
-for _, exe in ipairs({
-  "rust-analyzer",
-  "rustfmt",
-  "cargo",
-}) do
-  if vim.fn.executable(exe) == 0 then
-    vim.notify(
-      "rust: optional tool missing: " .. exe,
-      vim.log.levels.WARN
-    )
-  end
-end
-```
-
-These are external integration dependencies, not reasons to fail configuration-only tests.
-
-### 8.2 Test limitations
-
-The offline tests do not prove:
-
-- rust-analyzer can start.
-- Cargo can resolve dependencies.
-- Clippy produces diagnostics.
-- Conform invokes rustfmt correctly.
-- rust-analyzer extension requests are supported.
-- The configured server works with the installed Rust toolchain.
-
-These require integration testing.
-
-The tests should also be extended when the root finder or edition resolver gains support for additional Cargo manifest syntax.
-
-## 9. Integration validation
-
-Integration tests require the Rust toolchain and a working Cargo installation.
-
-### 9.1 Create a test workspace
-
-Create a small workspace:
-
-```sh
-mkdir rust-workspace
-cd rust-workspace
-
-cargo new --lib crates-a
-cargo new --lib crates-b
-```
-
-Create a workspace manifest at the root:
-
-```toml
-[workspace]
-resolver = "3"
-members = [
-  "crates-a",
-  "crates-b",
-]
-
-[workspace.package]
-edition = "2024"
-```
-
-For each member crate, use workspace edition inheritance:
-
-```toml
-[package]
-name = "crates-a"
-version = "0.1.0"
-edition.workspace = true
-```
-
-Use the same arrangement for the second member.
-
-### 9.2 Validate language-server attachment
-
-Open files from both member crates.
-
-Check:
-
-```vim
-:checkhealth vim.lsp
-```
-
-Verify:
-
-- `rust_analyzer` starts successfully.
-- Both member crates resolve to the workspace root.
-- Only one rust-analyzer client is attached for the shared workspace.
-- Hover displays signatures and documentation.
-- `gd` navigates to definitions.
-- `grr` lists references.
-- Rename and code actions work.
-
-### 9.3 Validate diagnostics
-
-Introduce an intentional type error:
-
-```rust
-fn main() {
-    let value: u32 = "invalid";
-    println!("{value}");
-}
-```
-
-Wait for rust-analyzer's check operation.
-
-Verify that the diagnostic appears in Neovim.
-
-Correct the code and confirm the diagnostic disappears.
-
-### 9.4 Validate formatting
-
-Create a file containing edition-specific syntax:
-
-```rust
-async fn example() {
-    let value = async { 42 };
-    println!("{}", value.await);
-}
-```
-
-Introduce inconsistent indentation.
-
-Run:
-
-```vim
-:Format
-```
-
-Verify:
-
-- Conform selects `rustfmt`.
-- The formatter receives the crate edition.
-- The output is correctly formatted.
-- No edition-related parse errors occur.
-- The source file is not modified by a separate direct-to-file formatter invocation.
-
-Also inspect:
+- Structural syntax information used by existing native workflows.
+
+The `toml` parser remains owned by the existing data-language pack.
+
+## 9. Automated tests
+
+Rust tests use the repository's existing validation conventions and focused scripts. They must not introduce a parallel plugin or test framework.
+
+### 9.1 Root-resolution tests
+
+`scripts/test-rust-roots.lua` validates root resolution using temporary project fixtures.
+
+The verified cases include:
+
+| Fixture | Expected result | Status |
+|---|---|---|
+| Standalone crate | Its own crate directory | Passed |
+| Workspace member | Owning workspace directory | Passed |
+| Excluded package | Appropriate package root | Passed |
+| Nested workspace | Nearest applicable workspace | Passed |
+| Workspace edition inheritance fixture | Cargo workspace resolution | Passed |
+| `rust-project.json` project | Directory containing the project marker | Passed |
+
+Temporary directories are cleaned up through the test cleanup pattern.
+
+### 9.2 Edition tests
+
+`scripts/test-rust-edition.lua` verifies:
+
+- Explicit project edition arguments.
+- Workspace-inherited edition arguments.
+- The configured fallback edition.
+- The final rustfmt argument list.
+
+All edition validation scenarios passed. The workspace fixture produced the expected inherited edition argument. The earlier expectation of a fallback argument for that fixture was corrected.
+
+### 9.3 LSP tests
+
+`scripts/test-rust-lsp.lua` verifies:
+
+- rust-analyzer attaches to a temporary Cargo project.
+- The resolved LSP root matches the expected project root.
+- Document formatting is disabled.
+- Range formatting is disabled.
+
+The test asserts the root directory rather than merely printing it.
+
+The formatting assertions inspect the attached client's effective capabilities after the Rust attachment behavior has run.
+
+### 9.4 Clippy tests
+
+`scripts/test-rust-clippy.lua` verifies:
+
+- Clippy is disabled by default.
+- Enabling the option selects the `clippy` check command when available.
+- Disabling the option restores the normal `check` command.
+
+### 9.5 Treesitter tests
+
+`scripts/test-rust-parser.lua` verifies that:
+
+- The enabled Rust pack contributes the parser mapping.
+- The existing Treesitter lifecycle installs the missing Rust parser.
+- The parser can be loaded.
+- Rust source can be parsed.
+- Highlighting can be activated.
+
+These tests exercise the existing automatic installation lifecycle rather than manually installing the parser.
+
+### 9.6 Configuration, buffer, and keymap tests
+
+Validation covers:
+
+- The Rust pack is enabled through the existing language configuration.
+- The registry uses its actual metadata schema.
+- The native LSP configuration is registered.
+- The Rust filetype is recognized.
+- Conform registers `rustfmt`.
+- Rust buffer-local options are applied.
+- The `:Cargo` command is registered only when Rust support is enabled.
+- Shared LSP keymaps continue to attach.
+- All four Rust Cargo mappings are registered in Rust buffers.
+- The mappings are buffer-local and isolated from non-Rust buffers.
+- Each mapping has the expected command and description.
+
+The verified mappings are:
+
+| Key | Expected right-hand side | Verified description |
+|---|---|---|
+| `<leader>cr` | `<cmd>Cargo run<CR>` | `Rust: Run project` |
+| `<leader>cb` | `<cmd>Cargo build<CR>` | `Rust: Build project` |
+| `<leader>ct` | `<cmd>Cargo test<CR>` | `Rust: Run tests` |
+| `<leader>cc` | `<cmd>Cargo check<CR>` | `Rust: Check project` |
+
+Offline tests do not require a running Rust toolchain or network access unless the test is explicitly an integration test.
+
+## 10. Integration validation
+
+Integration validation was completed with the external Rust toolchain available to the Neovim process.
+
+On Windows, compiler and linker environment validation was included in the completed toolchain review. The separate installation guide owns the system prerequisites.
+
+### 10.1 Validate LSP attachment and root resolution
+
+Validation covered standalone crates and workspace projects.
+
+The checks confirmed:
+
+- `rust-analyzer` starts successfully.
+- The client attaches to the buffer.
+- The resolved root matches the Cargo project root.
+- Document and range formatting capabilities are disabled.
+- Workspace member files resolve to the expected workspace root.
+
+### 10.2 Validate diagnostics and language intelligence
+
+Rust-analyzer diagnostics and the existing shared LSP workflows were included in integration validation.
+
+The implementation retains the shared workflows for hover, definition navigation, references, rename, code actions, and diagnostics.
+
+### 10.3 Validate formatting
+
+Formatting validation used:
 
 ```vim
 :ConformInfo
+:Format
 ```
 
-### 9.5 Validate LSP formatting ownership
+The checks confirmed:
 
-Run:
+- Conform selects `rustfmt`.
+- The formatter receives the expected edition argument.
+- Explicit and workspace-inherited edition handling works for the tested fixtures.
+- The configured fallback edition is used when no project edition is available.
+- The formatter preserves stdin/stdout behavior.
+- The output is correctly formatted.
+- Rust-analyzer formatting is not invoked.
+
+### 10.4 Validate Cargo execution
+
+Cargo validation covered:
 
 ```vim
-:lua =vim.lsp.get_clients({ name = "rust_analyzer" })[1].server_capabilities.documentFormattingProvider
-```
-
-Expected:
-
-```lua
-false
-```
-
-The Rust LSP must not become an alternative formatting authority.
-
-### 9.6 Validate Cargo execution
-
-Run:
-
-```vim
+:Cargo check
 :Cargo test
+:Cargo run
 ```
 
-Verify:
+The checks confirmed:
 
-- A terminal split opens.
-- The command executes from the workspace root.
-- Cargo runs the expected tests.
-- The terminal displays its output.
-- Pressing `q` closes the split.
+- The terminal opens.
+- Cargo runs from the resolved project root.
+- Arguments are forwarded correctly.
+- Output remains visible.
+- The terminal remains usable while the process runs.
+- Completed output remains available.
+- Missing-project handling reports the absence of a Cargo project.
 
-Test argument forwarding:
+The four Rust buffer-local mappings were also verified to dispatch to the corresponding native `:Cargo` commands.
 
-```vim
-:Cargo run -- --verbose
-```
+### 10.5 Validate optional Clippy
 
-Test completion:
+Clippy validation confirmed that:
 
-```vim
-:Cargo <Tab>
-```
+- The optional setting controls Clippy integration.
+- The Clippy check command is selected when enabled and available.
+- Disabling the option restores the normal `check` command.
 
-### 9.7 Validate optional Clippy
+### 10.6 Windows environment validation
 
-Enable Clippy before initializing the language pack:
+Windows toolchain validation was completed in the environment used for the project.
 
-```lua
-vim.g.config_rust_clippy = true
-```
+The review covered discovery and use of:
 
-Restart Neovim or restart the Rust language server.
+- `rust-analyzer`
+- `rustfmt`
+- `cargo`
+- `rustc`
+- The MSVC compiler and linker required by native Cargo builds
 
-Verify:
+Do not hardcode Visual Studio installation paths in the Rust language pack. Environment initialization belongs to the operating-system and toolchain setup.
 
-```vim
-:checkhealth vim.lsp
-```
+## 11. Validation and acceptance status
 
-Introduce a Clippy-detectable issue and confirm that the diagnostic appears.
+### 11.1 Verified implementation behavior
 
-Example:
+The following implementation and integration checks passed:
 
-```rust
-fn calculate() -> u32 {
-    return 42;
-}
-```
+| Area | Validation | Result |
+|---|---|---|
+| Rust metadata | Language registry integration | Passed |
+| Cargo roots | Standalone and workspace fixtures | Passed |
+| Project markers | `rust-project.json` resolution | Passed |
+| LSP | rust-analyzer attachment and root assertion | Passed |
+| LSP formatting | Document and range formatting disabled | Passed |
+| LSP settings | Cargo build scripts and procedural macros enabled; all features disabled | Passed |
+| Clippy | Optional check-command selection | Passed |
+| Rust formatter | Conform formatter resolution and 2024 fallback | Passed |
+| Edition handling | Explicit, workspace-inherited, and fallback edition arguments | Passed |
+| Buffer settings | Rust indentation and folding options | Passed |
+| Rust keymaps | Four buffer-local mappings and command targets | Passed |
+| Keymap isolation | Rust mappings absent from non-Rust buffers | Passed |
+| Treesitter | Automatic parser installation and parsing | Passed |
+| Cargo helper | Root resolution, command execution, and terminal output | Passed |
+| Windows toolchain | Compiler and linker environment validation | Passed |
+| Static validation | StyLua, syntax check, and whitespace validation | Passed |
+| Documentation | Implementation and architecture review | Passed |
 
-Check that Clippy is available:
+### 11.2 Repository validation
 
-```sh
-cargo clippy --version
-```
-
-### 9.8 Validate native inlay hints
-
-Enable:
-
-```lua
-vim.g.config_rust_inlay_hints = true
-```
-
-Restart or reattach the language server.
-
-Verify that supported type and parameter hints appear.
-
-### 9.9 Validate extension commands
-
-Test each command independently:
-
-```vim
-:RustExpandMacro
-:RustOpenCargoToml
-:RustOpenDocs
-```
-
-For each command, verify:
-
-- The server is attached.
-- The request method is supported.
-- The response has the expected structure.
-- Errors produce meaningful notifications.
-- Unsupported methods do not crash Neovim.
-
-These commands remain version-dependent until validated against the installed rust-analyzer release.
-
-## 10. Checkpoint
-
-Run the checks in the following order.
-
-### 10.1 Static validation
+The repository validation commands completed successfully:
 
 ```powershell
 stylua --check .
+nvim --headless -u NONE -l .\scripts\check-syntax.lua
+git diff --check
 ```
 
-```powershell
-nvim -l scripts/check-syntax.lua
-```
+Tests that depend on the actual repository configuration were run with the repository's `init.lua`.
 
-### 10.2 Offline smoke tests
+### 11.3 Validation and acceptance status
 
-Use the existing project startup and smoke-test conventions.
+All Rust implementation tests, integration checks, design reviews, and documentation reviews have been completed successfully.
 
-For a headless run with an isolated application name:
+- [x] Validate explicit and workspace-inherited Rust edition handling.
+- [x] Verify Cargo process exit-status reporting requirements.
+- [x] Complete Windows compiler and linker environment validation.
+- [x] Review the final documentation against the implementation.
+- [x] Complete the Stage 13 acceptance review.
 
-```powershell
-$env:NVIM_APPNAME = "nvim-config"
-nvim --headless -u init.lua -c "luafile scripts/smoke.lua" -c "qa!"
-```
+**Status:** Rust support validation is complete. Stage 13 Rust support is accepted.
 
-On systems where the configuration is already selected through `NVIM_APPNAME`, retain the repository's established invocation rather than introducing a second startup mechanism.
+No further Rust tests or validation runs are required for this accepted implementation unless the scope or implementation changes.
 
-### 10.3 Integration validation
+## 12. Troubleshooting
 
-Complete the following:
-
-- [ ] Rust filetype detection.
-- [ ] Rust parser installation.
-- [ ] rust-analyzer startup.
-- [ ] Workspace-root resolution.
-- [ ] Single server per workspace.
-- [ ] Cross-crate navigation.
-- [ ] Diagnostics.
-- [ ] Edition-aware Conform formatting.
-- [ ] LSP formatting disabled.
-- [ ] Cargo terminal execution.
-- [ ] Cargo argument forwarding.
-- [ ] Cargo command completion.
-- [ ] Optional Clippy diagnostics.
-- [ ] Optional native inlay hints.
-- [ ] Macro expansion compatibility.
-- [ ] Cargo manifest navigation compatibility.
-- [ ] External documentation compatibility.
-- [ ] Windows compatibility.
-
-### 10.4 Completion criteria
-
-Rust support is ready for acceptance when:
-
-1. Static validation passes.
-2. Offline smoke tests pass.
-3. Required external dependencies are detected correctly.
-4. Workspace and standalone crate integration tests pass.
-5. Conform formats using the correct edition.
-6. Cargo commands execute from the expected root.
-7. Optional features behave correctly when enabled.
-8. Version-dependent extension commands either work or report unsupported functionality clearly.
-9. Documentation reflects the implemented configuration.
-
-Commit and tag the Rust support implementation only after the required checks pass.
-
-## 11. Troubleshooting
-
-| Symptom | Possible cause | Resolution |
+| Symptom | Possible cause | Investigation |
 |---|---|---|
-| `rust_analyzer` never attaches | Missing executable | Verify `rust-analyzer --version` and PATH |
-| Rust standard-library navigation fails | Missing `rust-src` | Run `rustup component add rust-src` |
-| Rust formatting fails | Missing `rustfmt` | Run `rustup component add rustfmt` |
-| Clippy diagnostics do not appear | Missing Clippy component | Run `rustup component add clippy` |
-| Multiple rust-analyzer clients start | Workspace-root detection is incorrect | Inspect the resolved root for each member |
-| Workspace member uses the wrong edition | Manifest inheritance was not resolved | Inspect package and workspace edition declarations |
-| `async` syntax fails during formatting | Wrong edition passed to rustfmt | Inspect the resolved Conform command |
-| Conform cannot format Rust | Incorrect formatter arguments or missing executable | Inspect `:ConformInfo` and the formatter definition |
-| Formatting uses the LSP | Formatting capabilities were not disabled | Inspect the attached client's formatting capabilities |
-| Cargo command cannot find a project | Current buffer is outside a Cargo project | Open a Rust file inside the project |
-| Cargo command does not start | Cargo missing from PATH | Verify `cargo --version` |
-| Cargo command uses the wrong directory | Root detection returned an unexpected path | Inspect `require("langs.rust").find_root()` |
-| Macro expansion fails | Unsupported or changed extension request | Check the installed rust-analyzer version |
-| Cargo manifest navigation fails | Extension request unsupported or response changed | Verify the request contract |
-| Documentation command fails | Extension request or URL response changed | Verify server support and returned URL |
-| Inlay hints do not appear | Option disabled or server method unsupported | Enable the option and inspect LSP capabilities |
-| rust-analyzer competes with Cargo builds | Shared target directory or Cargo lock contention | Verify `cargo.targetDir` configuration |
+| rust-analyzer does not attach | Missing executable, invalid root, or server configuration issue | Check executable availability, `:checkhealth vim.lsp`, and the resolved root |
+| Standard-library navigation is incomplete | Rust source component unavailable | Check `rust-src` availability |
+| Rust formatting fails | Missing rustfmt or invalid Conform arguments | Inspect `:ConformInfo` and formatter arguments |
+| Edition-specific syntax fails during formatting | Incorrect edition detection or fallback | Inspect the package manifest and formatter arguments |
+| Workspace member uses the wrong root | Cargo root resolution issue | Compare the resolved root for each member |
+| Workspace member uses the wrong edition | Edition configuration or detection issue | Inspect `edition.workspace = true` and `[workspace.package]` |
+| Clippy diagnostics do not appear | Clippy unavailable, disabled, or server not reconfigured | Check the optional component and effective rust-analyzer setting |
+| Formatting uses the LSP | Rust formatting capabilities remain enabled | Inspect the attached client's formatting capabilities |
+| Cargo command cannot find a project | Current buffer is outside a Cargo project | Inspect the Rust root resolver result |
+| Cargo command uses the wrong directory | Root resolution is incorrect | Check the root helper against the workspace fixture |
+| Cargo build cannot find the linker on Windows | MSVC environment is unavailable to Neovim | Follow the Windows installation guide and check the Neovim launch environment |
 
-Useful diagnostics:
+Useful Neovim diagnostics:
 
 ```vim
 :checkhealth vim.lsp
@@ -1699,26 +720,24 @@ Useful diagnostics:
 :messages
 ```
 
-Check external tools:
+External tool versions:
 
-```sh
+```powershell
 rust-analyzer --version
 rustfmt --version
 cargo --version
+rustc --version
+```
+
+Check Clippy only when it is enabled:
+
+```powershell
 cargo clippy --version
 ```
 
-For rust-analyzer configuration diagnostics, its logs can be inspected using:
+For rust-analyzer logging, set `RA_LOG` before starting Neovim using the syntax appropriate to the current shell. Keep verbose logging disabled by default.
 
-```sh
-RA_LOG=rust_analyzer=info
-```
-
-Set the environment variable before starting Neovim, using the appropriate syntax for the operating system.
-
-## 12. Architecture decisions
-
-The following decisions govern future Rust support changes.
+## 13. Architecture decisions
 
 | Decision | Policy |
 |---|---|
@@ -1726,39 +745,45 @@ The following decisions govern future Rust support changes.
 | LSP configuration | Native Neovim LSP API |
 | Server definitions | Existing nvim-lspconfig |
 | Formatter | rustfmt through Conform |
-| Formatting ownership | Conform only |
+| Formatting authority | Conform only |
 | Formatting trigger | Manual by default |
-| Linter | Clippy through rust-analyzer |
+| Linter | Clippy through rust-analyzer, optional |
 | Linting plugin | No nvim-lint |
-| Workspace handling | Workspace root preferred |
-| Edition detection | Cargo manifest and workspace inheritance |
-| Cargo execution | Native terminal buffer and jobstart |
-| Inlay hints | Native Neovim API |
+| Workspace handling | Cargo workspace root resolution |
+| Edition handling | Explicit, workspace-inherited, and fallback edition handling validated |
+| Cargo execution | Native terminal workflow through `:Cargo` |
+| Cargo keymaps | Centralized, Rust-buffer-local mappings |
+| Inlay hints | Deferred |
 | Parser | Existing Treesitter infrastructure |
+| TOML ownership | Existing data-language pack |
 | Debugging | Deferred to Stage 14 |
 | New plugins | None |
+| Tool installation | Separate installation guide; never during startup |
 
 ### Deferred functionality
 
-The following functionality is outside the initial Rust core-pack implementation:
+The following remain outside the accepted Stage 13 Rust core-pack implementation:
 
-- CodeLLDB debugging.
-- DAP configuration.
+- CodeLLDB and DAP configuration.
+- Native inlay-hint configuration.
 - Advanced Cargo workspace management.
-- Additional Rust-specific UI plugins.
+- Rust-specific UI plugins.
 - Automatic Rust toolchain installation.
-- Advanced manifest parsing beyond the lightweight edition resolver.
+- Experimental rust-analyzer extension commands.
+- Full TOML parsing inside Rust helpers.
+- Automatic format-on-save unless separately approved through the global formatting policy.
 
 Debugging belongs to Stage 14. Do not pull it into Stage 13.
 
-## 13. References
+## 14. References
 
 Official documentation:
 
 - [rust-analyzer – Installation](https://rust-analyzer.github.io/book/installation.html)
 - [rust-analyzer – Configuration](https://rust-analyzer.github.io/book/configuration.html)
-- [The Rust Programming Language](https://doc.rust-lang.org/book/)
 - [Cargo Book](https://doc.rust-lang.org/cargo/)
+- [Cargo manifest reference](https://doc.rust-lang.org/cargo/reference/manifest.html)
+- [Rust editions](https://doc.rust-lang.org/edition-guide/)
 - [rustfmt](https://github.com/rust-lang/rustfmt)
 - [Clippy](https://doc.rust-lang.org/clippy/)
 - [Neovim LSP documentation](https://neovim.io/doc/user/lsp.html)
@@ -1769,4 +794,6 @@ Official documentation:
 
 **Document ownership:** Stage 13 – Language Packs
 **Core pack:** Rust
+**Document:** `docs/architecture/rust-support.md`
+**Acceptance:** Complete
 **Implementation principle:** Minimum installation. Compose the rest.

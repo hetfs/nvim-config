@@ -113,6 +113,11 @@ require("lsp.servers.emmet").setup()
 -- Language packs.
 require("langs").setup()
 
+-- Native Rust and Cargo workflows.
+if require("config.languages").packs.rust then
+  require("config.rust").setup()
+end
+
 -- Formatting (Conform reads formatter metadata from language packs).
 require("plugins.conform")
 require("config.format").setup()

@@ -121,10 +121,7 @@ local function get_format_on_save_config(language_config)
 
   if timeout_ms == nil then
     timeout_ms = 500
-  elseif type(timeout_ms) ~= "number"
-    or timeout_ms < 1
-    or timeout_ms % 1 ~= 0
-  then
+  elseif type(timeout_ms) ~= "number" or timeout_ms < 1 or timeout_ms % 1 ~= 0 then
     fail("config.languages.format_on_save.timeout_ms must be a positive integer")
   end
 
@@ -203,11 +200,7 @@ function M.resolve(defaults, preferences)
       local configured = preferred[filetype]
 
       if not configured or #configured == 0 then
-        fail(string.format(
-          "formatters_only.%s is true, but preferred.%s has no formatter names",
-          filetype,
-          filetype
-        ))
+        fail(string.format("formatters_only.%s is true, but preferred.%s has no formatter names", filetype, filetype))
       end
     end
   end
@@ -247,10 +240,7 @@ function M.resolve(defaults, preferences)
       local configured = result[filetype]
 
       if not configured or #configured == 0 then
-        fail(string.format(
-          "stop_after_first.%s is true, but no formatter is configured for that filetype",
-          filetype
-        ))
+        fail(string.format("stop_after_first.%s is true, but no formatter is configured for that filetype", filetype))
       end
 
       configured.stop_after_first = true
@@ -268,10 +258,7 @@ function M.format()
   local configured = formatters_by_ft and formatters_by_ft[filetype]
 
   if not configured or #configured == 0 then
-    vim.notify(
-      string.format("Format: no formatter configured for '%s'", display_filetype),
-      vim.log.levels.WARN
-    )
+    vim.notify(string.format("Format: no formatter configured for '%s'", display_filetype), vim.log.levels.WARN)
     return
   end
 
@@ -289,21 +276,9 @@ function M.format()
     end
 
     if #unavailable > 0 then
-      vim.notify(
-        string.format(
-          "Format: formatter executable unavailable: %s",
-          table.concat(unavailable, ", ")
-        ),
-        vim.log.levels.WARN
-      )
+      vim.notify(string.format("Format: formatter executable unavailable: %s", table.concat(unavailable, ", ")), vim.log.levels.WARN)
     else
-      vim.notify(
-        string.format(
-          "Format: no configured formatter is runnable for '%s' in this buffer",
-          display_filetype
-        ),
-        vim.log.levels.WARN
-      )
+      vim.notify(string.format("Format: no configured formatter is runnable for '%s' in this buffer", display_filetype), vim.log.levels.WARN)
     end
 
     return
@@ -323,6 +298,8 @@ function M.setup()
     fail("config.languages must return a table")
   end
 
+  local conform = require("conform")
+
   formatters_by_ft = M.resolve(nil, language_config.formatters)
 
   local conform_config = {
@@ -333,17 +310,24 @@ function M.setup()
 
       -- Register under the name used by the Shell language packs.
       shfmt = require("config.formatters.shell_formatter"),
+
+      -- Extend Conform's built-in Rust formatter.
+      -- Keep its command, arguments, and working-directory behavior.
+      rustfmt = {
+        options = {
+          default_edition = "2024",
+        },
+      },
     },
 
     default_format_opts = {
       lsp_format = "never",
     },
   }
-
   -- Conform registers its save hook only when explicitly enabled.
   conform_config.format_on_save = get_format_on_save_config(language_config)
 
-  require("conform").setup(conform_config)
+  conform.setup(conform_config)
 
   vim.api.nvim_create_user_command("Format", M.format, {
     desc = "Format current buffer",
