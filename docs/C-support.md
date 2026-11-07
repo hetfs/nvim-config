@@ -4,7 +4,7 @@
 
 This document defines the architecture, dependencies, implementation decisions, and validation requirements for C language support in the Neovim configuration.
 
-C is an independent Stage 13 language pack. It uses the existing native Neovim LSP architecture and reuses shared infrastructure where appropriate.
+C is an independent Stage 13 language pack. It uses the existing native Neovim LSP architecture and shares infrastructure with the independently enabled C++ language pack.
 
 The implementation follows these principles:
 
@@ -15,6 +15,8 @@ The implementation follows these principles:
 - Project-aware compilation through a compilation database.
 - Explicit external-tool installation and validation.
 - Independent C and C++ language packs with shared infrastructure.
+- Explicit CMake build and execution workflows.
+- Buffer-local language keymaps with centralized ownership.
 
 ## 2. Architecture
 
@@ -26,23 +28,38 @@ The C language pack is implemented at:
 lua/langs/c.lua
 ```
 
+The C++ language pack is implemented independently at:
+
+```text
+lua/langs/cpp.lua
+```
+
 The shared clangd integration is:
 
 ```text
 lua/lsp/servers/clangd.lua
 ```
 
-The existing infrastructure also includes:
+The CMake workflow is implemented at:
+
+```text
+lua/config/cmake.lua
+```
+
+The relevant configuration structure is:
 
 ```text
 lua/
 ├── config/
+│   ├── cmake.lua
 │   ├── format.lua
-│   └── languages.lua
+│   ├── keymaps.lua
+│   ├── languages.lua
+│   └── autocmds.lua
 │
 ├── langs/
 │   ├── c.lua
-│   └── cpp.lua             # Planned independent C++ pack
+│   └── cpp.lua
 │
 ├── lsp/
 │   └── servers/
@@ -61,15 +78,18 @@ This structure describes the relevant ownership boundaries. Existing modules mus
 | Component | Responsibility |
 |---|---|
 | `langs/c.lua` | C-specific configuration and metadata |
-| `langs/cpp.lua` | Independent C++ configuration |
+| `langs/cpp.lua` | C++-specific configuration and metadata |
 | `lsp/servers/clangd.lua` | Shared clangd configuration |
+| `config/cmake.lua` | CMake project discovery, build, and execution |
+| `config/keymaps.lua` | C/C++ and shared LSP keymaps |
+| `config/autocmds.lua` | Buffer-local language keymap registration |
 | Treesitter | C and C++ parser integration |
 | Conform | clang-format integration |
 | Native Neovim LSP | Language-server lifecycle and communication |
 | WinLibs | GCC and G++ toolchain |
 | Project build system | Compiler flags and compilation database |
 
-C and C++ must remain independently enabled while sharing clangd and compatible external tools.
+C and C++ remain independently enabled while sharing clangd and compatible external tools.
 
 ## 3. Language Server
 
@@ -112,7 +132,7 @@ The C language pack must not create another LSP client or duplicate shared serve
 
 ### Server definition and activation
 
-`nvim-lspconfig` supplies the clangd server definition. The shared integration configures the executable and enabled language filetypes through the native API.
+`nvim-lspconfig` supplies the clangd server definition. The shared integration configures the executable and enabled language filetypes through the native Neovim LSP API.
 
 The server definition must be available before language-pack activation so its capabilities and root markers are preserved.
 
@@ -217,6 +237,7 @@ C reuses the existing WinLibs GCC/MinGW-w64 POSIX UCRT x64 toolchain.
 | Tool | Executable | Purpose |
 |---|---|---|
 | GCC | `gcc.exe` | C compilation |
+| G++ | `g++.exe` | C++ compilation |
 | GNU Binutils | `ar.exe` | Static library archiving |
 | GNU Binutils | `ld.exe` | Linking |
 | GNU Binutils | `objdump.exe` | Object-file inspection |
@@ -230,12 +251,13 @@ The actual required executable inventory must be verified against the installed 
 - Do not install MSVC as part of the baseline.
 - Do not install a separate compiler solely for clangd.
 - Keep compilation independent of the language-server implementation.
+- Share the toolchain between C and C++ packs.
 
-clangd provides language intelligence. GCC performs compilation.
+clangd provides language intelligence. GCC and G++ perform compilation.
 
 ## 6. Treesitter
 
-**Approved parser: `c`**
+**Approved parsers: `c` and `cpp`**
 
 The C language pack contributes the following parser metadata:
 
@@ -245,9 +267,19 @@ parser_by_filetype = {
 }
 ```
 
-The existing central Treesitter configuration owns parser installation and setup.
+The C++ language pack independently contributes:
 
-The C language pack must not install or configure a separate Treesitter instance.
+```lua
+parser_by_filetype = {
+  cpp = "cpp",
+}
+```
+
+The existing central Treesitter configuration owns parser discovery, installation, and setup.
+
+When an enabled language pack declares a parser, the existing integration must handle its installation lifecycle.
+
+The language packs must not install or configure separate Treesitter instances.
 
 ## 7. Formatting
 
@@ -274,11 +306,13 @@ The formatter must respect project-level configuration when available:
 
 clangd provides language intelligence. clang-format provides source formatting. These responsibilities must remain separate.
 
+C and C++ share the same formatter executable and configuration mechanism.
+
 ## 8. Static Analysis
 
 **Approved analysis tool: clang-tidy**
 
-clang-tidy provides additional static analysis for C projects.
+clang-tidy provides additional static analysis for C and C++ projects.
 
 It can identify:
 
@@ -319,32 +353,159 @@ The implementation must not blindly force every `.h` file into C mode.
 
 clangd should use project metadata and header-inference mechanisms where appropriate.
 
-C++ header handling must be validated separately when the C++ pack is implemented.
+The C++ language pack must recognize its own source and header filetypes, including `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, and `.hxx`, as applicable to the existing configuration.
+
+C++ header handling must remain compatible with the C pack.
 
 ## 10. Source and Header Navigation
 
-The development workflow should support navigation between source and header files.
+The C/C++ workflow supports navigation between source and header files through clangd's source/header switching extension.
 
-Example relationship:
+Example relationships:
 
 ```text
 main.c
 main.h
 ```
 
-Navigation should reuse native LSP capabilities and existing keymap infrastructure.
+```text
+main.cpp
+main.hpp
+```
 
-The proposed mapping is:
+The implemented mapping is:
 
 ```text
 <leader>ch
 ```
 
-Before implementing it, inspect the existing keymap registry and confirm that the mapping is available.
+### Implementation
 
-A new navigation plugin is not justified solely for this feature.
+The mapping is registered through the existing centralized keymap module.
 
-## 11. Compilation Database Management
+The implementation:
+
+- Locates the clangd client attached to the current buffer.
+- Checks support for the source/header switching method.
+- Sends `textDocument/switchSourceHeader`.
+- Handles rejected requests and callback errors.
+- Handles missing matching files.
+- Opens the returned file in the original window.
+- Avoids switching if the original buffer or window is no longer valid.
+
+The mapping is buffer-local and registered for C and C++ buffers through the existing FileType autocmd infrastructure.
+
+No additional navigation plugin is required.
+
+## 11. CMake Build and Execution
+
+**Implemented integration: `lua/config/cmake.lua`**
+
+CMake provides a shared build and execution workflow for C and C++ projects.
+
+The integration is independent of the individual language packs and uses the existing project structure rather than introducing a separate project-root module.
+
+### Project discovery
+
+The module locates the outermost ancestor containing:
+
+```text
+CMakeLists.txt
+```
+
+It uses the current file buffer to identify the project.
+
+It rejects invalid buffers, unnamed buffers, and buffers without a valid file path.
+
+### Build workflow
+
+The implemented command is:
+
+```vim
+:CMakeBuild
+```
+
+The C/C++ buffer-local mapping is:
+
+```text
+<leader>cb
+```
+
+The command:
+
+1. Resolves the project root from the current buffer.
+2. Checks for the project's `build/` directory.
+3. Builds using the CMake build command.
+4. Runs the process with the project root as its working directory.
+5. Captures standard output and standard error.
+6. Parses supported compiler diagnostics into quickfix entries.
+7. Reports build success or failure.
+
+The build command is equivalent to:
+
+```powershell
+cmake --build build
+```
+
+The integration does not configure projects automatically.
+
+If the build directory does not exist, the user must configure the project explicitly:
+
+```powershell
+cmake -S . -B build
+```
+
+### Execution workflow
+
+The implemented command is:
+
+```vim
+:CMakeRun
+```
+
+The C/C++ buffer-local mapping is:
+
+```text
+<leader>cr
+```
+
+The command:
+
+1. Resolves the project root.
+2. Prompts for an executable path.
+3. Accepts project-relative or absolute paths.
+4. Rejects directories and non-executable files.
+5. Opens a bottom terminal split.
+6. Executes the program with the project root as its working directory.
+7. Cleans up the terminal window and buffer if process startup fails.
+
+The executable is selected explicitly by the user.
+
+The integration does not guess the target executable or automatically run the most recently built target.
+
+### Command initialization
+
+The CMake module defines `M.setup()`. Defining this function does not register commands until it is called.
+
+The root `init.lua` initializes the module directly:
+
+```lua
+require("config.cmake").setup()
+```
+
+This call is made once during startup alongside the other general configuration modules.
+
+The commands are available after initialization, independently of whether a C or C++ buffer is currently open.
+
+### Build-system scope
+
+CMake is the approved initial build integration.
+
+Make and Meson are deferred.
+
+The CMake integration does not replace the project's build configuration, compiler flags, or compilation database.
+
+## 12. Compilation Database Management
 
 A proposed command is:
 
@@ -367,15 +528,17 @@ If retained, it must:
 
 Do not introduce a new root-management module solely to support this proposal.
 
-## 12. External Tool Inventory
+## 13. External Tool Inventory
 
 | Tool | Category | Status |
 |---|---|---|
 | WinLibs GCC | Compiler | Approved and installed |
+| WinLibs G++ | Compiler | Approved and installed |
 | clangd | Language server | Approved and installed |
 | clang-format | Formatter | Approved and installed |
 | clang-tidy | Static analysis | Approved and installed |
-| CMake | Build integration | Supported where needed |
+| CMake | Build integration | Supported and installed |
+| Ninja | Build generator | Verified in real-project validation |
 | Bear | Compilation database generation | Optional |
 
 External tools must be managed through the existing modular Windows installation infrastructure.
@@ -390,18 +553,25 @@ For example:
 - clangd is shared between C and C++.
 - clang-format is shared between C and C++.
 - clang-tidy is shared between C and C++.
+- CMake and Ninja are shared build dependencies where required.
 
 No Mason installation or automatic startup installation is permitted.
 
-## 13. Configuration Ownership
+## 14. Configuration Ownership
 
 | Responsibility | Owner |
 |---|---|
 | C filetypes | C language pack |
+| C++ filetypes | C++ language pack |
 | C parser metadata | C language pack and central Treesitter configuration |
-| C language-server association | Shared clangd configuration |
+| C++ parser metadata | C++ language pack and central Treesitter configuration |
+| Language-server association | Shared clangd configuration |
 | LSP client lifecycle | Native Neovim LSP |
 | LSP keymaps | Centralized LSP keymap infrastructure |
+| C/C++ workflow keymaps | Centralized keymap module |
+| FileType mapping registration | `config.autocmds` |
+| CMake commands | `config.cmake` |
+| CMake initialization | Root `init.lua` |
 | Formatting | Conform |
 | Formatting rules | `.clang-format` |
 | Static-analysis rules | `.clang-tidy` |
@@ -411,11 +581,11 @@ No Mason installation or automatic startup installation is permitted.
 
 This separation prevents duplicate configuration and supports independent language-pack activation.
 
-## 14. Validation Requirements and Current Status
+## 15. Validation Requirements and Current Status
 
-Validation must distinguish between executable availability, configuration correctness, and actual editor behavior.
+Validation distinguishes between executable availability, configuration correctness, automated tests, and actual editor behavior.
 
-### 14.1 External tools
+### 15.1 External tools
 
 Verified versions:
 
@@ -426,12 +596,14 @@ Verified versions:
 | clangd | 23.1.5 |
 | clang-format | 23.1.5 |
 | clang-tidy | 23.1.5 |
+| CMake | 4.4.4 |
+| Ninja | 1.13.2 |
 
 The WinLibs compiler is the MinGW-w64 POSIX UCRT x64 toolchain.
 
 The installed LLVM clang executable targets MSVC. It must not be confused with the WinLibs GCC toolchain.
 
-### 14.2 clangd and native LSP validation
+### 15.2 clangd and native LSP validation
 
 The following C language-server checks have passed:
 
@@ -460,7 +632,9 @@ The installed definition and merged configuration were subsequently inspected. T
 
 The end-to-end workspace-symbol test must be rerun with the corrected initialization order before it is marked complete.
 
-### 14.3 Compilation database
+### 15.3 Compilation database
+
+Previously validated:
 
 - [x] Created a temporary `compile_commands.json`.
 - [x] clangd loaded the compilation database.
@@ -476,14 +650,17 @@ Remaining:
 - [ ] Validate CMake-generated database discovery.
 - [ ] Validate behavior without a compilation database.
 
-### 14.4 Treesitter
+### 15.4 Treesitter
 
 - [ ] Confirm the C parser is installed.
 - [ ] Confirm C buffers are recognized.
 - [ ] Confirm syntax highlighting.
 - [ ] Confirm no parser initialization errors.
+- [ ] Confirm the C++ parser is installed and operational.
 
-### 14.5 Formatting
+Parser installation must use the existing language-pack and Treesitter lifecycle. Manual parser installation is not the normal workflow.
+
+### 15.5 Formatting
 
 - [ ] Confirm Conform recognizes clang-format.
 - [ ] Validate `:Format`.
@@ -492,35 +669,112 @@ Remaining:
 - [ ] Confirm format-on-save remains disabled.
 - [ ] Confirm LSP formatting fallback remains disabled.
 
-### 14.6 Static analysis
+### 15.6 Static analysis
 
 - [ ] Validate clang-tidy against the temporary C project.
 - [ ] Validate compilation database usage.
 - [ ] Validate project-specific `.clang-tidy` rules.
 
-### 14.7 Header behavior
+### 15.7 Header behavior
 
 - [ ] Validate `.c` filetype detection.
 - [ ] Validate C header handling.
-- [ ] Validate C++ header handling after C++ implementation.
+- [ ] Validate C++ header handling.
 - [ ] Confirm headers are not incorrectly forced into C mode.
 
-### 14.8 Build and execution
+### 15.8 CMake build and execution
 
-- [ ] Compile a basic C program with GCC.
-- [ ] Link the resulting executable.
-- [ ] Execute the validation program successfully.
+Automated CMake tests:
 
-### 14.9 Remaining integration work
+- [x] Outermost CMake project-root detection.
+- [x] Invalid and unnamed buffer handling.
+- [x] Build command construction.
+- [x] Build-directory validation.
+- [x] Build process execution.
+- [x] Build process failure reporting.
+- [x] Build output parsing.
+- [x] Executable prompt cancellation.
+- [x] Empty executable input handling.
+- [x] Executable path resolution.
+- [x] Directory and missing executable rejection.
+- [x] Terminal startup failure cleanup.
 
-- [ ] Validate source/header navigation.
-- [ ] Validate automated smoke tests.
-- [ ] Validate interactive workflows.
+Real Windows project validation:
+
+- [x] CMake 4.4.4 detected.
+- [x] Ninja 1.13.2 detected.
+- [x] WinLibs GCC/G++ 16.2.0 detected.
+- [x] CMake project configured.
+- [x] Build executed successfully through `<leader>cb`.
+- [x] Executable launched successfully through `<leader>cr`.
+- [x] Executable output confirmed: `CMake + Ninja + WinLibs: OK`.
+
+The real-project test confirms the CMake build and execution mappings work through the running Neovim configuration.
+
+### 15.9 C/C++ keymaps and source/header navigation
+
+Automated checks:
+
+- [x] C/C++ build mapping registered buffer-locally.
+- [x] C/C++ run mapping registered buffer-locally.
+- [x] C/C++ source/header mapping registered buffer-locally.
+- [x] C/C++ mappings are not registered globally.
+- [x] Rust mappings remain buffer-local.
+- [x] C/C++ and Rust mappings remain isolated.
+- [x] Existing global Format mapping remains available.
+- [x] C FileType registers C/C++ mappings.
+- [x] C++ FileType registers C/C++ mappings.
+- [x] Unrelated filetypes do not receive C/C++ mappings.
+- [x] clangd source/header request uses the expected extension method.
+- [x] Request and callback errors are handled.
+- [x] Missing matching files are handled.
+- [x] Successful switching opens the returned file in the original window.
+
+Real-project validation:
+
+- [x] `<leader>ch` switches from source to header.
+- [x] `<leader>ch` switches from header to source.
+
+### 15.10 Automated quality checks
+
+The seven C/C++ and CMake test suites passed:
+
+| Test suite | Checks passed |
+|---|---:|
+| C/C++ keymaps | 7 |
+| C/C++ autocmds | 7 |
+| clangd source/header switching | 15 |
+| CMake project roots | 4 |
+| CMake build command | 3 |
+| CMake build execution | 6 |
+| CMake executable execution | 7 |
+| **Total** | **49** |
+
+Additional checks:
+
+- [x] Lua syntax validation: 64 Lua files passed.
+- [x] Targeted StyLua validation for the C/C++ implementation and selected tests.
+- [x] `git diff --check` completed cleanly.
+
+**Repository-wide formatting qualification:** `stylua --check .` reported existing formatting differences in unrelated configuration, plugin, Rust test, and other test files. These files were not broadly reformatted as part of C/C++ integration. The CMake executable test file also had an outstanding formatting difference and was excluded from the targeted StyLua command.
+
+The repository-wide formatting check must be reconciled separately. Do not treat the targeted StyLua pass as proof that the entire repository passes formatting validation.
+
+### 15.11 Remaining integration work
+
+- [ ] Rerun end-to-end workspace-symbol validation with the corrected server initialization order.
+- [ ] Complete remaining compilation database checks.
+- [ ] Validate Treesitter parser behavior.
+- [ ] Validate Conform formatting.
+- [ ] Validate clang-tidy analysis.
+- [ ] Complete C and C++ header classification checks.
 - [ ] Review installation-script integration.
 - [ ] Complete documentation review.
+- [ ] Reconcile repository-wide StyLua differences.
+- [ ] Run the final smoke suite.
 - [ ] Commit and push after implementation and validation are complete.
 
-## 15. Scope Exclusions
+## 16. Scope Exclusions
 
 The baseline C language pack does not introduce:
 
@@ -538,11 +792,15 @@ The baseline C language pack does not introduce:
 - Objective-C support.
 - CUDA support.
 
+CMake integration provides explicit build and execution commands. It does not automatically configure, build, or execute projects.
+
 These exclusions keep Stage 13 focused on language support.
 
-## 16. Relationship with C++ Support
+## 17. Relationship with C++ Support
 
 C and C++ are independent language packs that share appropriate infrastructure.
+
+Both language packs are implemented.
 
 | Component | C | C++ |
 |---|---|---|
@@ -555,6 +813,10 @@ C and C++ are independent language packs that share appropriate infrastructure.
 | Compiler | GCC | G++ |
 | Toolchain | WinLibs | WinLibs |
 | Compilation database | `compile_commands.json` | `compile_commands.json` |
+| Build integration | Shared CMake module | Shared CMake module |
+| Build mapping | `<leader>cb` | `<leader>cb` |
+| Run mapping | `<leader>cr` | `<leader>cr` |
+| Source/header mapping | `<leader>ch` | `<leader>ch` |
 
 ### Shared infrastructure principles
 
@@ -568,33 +830,51 @@ C and C++ are independent language packs that share appropriate infrastructure.
 8. Shared configuration must not assume that both languages are enabled.
 9. Shared dependencies must not be installed twice.
 10. C++ support must not regress existing C functionality.
+11. CMake build and execution workflows are shared rather than duplicated.
+12. C/C++ workflow mappings remain buffer-local.
 
-## 17. Completion Criteria
+## 18. Completion Criteria
 
-C support can be marked complete when:
+C support is implemented, and its core C/C++ integration has passed automated and real-project workflow validation.
+
+The following implementation criteria are complete:
 
 - [x] C language pack implemented.
+- [x] C++ language pack implemented independently.
 - [x] clangd integrated through native Neovim LSP.
 - [x] Shared clangd configuration supports independent C and C++ activation.
 - [x] WinLibs GCC verified.
+- [x] WinLibs G++ verified.
 - [x] clangd verified.
 - [x] clang-format verified as an installed executable.
 - [x] clang-tidy verified as an installed executable.
-- [x] Core C LSP requests validated, except Workspace Symbols.
-- [x] Document Symbols validated.
-- [ ] Workspace Symbols validated.
-- [ ] C Treesitter parser validated.
+- [x] CMake build and execution integration implemented.
+- [x] CMake initialization registered in root `init.lua`.
+- [x] C/C++ buffer-local keymaps implemented.
+- [x] Automated C/C++ and CMake tests passed: 49/49.
+- [x] Real CMake build passed.
+- [x] Real CMake executable execution passed.
+- [x] Real clangd source/header switching passed.
+- [x] Lua syntax validation passed.
+- [x] Targeted StyLua validation passed.
+- [x] `git diff --check` passed.
+
+The following validation criteria remain outstanding:
+
+- [ ] Workspace Symbols validated end to end.
+- [ ] C and C++ Treesitter parser behavior validated.
 - [ ] Conform formatting validated.
 - [ ] clang-tidy analysis validated.
-- [ ] Compilation database project behavior validated.
-- [ ] C filetype and header behavior validated.
-- [ ] Source/header navigation validated.
-- [ ] Automated smoke tests pass.
-- [ ] Interactive validation passes.
-- [ ] Documentation finalized.
+- [ ] Remaining compilation database behavior validated.
+- [ ] C and C++ header classification fully validated.
+- [ ] Installation-script integration reviewed.
+- [ ] Repository-wide formatting differences reconciled.
+- [ ] Final documentation and smoke-test review completed.
 - [ ] Changes committed and pushed.
 
-## 18. Final Architecture Decision
+Do not mark the entire C language-support workstream complete until the remaining validation criteria have been addressed or explicitly deferred.
+
+## 19. Final Architecture Decision
 
 C support uses a native-first, project-aware development architecture.
 
@@ -607,7 +887,9 @@ Approved baseline:
 - Static analysis: clang-tidy.
 - Compiler: GCC from WinLibs.
 - Compilation metadata: `compile_commands.json`.
-- Build integration: CMake where needed.
+- Build integration: CMake.
+- Build and execution commands: `:CMakeBuild` and `:CMakeRun`.
+- Source/header navigation: clangd extension through `<leader>ch`.
 - Installation: Explicit Windows installation scripts.
 
 C remains an independent language pack while reusing shared C/C++ infrastructure.

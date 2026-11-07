@@ -373,7 +373,7 @@ map("n", "<leader>ca", vim.lsp.buf.code_action, {
 -- Shell
 -- ============================================================
 
-vim.keymap.set("n", "<leader>cw", "<cmd>ShellcheckWiki<CR>", {
+map("n", "<leader>cw", "<cmd>ShellcheckWiki<CR>", {
   desc = "Open ShellCheck wiki",
 })
 
@@ -395,4 +395,82 @@ function M.rust(bufnr)
   rust_map("<leader>ct", "<cmd>Cargo test<CR>", "Run tests")
   rust_map("<leader>cc", "<cmd>Cargo check<CR>", "Check project")
 end
+
+-- ============================================================
+-- C and C++
+-- ============================================================
+
+local function switch_source_header(bufnr)
+  local method = "textDocument/switchSourceHeader"
+  local win = vim.api.nvim_get_current_win()
+  local clients = vim.lsp.get_clients({
+    bufnr = bufnr,
+    name = "clangd",
+  })
+
+  if #clients == 0 then
+    return vim.notify("clangd is not attached to this buffer", vim.log.levels.WARN)
+  end
+
+  local client = clients[1]
+
+  -- Keep this check defensive; clangd's request result remains authoritative.
+  if not client:supports_method(method, bufnr) then
+    return vim.notify("clangd does not support source/header switching", vim.log.levels.WARN)
+  end
+
+  local params = {
+    uri = vim.uri_from_bufnr(bufnr),
+  }
+
+  local sent = client:request(method, params, function(err, result)
+    if err then
+      return vim.notify("clangd source/header switch failed: " .. err.message, vim.log.levels.ERROR)
+    end
+
+    if not result then
+      return vim.notify("No matching source/header file found", vim.log.levels.INFO)
+    end
+
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return vim.notify("Original buffer is no longer valid", vim.log.levels.WARN)
+    end
+
+    if not vim.api.nvim_win_is_valid(win) then
+      return vim.notify("Original window is no longer valid", vim.log.levels.WARN)
+    end
+
+    if vim.api.nvim_win_get_buf(win) ~= bufnr then
+      return vim.notify("Original buffer is no longer displayed in its window", vim.log.levels.WARN)
+    end
+
+    local filename = vim.uri_to_fname(result)
+
+    vim.api.nvim_win_call(win, function()
+      vim.cmd.edit(vim.fn.fnameescape(filename))
+    end)
+  end, bufnr)
+
+  if not sent then
+    return vim.notify("clangd rejected the source/header switch request", vim.log.levels.WARN)
+  end
+end
+
+-- Register buffer-local CMake and clangd workflow mappings.
+function M.c_cpp(bufnr)
+  local function c_cpp_map(lhs, command, description)
+    map("n", lhs, command, {
+      buffer = bufnr,
+      desc = "C/C++: " .. description,
+    })
+  end
+
+  c_cpp_map("<leader>cb", "<cmd>CMakeBuild<CR>", "Build project")
+  c_cpp_map("<leader>cr", "<cmd>CMakeRun<CR>", "Run executable")
+
+  c_cpp_map("<leader>ch", function()
+    switch_source_header(bufnr)
+  end, "Switch source/header")
+end
+
 return M

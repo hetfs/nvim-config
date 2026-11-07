@@ -177,6 +177,22 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 })
 
 -- ============================================================
+-- C and C++
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+  group = group,
+  desc = "Configure C and C++ buffers",
+  pattern = {
+    "c",
+    "cpp",
+  },
+  callback = function(event)
+    require("config.keymaps").c_cpp(event.buf)
+  end,
+})
+
+-- ============================================================
 -- Rust
 -- ============================================================
 

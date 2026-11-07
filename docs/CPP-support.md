@@ -1,13 +1,12 @@
+# Stage 13: C++ Language Support
 
-# C++ Support
+## 1. Purpose
 
-C++ support is implemented as an independent language pack in the Neovim configuration.
+This document defines the architecture, dependencies, implementation decisions, and validation requirements for C++ language support in the Neovim configuration.
 
-It uses the native Neovim LSP client, `clangd` for language intelligence, `clang-format` for manual formatting, and Tree-sitter for syntax parsing and highlighting.
+C++ is an independent Stage 13 language pack. It uses the native Neovim LSP architecture, shares clangd integration with C, and maintains independent language metadata and activation.
 
-The implementation shares the clangd integration with C while keeping language-specific metadata and activation independent.
-
-## 1. Design Principles
+The implementation follows these principles:
 
 - Native Neovim LSP using `vim.lsp.config()` and `vim.lsp.enable()`.
 - No Mason or automatic external tool installation.
@@ -16,10 +15,15 @@ The implementation shares the clangd integration with C while keeping language-s
 - Project-aware compilation through a compilation database.
 - Independent C and C++ language-pack activation.
 - Shared clangd configuration for C and C++.
+- Shared CMake build and execution infrastructure.
+- Buffer-local language workflow mappings.
+- Explicit external-tool installation and validation.
 
 ## 2. Architecture
 
 ### Directory structure
+
+The relevant implementation structure is:
 
 ```text
 lua/
@@ -32,9 +36,11 @@ lua/
 │       └── clangd.lua
 │
 ├── config/
+│   ├── cmake.lua
 │   ├── languages.lua
 │   ├── format.lua
-│   └── keymaps.lua
+│   ├── keymaps.lua
+│   └── autocmds.lua
 │
 └── plugins/
     ├── conform.lua
@@ -57,17 +63,17 @@ Implementation:
 -- The shared clangd integration owns LSP configuration and activation.
 
 local M = {
-  formatters = {
-    cpp = { "clang_format" },
-  },
+    formatters = {
+        cpp = { "clang_format" },
+    },
 
-  parser_by_filetype = {
-    cpp = "cpp",
-  },
+    parser_by_filetype = {
+        cpp = "cpp",
+    },
 }
 
 function M.setup()
-  require("lsp.servers.clangd").setup()
+    require("lsp.servers.clangd").setup()
 end
 
 return M
@@ -83,17 +89,39 @@ Enable C++ independently in:
 lua/config/languages.lua
 ```
 
+Example:
+
 ```lua
 packs = {
-  cpp = true,
+    cpp = true,
 }
 ```
 
 C and C++ can be enabled independently. When both are enabled, they share one clangd configuration.
 
+### Shared CMake integration
+
+The CMake workflow is implemented in:
+
+```text
+lua/config/cmake.lua
+```
+
+It provides project discovery, build, and executable execution for both C and C++.
+
+The root `init.lua` initializes it directly:
+
+```lua
+require("config.cmake").setup()
+```
+
+This initialization registers `:CMakeBuild` and `:CMakeRun` once during startup.
+
 ## 3. Toolchain
 
-The C++ integration uses the LLVM toolchain and MinGW-w64 GCC toolchain.
+**Approved compiler toolchain: WinLibs GCC/G++ with LLVM tooling.**
+
+The C++ integration uses the WinLibs MinGW-w64 POSIX UCRT x64 toolchain for compilation and LLVM tools for language intelligence and formatting.
 
 | Component | Purpose |
 |---|---|
@@ -102,7 +130,7 @@ The C++ integration uses the LLVM toolchain and MinGW-w64 GCC toolchain.
 | `clang` | LLVM compiler |
 | `g++` | MinGW-w64 C++ compiler |
 | `gcc` | MinGW-w64 C compiler |
-| `clang-tidy` | Available for optional static analysis |
+| `clang-tidy` | Optional static analysis |
 
 ### Validated Windows toolchain
 
@@ -114,8 +142,12 @@ The C++ integration uses the LLVM toolchain and MinGW-w64 GCC toolchain.
 | clang-tidy | 23.1.5 |
 | GCC | 16.2.0 |
 | G++ | 16.2.0 |
+| CMake | 4.4.4 |
+| Ninja | 1.13.2 |
 
 LLVM is installed separately from Neovim. The MinGW-w64 compiler provides the GCC and G++ toolchains.
+
+The LLVM clang executable targets MSVC in the validated environment. It must not be confused with the WinLibs GCC/G++ toolchain.
 
 External tools must be installed and available through the system `PATH` before Neovim uses them.
 
@@ -150,14 +182,16 @@ The effective configuration uses:
 
 ```lua
 vim.lsp.config("clangd", {
-  cmd = cmd,
-  filetypes = filetypes,
+    cmd = cmd,
+    filetypes = filetypes,
 })
 
 vim.lsp.enable("clangd")
 ```
 
 A configuration guard prevents repeated setup.
+
+The shared module must preserve the existing clangd server definition, including its root markers and supported project metadata.
 
 ### Compilation database
 
@@ -181,19 +215,35 @@ A compilation database provides the compiler command and compilation arguments f
 
 For reliable project diagnostics and navigation, generate a compilation database using the project's build system.
 
-Example structure:
+Example:
 
 ```json
 [
-  {
-    "directory": "C:/projects/example/build",
-    "command": "g++ -std=c++20 -I../include -c ../src/main.cpp",
-    "file": "C:/projects/example/src/main.cpp"
-  }
+    {
+        "directory": "C:/projects/example/build",
+        "command": "g++ -std=c++20 -I../include -c ../src/main.cpp",
+        "file": "C:/projects/example/src/main.cpp"
+    }
 ]
 ```
 
 The paths and compiler arguments must match the actual project build environment.
+
+### CMake compilation database generation
+
+CMake can generate the compilation database:
+
+```powershell
+cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+```
+
+The generated database is normally located at:
+
+```text
+build/compile_commands.json
+```
+
+clangd must be able to locate the database in the appropriate build directory.
 
 ## 5. Formatting
 
@@ -203,7 +253,7 @@ Language-pack metadata:
 
 ```lua
 formatters = {
-  cpp = { "clang_format" },
+    cpp = { "clang_format" },
 }
 ```
 
@@ -229,12 +279,20 @@ Automatic formatting remains disabled:
 
 ```lua
 format_on_save = {
-  enabled = false,
-  timeout_ms = 500,
+    enabled = false,
+    timeout_ms = 500,
 }
 ```
 
 This keeps formatting under explicit user control.
+
+The formatter must respect project-level configuration when available:
+
+```text
+.clang-format
+```
+
+C and C++ share the same formatter executable and configuration mechanism.
 
 ## 6. Tree-sitter
 
@@ -244,7 +302,7 @@ Language-pack metadata:
 
 ```lua
 parser_by_filetype = {
-  cpp = "cpp",
+    cpp = "cpp",
 }
 ```
 
@@ -256,11 +314,144 @@ The shared Tree-sitter integration:
 4. Starts native Tree-sitter highlighting when the parser becomes available.
 5. Avoids duplicate installation requests.
 
-No separate C++ Tree-sitter plugin is required.
+Parser installation belongs to the existing language-pack and Tree-sitter lifecycle.
 
-## 7. Validated Features
+No separate C++ Tree-sitter plugin or manual parser installation workflow is required.
+
+## 7. CMake Build and Execution
+
+C++ uses the shared CMake integration:
+
+```text
+lua/config/cmake.lua
+```
+
+The integration supports C and C++ projects without duplicating build logic in individual language packs.
+
+### Project discovery
+
+The module locates the outermost ancestor containing:
+
+```text
+CMakeLists.txt
+```
+
+It uses the current source buffer to identify the project root.
+
+It rejects invalid buffers, unnamed buffers, and buffers without a valid file path.
+
+### Build command
+
+The implemented command is:
+
+```vim
+:CMakeBuild
+```
+
+The C++ buffer-local mapping is:
+
+```text
+<leader>cb
+```
+
+The command:
+
+1. Resolves the CMake project root.
+2. Checks for the project's `build/` directory.
+3. Executes the CMake build.
+4. Uses the project root as the process working directory.
+5. Captures standard output and standard error.
+6. Parses supported compiler diagnostics into quickfix entries.
+7. Reports build success or failure.
+
+The build command is equivalent to:
+
+```powershell
+cmake --build build
+```
+
+The integration does not configure projects automatically.
+
+If the build directory does not exist, configure the project explicitly:
+
+```powershell
+cmake -S . -B build
+```
+
+### Executable command
+
+The implemented command is:
+
+```vim
+:CMakeRun
+```
+
+The C++ buffer-local mapping is:
+
+```text
+<leader>cr
+```
+
+The command:
+
+1. Resolves the project root.
+2. Prompts for an executable path.
+3. Accepts project-relative or absolute paths.
+4. Rejects directories and non-executable files.
+5. Opens a bottom terminal split.
+6. Executes the selected program with the project root as its working directory.
+7. Cleans up the terminal window and buffer if process startup fails.
+
+The executable is selected explicitly by the user.
+
+The integration does not guess the target executable or automatically run the most recently built target.
+
+### Build-system scope
+
+CMake is the approved initial build integration.
+
+Make and Meson are deferred.
+
+CMake does not replace the project's compiler configuration, build configuration, or compilation database.
+
+## 8. Source and Header Navigation
+
+C++ supports source/header navigation through clangd's `textDocument/switchSourceHeader` extension.
+
+Example relationship:
+
+```text
+main.cpp
+main.hpp
+```
+
+The implemented mapping is:
+
+```text
+<leader>ch
+```
+
+The mapping is registered through the centralized keymap module and is buffer-local.
+
+The implementation:
+
+- Locates the clangd client attached to the current buffer.
+- Checks support for the source/header switching method.
+- Sends the clangd extension request.
+- Handles rejected requests and callback errors.
+- Handles missing matching files.
+- Opens the returned file in the original window.
+- Avoids switching if the original buffer or window is no longer valid.
+
+The mapping is registered for C and C++ buffers through the existing FileType autocmd infrastructure.
+
+No additional navigation plugin is required.
+
+## 9. Validated Features
 
 The C++ integration was tested on Windows using Neovim 0.12.6.
+
+### 9.1 Previously validated language-server features
 
 | Feature | Result |
 |---|---|
@@ -276,6 +467,11 @@ The C++ integration was tested on Windows using Neovim 0.12.6.
 | Symbol rename | Passed |
 | Document symbols | Passed |
 | Workspace symbols | Passed |
+
+### 9.2 Previously validated formatting and syntax features
+
+| Feature | Result |
+|---|---|
 | clang-format executable | Passed |
 | Manual Conform formatting | Passed |
 | Format-on-save disabled | Passed |
@@ -284,51 +480,115 @@ The C++ integration was tested on Windows using Neovim 0.12.6.
 | C++ syntax-tree parsing | Passed |
 | Shared C/C++ clangd configuration | Passed |
 
-### Validation environment
+These results belong to the earlier C++ validation workspace and should be retained as historical implementation evidence.
 
-Temporary validation workspace:
+### 9.3 Real-project workflow validation
+
+The C++ integration was additionally tested using a real Windows CMake project.
+
+Validation environment:
+
+| Component | Version |
+|---|---|
+| Neovim | 0.12.6 |
+| CMake | 4.4.4 |
+| Ninja | 1.13.2 |
+| GCC | 16.2.0 |
+| G++ | 16.2.0 |
+| Platform | Windows |
+
+The test used the temporary project:
 
 ```text
-%TEMP%\nvim-cpp-validation
+%TEMP%\nvim-config-cmake-smoke
 ```
 
-The tests covered a C++ source file containing:
+Results:
 
-- A function declaration and definition.
-- A function call.
-- Standard library usage.
-- A deliberately undefined identifier for diagnostics.
-- Symbol references and rename operations.
-- Workspace symbol indexing.
+| Workflow | Mapping | Result |
+|---|---|---|
+| Build CMake project | `<leader>cb` | Passed |
+| Run compiled executable | `<leader>cr` | Passed |
+| Switch source to header | `<leader>ch` | Passed |
+| Switch header to source | `<leader>ch` | Passed |
 
-The compilation database was also validated as a JSON array, including the single-entry case.
+The executable produced:
 
-## 8. Current Limitations
+```text
+CMake + Ninja + WinLibs: OK
+```
+
+These tests confirm that the CMake workflows and clangd source/header switching operate through the running Neovim configuration.
+
+### 9.4 Automated C/C++ and CMake tests
+
+Seven test suites passed:
+
+| Test suite | Checks passed |
+|---|---:|
+| C/C++ keymaps | 7 |
+| C/C++ autocmds | 7 |
+| clangd source/header switching | 15 |
+| CMake project roots | 4 |
+| CMake build command | 3 |
+| CMake build execution | 6 |
+| CMake executable execution | 7 |
+| **Total** | **49** |
+
+Additional quality checks:
+
+- [x] Lua syntax validation: 64 Lua files passed.
+- [x] Targeted StyLua validation for the C/C++ implementation and selected tests.
+- [x] `git diff --check` completed cleanly.
+
+**Repository-wide formatting qualification:** `stylua --check .` reported existing formatting differences in unrelated configuration, plugin, Rust test, and other test files. The CMake executable test file also had an outstanding formatting difference and was excluded from the targeted StyLua command.
+
+The repository-wide formatting check must be reconciled separately. The targeted StyLua pass does not establish that the entire repository passes formatting validation.
+
+## 10. Current Limitations and Remaining Validation
 
 The following features are not part of the validated baseline:
 
 - Automatic format-on-save.
 - Automatic toolchain installation.
-- clang-tidy integration.
-- Dedicated source/header switching.
-- Custom C++ build commands.
+- Dedicated clang-tidy integration.
+- Automatic compilation database generation.
+- Automatic project configuration.
+- Automatic build execution.
 - Dedicated C++ debugging configuration.
+- Dedicated C++ testing frameworks.
 
-Some of these capabilities can be considered separately without expanding the baseline unnecessarily.
+The following additional validation remains outstanding:
 
-## 9. Future Considerations
+- [ ] Reconfirm the C++ LSP and Tree-sitter tests in the current integrated configuration.
+- [ ] Validate project include directories through the compilation database.
+- [ ] Validate project preprocessor definitions.
+- [ ] Validate language-standard flags.
+- [ ] Validate CMake-generated compilation database discovery.
+- [ ] Validate clangd behavior without a compilation database.
+- [ ] Validate clang-tidy against a real C++ project.
+- [ ] Complete C++ header classification checks.
+- [ ] Review external-tool installation-script integration.
+- [ ] Reconcile repository-wide StyLua differences.
+- [ ] Complete final documentation and smoke-test review.
+
+These checks must be completed or explicitly deferred before claiming full Stage 13 C++ validation.
+
+## 11. Future Considerations
 
 Potential future improvements should be evaluated independently:
 
 - clang-tidy diagnostics and static analysis.
-- Source/header navigation through clangd.
-- Build-system integration for CMake and other project generators.
+- Additional compilation database discovery workflows.
+- Make and Meson build-system support.
 - C++ debugging through the existing DAP architecture.
 - Additional compiler support where required.
 
-Do not introduce another language server or formatter without a demonstrated requirement.
+Do not introduce another language server, formatter, or project-management module without a demonstrated requirement.
 
-## 10. References
+The existing CMake and clangd integrations should remain the default shared infrastructure.
+
+## 12. References
 
 - [clangd documentation](https://clangd.llvm.org/)
 - [clangd configuration](https://clangd.llvm.org/config)
@@ -337,3 +597,5 @@ Do not introduce another language server or formatter without a demonstrated req
 - [LLVM project](https://github.com/llvm/llvm-project)
 - [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)
 - [Conform.nvim](https://github.com/stevearc/conform.nvim)
+- [CMake documentation](https://cmake.org/documentation/)
+- [Ninja documentation](https://ninja-build.org/manual.html)

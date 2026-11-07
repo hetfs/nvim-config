@@ -106,6 +106,7 @@ require("plugins.mini-pairs")
 -- General configuration and native LSP behavior.
 require("config.keymaps")
 require("config.lsp")
+require("config.cmake").setup()
 
 -- Optional shared LSP integrations.
 require("lsp.servers.emmet").setup()
