@@ -1,35 +1,47 @@
-# Rust installation guide for `nvim-config`
+# Rust installation guide for Windows
 
-This guide documents the Windows MSVC toolchain setup required to develop and build Rust projects for the `nvim-config` Rust language pack.
+This guide documents the Windows MSVC toolchain installation required to develop and build Rust projects on Windows.
 
-Rust installation is deliberately separate from Neovim. Neovim configures Rust tooling, but it does not install the Rust compiler, linker, Windows SDK, or external utilities.
+It covers Rustup, the Rust toolchain, Rust components, Visual Studio Build Tools, the Windows SDK, and the verification of the native build environment.
 
-This guide records the verified Windows installation state as of 7 November 2026. It covers external prerequisites and toolchain verification only. The separate `rust-support.md` document defines the Stage 13 Neovim integration.
+Rust installation is independent of Neovim. Editor configuration does not install the Rust compiler, linker, Windows SDK, or external utilities.
+
+This guide records the verified installation state as of **7 November 2026**.
 
 ## 1. Installation requirements
 
-The Rust setup uses the native Windows MSVC target:
+The Rust environment uses the native Windows MSVC target.
 
-| Component | Purpose | Verified state |
+| Component | Purpose | Required state |
 | --- | --- | --- |
 | `rustup` | Rust toolchain manager | Installed |
 | `rustc` | Rust compiler | Installed |
 | `cargo` | Build and package manager | Installed |
-| `rust-analyzer` | Language server executable | Installed |
+| `rust-analyzer` | Rust language server executable | Installed |
 | `rustfmt` | Rust formatter | Installed |
 | `rust-src` | Rust standard-library source | Installed |
 | `clippy` | Rust linter | Installed |
 | `rust-docs` | Local Rust documentation | Installed |
-| MSVC C++ Build Tools | Native compiler and linker | Executables found on disk |
+| MSVC C++ Build Tools | Native compiler and linker | Installed |
 | Windows SDK | Windows headers and libraries | Installed |
 
-The active toolchain is `stable-x86_64-pc-windows-msvc`, with target `x86_64-pc-windows-msvc`.
+The active toolchain is:
+
+```text
+stable-x86_64-pc-windows-msvc
+```
+
+The target architecture is:
+
+```text
+x86_64-pc-windows-msvc
+```
 
 Keep this target unless you deliberately decide to maintain a separate GNU-based Rust environment.
 
 ## 2. Install Visual Studio Build Tools
 
-The MSVC toolchain requires Microsoft's C++ build tools. Installing Rust alone is not sufficient.
+The MSVC Rust toolchain requires Microsoft's C++ build tools. Installing Rust alone is not sufficient for projects that depend on native Windows compilation.
 
 Download the installer:
 
@@ -56,9 +68,13 @@ If it is available, install it:
 winget install --id Microsoft.VisualStudio.BuildTools --exact
 ```
 
-Then open Visual Studio Installer and select the C++ workload and required components. Installing the package alone does not guarantee that the complete workload is installed.
+After installation, open Visual Studio Installer and select the C++ workload and required components.
+
+Installing the package alone does not guarantee that the complete C++ workload is installed.
 
 ## 3. Verify Visual Studio Build Tools and the Windows SDK
+
+### 3.1 Locate Visual Studio
 
 Use `vswhere.exe` to locate the Visual Studio Build Tools installation:
 
@@ -78,9 +94,13 @@ To check whether the Visual C++ workload is registered:
     -property installationPath
 ```
 
-A returned installation path confirms that `vswhere` found an installation containing that workload. No output means the workload was not confirmed by this query. It does not, by itself, prove that no MSVC files are installed.
+A returned installation path confirms that `vswhere` found an installation containing the requested workload.
 
-Set the installation path returned by `vswhere` and inspect the MSVC toolset:
+No output means the workload was not confirmed by this query. It does not, by itself, prove that MSVC files are absent.
+
+### 3.2 Inspect the MSVC toolset
+
+Set the installation path returned by `vswhere`:
 
 ```powershell
 $vsPath = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools'
@@ -96,7 +116,16 @@ Get-ChildItem "$msvcPath\*\bin\Hostx64\x64\cl.exe"
 Get-ChildItem "$msvcPath\*\bin\Hostx64\x64\link.exe"
 ```
 
-Check the standard Windows SDK location:
+The expected executables are:
+
+- `cl.exe`: Microsoft C/C++ compiler.
+- `link.exe`: Microsoft linker.
+
+Finding these files confirms that the executables exist on disk. It does not confirm that they are available through the current shell's `PATH`.
+
+### 3.3 Inspect the Windows SDK
+
+Check the standard Windows SDK installation directory:
 
 ```powershell
 $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\10"
@@ -111,21 +140,21 @@ Get-ChildItem "$sdkPath\Lib" -Directory -ErrorAction SilentlyContinue
 
 The SDK's `Include`, `Lib`, and `bin` directories should exist. The versioned `Include` and `Lib` directories identify the installed SDK version.
 
-### Verified installation on this machine
+### 3.4 Verified installation on this machine
 
 The following results were observed:
 
 | Item | Verified result |
 | --- | --- |
 | Visual Studio installation | `C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools` |
-| Visual Studio Build Tools version | Visual Studio 2026 Developer PowerShell reported `18.11.3` |
+| Visual Studio Build Tools version | `18.11.3` |
 | MSVC toolset directories | `14.44.35207` and `14.51.36231` |
 | `cl.exe` | Found under `14.44.35207\bin\Hostx64\x64` |
 | `link.exe` | Found under `14.44.35207\bin\Hostx64\x64` |
 | Windows SDK | `10.0.22621.0` |
 | C++ workload query | No installation path returned by the `vswhere -requires` query |
 
-The compiler and linker were found on disk with:
+The compiler and linker were found on disk using:
 
 ```powershell
 $vsPath = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools'
@@ -137,7 +166,9 @@ Get-ChildItem "$msvcPath\*\bin\Hostx64\x64\link.exe"
 
 ## 4. Verify the MSVC environment
 
-Visual Studio provides a developer-shell initialization script. The following command was used to launch the Visual Studio 2026 Developer PowerShell environment:
+Visual Studio provides a developer-shell initialization script that configures the environment for native development.
+
+The following command was used to launch the Visual Studio 2026 Developer PowerShell environment:
 
 ```powershell
 $vsPath = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools'
@@ -153,22 +184,48 @@ However, these checks still did not resolve the executables in that session:
 ```powershell
 Get-Command cl.exe
 Get-Command link.exe
+
+where.exe cl.exe
+where.exe link.exe
 ```
 
-Both commands reported that the executables were not recognized. `where.exe cl.exe` and `where.exe link.exe` also returned no matches in the ordinary PowerShell session.
+The commands did not find the compiler or linker through the current `PATH`.
 
 Record this as an environment-discovery issue. Do not report that `cl.exe` and `link.exe` are available through the current PowerShell `PATH` merely because their files exist on disk.
 
-The successful clean Cargo build documented in Section 6 confirms that the tested Rust project can build. It does not establish that arbitrary native build scripts or other tools can discover MSVC executables through the current shell environment.
+The successful Cargo build documented in Section 7 confirms that the tested Rust project can build. It does not establish that arbitrary native build scripts or other tools can discover MSVC executables through the current shell environment.
 
-If a future dependency requires direct MSVC executable discovery, investigate the Visual Studio environment setup and workload/component selection. Do not add hardcoded Visual Studio paths to the Neovim configuration.
+If a future dependency requires direct MSVC executable discovery, investigate the Visual Studio environment setup and workload/component selection.
 
-## 5. Verify and install Rust components
+## 5. Install and verify Rust
 
-The active toolchain and host can be checked with:
+### 5.1 Install Rustup
+
+Download Rustup from the official installation page:
+
+- [Rustup installation](https://rustup.rs/)
+
+For Windows, use the installer appropriate for the MSVC toolchain.
+
+Rustup manages Rust toolchains and their components. It allows Rust to be updated without manually replacing compiler binaries.
+
+### 5.2 Verify Rustup
+
+Check the installed Rustup version:
+
+```powershell
+rustup --version
+```
+
+Check the active toolchain:
 
 ```powershell
 rustup show
+```
+
+Verify the compiler and Cargo:
+
+```powershell
 rustc --version
 cargo --version
 rustc -vV
@@ -180,27 +237,51 @@ Confirm that the host is:
 x86_64-pc-windows-msvc
 ```
 
-Install the components used by the Neovim Rust integration:
+### 5.3 Verify the active toolchain
+
+The expected active toolchain is:
+
+```text
+stable-x86_64-pc-windows-msvc
+```
+
+If it is not installed, install it:
+
+```powershell
+rustup toolchain install stable-x86_64-pc-windows-msvc
+```
+
+Set it as the default only if that is your intended system-wide Rust toolchain:
+
+```powershell
+rustup default stable-x86_64-pc-windows-msvc
+```
+
+Check the active toolchain again:
+
+```powershell
+rustup show
+```
+
+## 6. Install and verify Rust components
+
+Install the components required for Rust development:
 
 ```powershell
 rustup component add rust-analyzer rustfmt rust-src
 ```
 
-Install Clippy if it is not already installed and the project will use it:
+Install Clippy if it is not already installed:
 
 ```powershell
 rustup component add clippy
 ```
 
-The corresponding `nvim-config` setting controls whether the Rust pack uses Clippy:
+Install local Rust documentation if required:
 
-```lua
-tools = {
-  rust_clippy = false,
-},
+```powershell
+rustup component add rust-docs
 ```
-
-Set `rust_clippy = true` only when Clippy is installed and the Rust pack is configured to use it. Component installation and pack activation are separate decisions.
 
 Check the installed components:
 
@@ -208,7 +289,7 @@ Check the installed components:
 rustup component list --installed
 ```
 
-### Verified installed components
+### 6.1 Verified installed components
 
 The following output was observed:
 
@@ -236,11 +317,38 @@ The Rust executables were found in:
 C:\Users\Administrator\.cargo\bin
 ```
 
-References: [Rustup components](https://rust-lang.github.io/rustup/concepts/components.html) · [rust-analyzer installation](https://rust-analyzer.github.io/book/installation.html).
+### 6.2 Verified Rust versions
 
-## 6. Test a Rust project
+The following versions were observed:
 
-Before configuring Rust support in Neovim, verify that Cargo can create, compile, test, and execute a Rust project.
+| Tool | Verified version |
+| --- | --- |
+| Rustup | `1.29.3` |
+| Rust compiler | `1.99.1` |
+| Cargo | `1.99.1` |
+| Rust Analyzer | `1.99.1` |
+| Rustfmt | `1.10.0-stable` |
+
+The compiler reported:
+
+```text
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+```
+
+Cargo reported:
+
+```text
+cargo 1.99.1 (5f94df478 2026-08-27)
+```
+
+References:
+
+- [Rustup components](https://rust-lang.github.io/rustup/concepts/components.html)
+- [rust-analyzer installation](https://rust-analyzer.github.io/book/installation.html)
+
+## 7. Test a Rust project
+
+Before relying on the installation, verify that Cargo can create, compile, test, and execute a Rust project.
 
 Run these commands in PowerShell:
 
@@ -271,7 +379,7 @@ If formatting needs correction, run:
 cargo fmt
 ```
 
-### Verified test results
+### 7.1 Verified test results
 
 The following workflow was completed successfully:
 
@@ -301,23 +409,181 @@ cargo run
 
 The clean command removed the previous build artifacts. The subsequent build, test, and run all succeeded.
 
-This confirms that the tested Rust project can build and run with the installed MSVC-targeted Rust toolchain. It does not prove that `cl.exe` and `link.exe` are discoverable by every process through the current PowerShell `PATH`.
+This confirms that the tested Rust project can build and run with the installed MSVC-targeted Rust toolchain.
 
-## 7. Verify the intended Neovim launch environment
+It does not prove that `cl.exe` and `link.exe` are discoverable by every process through the current PowerShell `PATH`.
 
-Neovim must be able to discover the Rust tools it uses. Check the Rust executables in the same shell from which Neovim will be launched:
+## 8. Manage Rust dependencies with the Windows installer
 
-```powershell
-Get-Command rustc, cargo, rust-analyzer, rustfmt
+The repository provides a PowerShell script for checking and updating the Rust toolchain and its required components.
+
+Script location:
+
+```text
+scripts/core/windows/rust.ps1
 ```
 
-The standard rustup binary directory on Windows is:
+Run the script from the repository root.
+
+The script manages Rustup, the configured Rust toolchain, Rust components, and verification of the Windows native build environment.
+
+It does not install Visual Studio Build Tools or the Windows SDK.
+
+### 8.1 Check the existing installation
+
+Use check mode to inspect the installed Rust environment without installing or updating components:
+
+```powershell
+pwsh -NoProfile -File .\scripts\core\windows\rust.ps1 -Check
+```
+
+Check mode verifies:
+
+- Windows platform detection.
+- Rustup availability and version.
+- Active Rust toolchain.
+- Required Rust components.
+- Rust executable availability and versions.
+- MSVC compiler and linker files.
+- Visual C++ workload discovery through `vswhere`.
+- Windows SDK installation.
+
+A successful check returns exit code `0`. A failed required check returns exit code `1`.
+
+Check mode does not install or update Rust components.
+
+To inspect the exit code after execution:
+
+```powershell
+$LASTEXITCODE
+```
+
+### 8.2 Update the Rust toolchain
+
+Use update mode to update the configured toolchain and ensure the required Rust components are installed:
+
+```powershell
+pwsh -NoProfile -File .\scripts\core\windows\rust.ps1 -Update
+```
+
+The script:
+
+1. Detects the existing Rustup installation.
+2. Ensures the configured Rust toolchain is installed.
+3. Updates the toolchain.
+4. Installs required components that are missing.
+5. Skips components that are already installed.
+6. Verifies Rust tools and components after the update.
+7. Checks MSVC and Windows SDK availability.
+
+The script does not reinstall components that are already present.
+
+### 8.3 Verified check execution
+
+The following command completed successfully on 7 November 2026:
+
+```powershell
+pwsh -NoProfile -File .\scripts\core\windows\rust.ps1 -Check
+```
+
+The script confirmed:
+
+```text
+[PASS] Windows platform detected.
+[PASS] Rustup found
+[PASS] rustup 1.29.3
+[PASS] rust-analyzer is installed.
+[PASS] rustfmt is installed.
+[PASS] rust-src is installed.
+[PASS] clippy is installed.
+[PASS] rust-docs is installed.
+[PASS] Active toolchain: stable-x86_64-pc-windows-msvc (default)
+```
+
+It also found the MSVC compiler, linker, and Windows SDK.
+
+The following warnings remained:
+
+```text
+[WARN] The Visual C++ workload was not confirmed by vswhere.
+[WARN] cl.exe exists on disk but is not discoverable through PATH.
+[WARN] link.exe exists on disk but is not discoverable through PATH.
+```
+
+The script completed with:
+
+```text
+[PASS] Rust dependency installation and verification completed.
+```
+
+The PowerShell exit code was verified separately:
+
+```powershell
+$LASTEXITCODE
+0
+```
+
+**Result:** Check mode passed.
+
+### 8.4 Verified update execution
+
+The following command also completed successfully:
+
+```powershell
+pwsh -NoProfile -File .\scripts\core\windows\rust.ps1 -Update
+```
+
+The script detected the existing stable toolchain:
+
+```text
+[SKIP] stable-x86_64-pc-windows-msvc is already installed.
+```
+
+Rustup checked for updates and reported:
+
+```text
+stable-x86_64-pc-windows-msvc unchanged - rustc 1.99.1 (58cf8f9c3 2026-10-13)
+```
+
+The script skipped the five components that were already installed:
+
+```text
+[SKIP] rust-analyzer is already installed.
+[SKIP] rustfmt is already installed.
+[SKIP] rust-src is already installed.
+[SKIP] clippy is already installed.
+[SKIP] rust-docs is already installed.
+```
+
+Post-update verification confirmed the required tools, components, active toolchain, MSVC compiler and linker files, and Windows SDK.
+
+The same three MSVC environment warnings remained.
+
+The script completed with:
+
+```text
+[PASS] Rust dependency installation and verification completed.
+```
+
+**Result:** Update mode completed successfully. The stable toolchain was already current, and no missing components required installation.
+
+## 9. Verify the Windows environment
+
+### 9.1 Verify Rust executable discovery
+
+Check the Rust commands from the PowerShell environment in which Rust applications will be built:
+
+```powershell
+Get-Command rustup, rustc, cargo, rust-analyzer, rustfmt
+```
+
+The standard Rustup binary directory on Windows is:
 
 ```text
 %USERPROFILE%\.cargo\bin
 ```
 
-If Rust commands are missing, check:
+If Rust commands are missing, inspect the active toolchain and process PATH:
 
 ```powershell
 rustup show
@@ -326,49 +592,33 @@ $env:Path -split ';'
 
 Add the Cargo binary directory to the user `PATH` if it is missing, then open a new terminal.
 
-The Rust language server and formatter should be available to Neovim through `PATH`. Cargo should also be available for project workflows.
+### 9.2 Verify MSVC executable discovery
 
-The current machine has a separate MSVC executable-discovery issue: `cl.exe` and `link.exe` exist on disk, but `Get-Command` and `where.exe` did not resolve them, even after the Visual Studio developer-shell script displayed its startup banner. The clean Cargo test project nevertheless built successfully. Keep these facts distinct when diagnosing native dependencies.
+Check compiler and linker discovery:
 
-Do not add hardcoded Visual Studio installation paths to the Neovim configuration. System toolchain installation and environment initialization remain outside Neovim's ownership.
+```powershell
+Get-Command cl.exe -ErrorAction SilentlyContinue
+Get-Command link.exe -ErrorAction SilentlyContinue
 
-## 8. Rust support in `nvim-config`
-
-Once the Rust tools are available in the intended Neovim launch environment and the Cargo workflow has been tested, configure the Rust language pack.
-
-The intended responsibilities are:
-
-| Area | Implementation |
-| --- | --- |
-| Language server | `rust-analyzer` |
-| Formatting | `rustfmt` through Conform |
-| Syntax parsing | Tree-sitter `rust` parser |
-| Build and tests | Native Cargo commands |
-| Linting | Optional Clippy |
-| Source navigation | Neovim LSP |
-| Formatting on save | Disabled by default |
-
-The configuration should use Neovim's native LSP API:
-
-```lua
-vim.lsp.config("rust_analyzer", {
-  -- Rust Analyzer settings
-})
-
-vim.lsp.enable("rust_analyzer")
+where.exe cl.exe
+where.exe link.exe
 ```
 
-The server definition is supplied by `nvim-lspconfig`. Neovim's native API remains responsible for configuring and enabling it. Do not use the legacy `require("lspconfig")` setup interface.
+If the files exist on disk but command discovery fails:
 
-Formatting should use the existing Conform integration. Keep manual formatting available through `:Format`; do not enable format-on-save by default.
+1. Confirm the Visual Studio installation path with `vswhere.exe`.
+2. Check the Visual C++ workload and individual MSVC components in Visual Studio Installer.
+3. Launch the developer shell using `Launch-VsDevShell.ps1`.
+4. Repeat the command-discovery checks.
+5. Investigate developer-shell initialization and required Visual Studio components if the issue remains.
 
-Cargo commands should remain available through the native terminal workflow. No additional Rust-specific plugin is required for the initial language pack.
+Do not conclude that the compiler or linker is absent solely because `Get-Command` cannot find it.
 
-This installation guide does not activate the Rust pack or define its implementation details. Those belong to `rust-support.md` and the Stage 13 integration work.
+Conversely, do not claim that the shell is configured merely because the files exist on disk.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
-### `link.exe` or `cl.exe` is not found
+### 10.1 `cl.exe` or `link.exe` is not found
 
 First distinguish between a missing executable and an executable that is not available through the current shell's `PATH`.
 
@@ -394,15 +644,15 @@ where.exe link.exe
 
 If the files exist but command discovery fails:
 
-1. Confirm the Visual Studio installation path with `vswhere.exe`.
-2. Check the Visual C++ workload and individual MSVC components in Visual Studio Installer.
-3. Launch the developer shell using `Launch-VsDevShell.ps1`.
+1. Confirm the Visual Studio installation path.
+2. Check the Visual C++ workload and MSVC components.
+3. Launch the Visual Studio developer shell.
 4. Repeat the command-discovery checks.
-5. If the issue remains, investigate the developer-shell initialization and required Visual Studio components.
+5. Investigate the developer-shell initialization if the problem remains.
 
-Do not conclude that the compiler or linker is absent solely because `Get-Command` cannot find it. Conversely, do not claim that the shell is configured merely because the files exist on disk.
+Do not add hardcoded Visual Studio paths to application or editor configuration.
 
-### Rust commands are not recognized
+### 10.2 Rust commands are not recognized
 
 Cause: Rust's binary directory is not available through `PATH`.
 
@@ -413,7 +663,7 @@ rustup show
 Get-Command rustup, rustc, cargo
 ```
 
-The standard rustup binary directory on Windows is:
+The standard Rustup binary directory on Windows is:
 
 ```text
 %USERPROFILE%\.cargo\bin
@@ -421,7 +671,7 @@ The standard rustup binary directory on Windows is:
 
 Add it to the user `PATH` if it is missing, then restart the terminal.
 
-### `rust-analyzer` is unavailable
+### 10.3 `rust-analyzer` is unavailable
 
 Check whether the component is installed:
 
@@ -435,13 +685,13 @@ Install it if necessary:
 rustup component add rust-analyzer
 ```
 
-Also confirm that the executable is discoverable:
+Confirm executable discovery:
 
 ```powershell
 Get-Command rust-analyzer
 ```
 
-### Cargo builds but a native dependency fails
+### 10.4 Cargo builds but a native dependency fails
 
 A simple Rust application may build without exercising every native dependency or build script.
 
@@ -454,7 +704,7 @@ If a dependency requires MSVC directly:
 
 Do not treat a successful `hello` project as proof that every native dependency is configured.
 
-## 10. Updating the toolchain
+## 11. Updating the toolchain
 
 Update Rust and its installed toolchain components:
 
@@ -462,37 +712,62 @@ Update Rust and its installed toolchain components:
 rustup update
 ```
 
+Alternatively, use the repository's Windows installer:
+
+```powershell
+pwsh -NoProfile -File .\scripts\core\windows\rust.ps1 -Update
+```
+
 Update Visual Studio Build Tools and the Windows SDK separately through Visual Studio Installer.
 
 These are independent update mechanisms. Updating Rust does not update the MSVC compiler or Windows SDK.
 
-## 11. Installation checklist
+## 12. Installation checklist
 
-Use this checklist before marking the Rust system prerequisites complete.
+Use this checklist to track the Windows Rust installation and verification state.
 
-- [x] Install Visual Studio Build Tools.
-- [x] Locate MSVC compiler and linker executables on disk.
-- [x] Install a Windows SDK.
-- [x] Verify the active Rust MSVC target.
-- [x] Install `rust-analyzer`, `rustfmt`, and `rust-src`.
-- [x] Install Clippy.
+### Rust toolchain
+
+- [x] Install Rustup.
+- [x] Verify the active `stable-x86_64-pc-windows-msvc` toolchain.
+- [x] Verify `rustc` and Cargo.
+- [x] Install and verify `rust-analyzer`.
+- [x] Install and verify `rustfmt`.
+- [x] Install and verify `rust-src`.
+- [x] Install and verify Clippy.
+- [x] Install and verify Rust documentation.
 - [x] Run `cargo build` successfully.
 - [x] Run `cargo test` successfully.
 - [x] Run `cargo run` successfully.
-- [ ] Resolve direct `cl.exe` and `link.exe` discovery in the Visual Studio developer shell.
-- [ ] Verify the complete tool environment from the intended Neovim launch shell.
+- [x] Verify a clean Cargo rebuild.
 
-The Cargo workflow is verified. The two remaining items track environment discovery and Neovim launch-environment verification; they do not invalidate the successful clean Cargo test project.
+### Windows native build environment
+
+- [x] Locate the Visual Studio Build Tools installation.
+- [x] Locate MSVC compiler and linker executables on disk.
+- [x] Verify the Windows SDK installation.
+- [ ] Confirm Visual C++ workload registration through `vswhere`.
+- [ ] Resolve direct `cl.exe` and `link.exe` discovery in the intended developer shell.
+
+### Repository installer
+
+- [x] Verify `scripts/core/windows/rust.ps1 -Check`.
+- [x] Verify `scripts/core/windows/rust.ps1 -Update`.
+- [x] Confirm that existing Rust components are skipped during update.
+- [x] Confirm that post-update tool and component checks pass.
+- [x] Confirm successful check-mode exit code `0`.
+
+**Installation status:** Rustup, the stable MSVC-targeted Rust toolchain, required Rust components, and the Windows SDK are installed and verified. The repository's Rust installer has passed both check and update execution. The remaining items concern Visual Studio workload confirmation and direct compiler/linker discovery through the developer shell.
 
 ## References
 
 - [Rustup: Windows MSVC prerequisites](https://rust-lang.github.io/rustup/installation/windows-msvc.html)
-- [Microsoft: Visual Studio Build Tools workload and component IDs](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools)
-- [Microsoft: Install MSVC](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation)
 - [Rustup: Installation](https://rustup.rs/)
 - [Rustup: Components](https://rust-lang.github.io/rustup/concepts/components.html)
+- [Microsoft: Visual Studio Build Tools workload and component IDs](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools)
+- [Microsoft: Install MSVC](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation)
 - [rust-analyzer: Installation](https://rust-analyzer.github.io/book/installation.html)
 
 ---
 
-**Project boundary:** This guide covers external Windows prerequisites and Rust toolchain verification. It does not install or configure Neovim plugins, modify the language registry, or activate the Rust pack. Those responsibilities belong to the Stage 13 Rust integration work documented separately in `rust-support.md` and `rust-win-install.md`.
+**Scope:** This document covers Rust installation and Windows toolchain management only. It does not document Neovim language-server configuration, editor keymaps, formatting integration, Tree-sitter, or language-pack activation. Those implementation details belong in the separate `rust-support.md` document.

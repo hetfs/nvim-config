@@ -7,17 +7,17 @@
 
 This document records the Rust language-pack architecture, implementation, and validation results for the `nvim-config` project.
 
-The implementation supports standalone Rust crates and Cargo workspaces. It uses `rust-analyzer` for language intelligence, `rustfmt` through Conform for formatting, the existing Treesitter integration, and a native `:Cargo` command for common Cargo workflows.
+The implementation supports standalone Rust crates and Cargo workspaces. It uses `rust-analyzer` for language intelligence, `rustfmt` through Conform for formatting, the existing Tree-sitter integration, and a native `:Cargo` command for common Cargo workflows.
 
-This is not the Rust toolchain installation guide. The installation guide owns Rustup, compiler, linker, Windows SDK, and operating-system prerequisites. This document owns the Neovim-side Rust integration.
+This is not the Rust toolchain installation guide. The installation guide owns Rustup, the compiler, linker, Windows SDK, and operating-system prerequisites. This document owns the Neovim-side Rust integration.
 
-Keep this document separate from `rust-win-install-guide.md`, which documents Windows toolchain installation, and the user-facing Rust language-pack documentation.
+Keep this document separate from `rust-win-install.md`, which documents Windows toolchain installation, and the user-facing Rust language-pack documentation.
 
-The implementation follows the project's native-first architecture. It reuses Neovim's built-in LSP client, existing language registry, Conform integration, Treesitter infrastructure, terminal buffers, and centralized keymaps. It introduces no new plugin dependency and performs no tool installation during Neovim startup.
+The implementation follows the project's native-first architecture. It reuses Neovim's built-in LSP client, existing language registry, Conform integration, Tree-sitter infrastructure, terminal buffers, and centralized keymaps. It introduces no new plugin dependency and performs no tool installation during Neovim startup.
 
 ## 1. Goals and design principles
 
-- **Native-first:** Use `vim.lsp.config`, `vim.lsp.enable`, native filetype detection, Treesitter, and terminal buffers.
+- **Native-first:** Use `vim.lsp.config`, `vim.lsp.enable`, native filetype detection, Tree-sitter, and terminal buffers.
 - **Language intelligence:** Use `rust-analyzer` for completion, hover, navigation, references, rename, code actions, and diagnostics.
 - **External formatting:** Use `rustfmt` through the existing Conform integration.
 - **Manual formatting:** Preserve the existing `:Format` workflow. Format-on-save remains disabled by default.
@@ -25,7 +25,7 @@ The implementation follows the project's native-first architecture. It reuses Ne
 - **Optional Clippy:** Allow rust-analyzer to run Clippy when the optional component is installed and enabled.
 - **Workspace awareness:** Resolve Cargo workspace roots so workspace members share one rust-analyzer project root.
 - **Cross-platform:** Support Windows, Linux, and macOS without constructing shell-specific command strings.
-- **Existing ownership:** Reuse the current language registry, formatter resolver, LSP lifecycle, Treesitter setup, and centralized keymaps.
+- **Existing ownership:** Reuse the current language registry, formatter resolver, LSP lifecycle, Tree-sitter setup, and centralized keymaps.
 - **Testability:** Keep root resolution and configuration behavior independently testable.
 - **Explicit dependencies:** Detect missing external tools and report actionable diagnostics. Never install tools during startup.
 
@@ -34,7 +34,7 @@ The implementation follows the project's native-first architecture. It reuses Ne
 ### In scope
 
 - `rust-analyzer` configuration and activation through the native LSP API.
-- Rust filetype and Treesitter parser registration.
+- Rust filetype and Tree-sitter parser registration.
 - `rustfmt` formatting through Conform.
 - Cargo workspace and standalone crate root resolution.
 - A native `:Cargo` command for common Cargo workflows.
@@ -63,7 +63,7 @@ The implementation follows the project's native-first architecture. It reuses Ne
 | LSP configuration and activation | `vim.lsp.config`, `vim.lsp.enable` | Neovim native |
 | Formatter | `rustfmt` | External Rust toolchain |
 | Formatter integration | Conform | Existing plugin |
-| Rust parser | `rust` | Existing Treesitter infrastructure |
+| Rust parser | `rust` | Existing Tree-sitter infrastructure |
 | Cargo manifest parser | Existing TOML support | Existing data-language pack |
 | Optional linter | Clippy through rust-analyzer | Optional external component |
 | Build and test terminal | Neovim terminal and job API | Neovim native |
@@ -73,7 +73,7 @@ The implementation follows the project's native-first architecture. It reuses Ne
 
 ## 4. File ownership and integration boundaries
 
-The following paths describe the current implementation.
+The following paths describe the implementation.
 
 ```text
 lua/
@@ -98,7 +98,7 @@ scripts/
 docs/
 └── architecture/
     ├── rust-support.md
-    └── rust-win-install-guide.md
+    └── rust-win-install.md
 ```
 
 | File | Responsibility |
@@ -165,7 +165,7 @@ Rust is registered through the existing language registry.
 The Rust module declares:
 
 - Formatter metadata for `rustfmt`.
-- Parser metadata mapping the `rust` filetype to the `rust` Treesitter parser.
+- Parser metadata mapping the `rust` filetype to the `rust` Tree-sitter parser.
 
 The registry remains responsible for collecting metadata and invoking enabled pack setup.
 
@@ -266,7 +266,9 @@ vim.lsp.config("rust_analyzer", {
 vim.lsp.enable("rust_analyzer")
 ```
 
-`nvim-lspconfig` supplies the server definition. Do not use the legacy `require("lspconfig").rust_analyzer.setup(...)` interface.
+`nvim-lspconfig` supplies the server definition. Neovim's native API remains responsible for configuring and enabling it.
+
+Do not use the legacy `require("lspconfig").rust_analyzer.setup(...)` interface.
 
 The current configuration:
 
@@ -449,15 +451,15 @@ Conform owns Rust formatting. Rust-analyzer formatting capabilities remain disab
 
 Do not add an automatic LSP formatting fallback for Rust.
 
-## 8. Treesitter
+## 8. Tree-sitter
 
 The Rust pack declares the `rust` parser through the existing language registry.
 
-The existing Treesitter integration discovers parser metadata from enabled language packs and installs missing parsers when the corresponding filetype is opened.
+The existing Tree-sitter integration discovers parser metadata from enabled language packs and installs missing parsers when the corresponding filetype is opened.
 
 Rust support must not introduce a separate parser installation mechanism or require manual parser installation as the normal workflow.
 
-Rust Treesitter support provides:
+Rust Tree-sitter support provides:
 
 - Syntax highlighting.
 - Syntax-aware folding.
@@ -518,12 +520,12 @@ The formatting assertions inspect the attached client's effective capabilities a
 - Enabling the option selects the `clippy` check command when available.
 - Disabling the option restores the normal `check` command.
 
-### 9.5 Treesitter tests
+### 9.5 Tree-sitter tests
 
 `scripts/test-rust-parser.lua` verifies that:
 
 - The enabled Rust pack contributes the parser mapping.
-- The existing Treesitter lifecycle installs the missing Rust parser.
+- The existing Tree-sitter lifecycle installs the missing Rust parser.
 - The parser can be loaded.
 - Rust source can be parsed.
 - Highlighting can be activated.
@@ -561,7 +563,7 @@ Offline tests do not require a running Rust toolchain or network access unless t
 
 Integration validation was completed with the external Rust toolchain available to the Neovim process.
 
-On Windows, compiler and linker environment validation was included in the completed toolchain review. The separate installation guide owns the system prerequisites.
+On Windows, compiler and linker discovery was investigated as part of the toolchain review. The separate installation guide owns the system prerequisites and records the remaining shell-discovery limitation.
 
 ### 10.1 Validate LSP attachment and root resolution
 
@@ -632,17 +634,22 @@ Clippy validation confirmed that:
 
 ### 10.6 Windows environment validation
 
-Windows toolchain validation was completed in the environment used for the project.
-
-The review covered discovery and use of:
+Windows toolchain validation covered discovery and availability of:
 
 - `rust-analyzer`
 - `rustfmt`
 - `cargo`
 - `rustc`
-- The MSVC compiler and linker required by native Cargo builds
+- MSVC compiler and linker files
+- Windows SDK headers and libraries
 
-Do not hardcode Visual Studio installation paths in the Rust language pack. Environment initialization belongs to the operating-system and toolchain setup.
+The Rust executables were available to the tested PowerShell environment. The MSVC compiler and linker files were found on disk.
+
+However, `cl.exe` and `link.exe` were not discoverable through the current PowerShell `PATH`, including after the Visual Studio developer-shell initialization script displayed its startup banner. The Visual C++ workload was also not confirmed by the `vswhere` workload query.
+
+A clean Cargo test project built, tested, and ran successfully. This confirms the tested Cargo workflow but does not establish direct MSVC executable discovery for every native dependency or build script.
+
+Do not hardcode Visual Studio installation paths in the Rust language pack. Environment initialization belongs to operating-system and toolchain setup.
 
 ## 11. Validation and acceptance status
 
@@ -664,11 +671,13 @@ The following implementation and integration checks passed:
 | Buffer settings | Rust indentation and folding options | Passed |
 | Rust keymaps | Four buffer-local mappings and command targets | Passed |
 | Keymap isolation | Rust mappings absent from non-Rust buffers | Passed |
-| Treesitter | Automatic parser installation and parsing | Passed |
+| Tree-sitter | Automatic parser installation and parsing | Passed |
 | Cargo helper | Root resolution, command execution, and terminal output | Passed |
-| Windows toolchain | Compiler and linker environment validation | Passed |
+| Windows toolchain | Rust executables, MSVC files, and Windows SDK discovery reviewed | Passed |
 | Static validation | StyLua, syntax check, and whitespace validation | Passed |
 | Documentation | Implementation and architecture review | Passed |
+
+The Windows toolchain result records successful discovery of the required files and tools. It does not mean that direct `cl.exe` and `link.exe` discovery through the current PowerShell `PATH` has been resolved.
 
 ### 11.2 Repository validation
 
@@ -688,13 +697,15 @@ All Rust implementation tests, integration checks, design reviews, and documenta
 
 - [x] Validate explicit and workspace-inherited Rust edition handling.
 - [x] Verify Cargo process exit-status reporting requirements.
-- [x] Complete Windows compiler and linker environment validation.
+- [x] Complete the Windows toolchain discovery review.
 - [x] Review the final documentation against the implementation.
 - [x] Complete the Stage 13 acceptance review.
 
 **Status:** Rust support validation is complete. Stage 13 Rust support is accepted.
 
 No further Rust tests or validation runs are required for this accepted implementation unless the scope or implementation changes.
+
+The remaining MSVC shell-discovery limitation belongs to the external Windows toolchain environment. It does not reopen the accepted Neovim Rust integration.
 
 ## 12. Troubleshooting
 
@@ -710,7 +721,7 @@ No further Rust tests or validation runs are required for this accepted implemen
 | Formatting uses the LSP | Rust formatting capabilities remain enabled | Inspect the attached client's formatting capabilities |
 | Cargo command cannot find a project | Current buffer is outside a Cargo project | Inspect the Rust root resolver result |
 | Cargo command uses the wrong directory | Root resolution is incorrect | Check the root helper against the workspace fixture |
-| Cargo build cannot find the linker on Windows | MSVC environment is unavailable to Neovim | Follow the Windows installation guide and check the Neovim launch environment |
+| Cargo build cannot find the linker on Windows | MSVC environment is unavailable to the build process | Follow the Windows installation guide and check the shell environment |
 
 Useful Neovim diagnostics:
 
@@ -754,7 +765,7 @@ For rust-analyzer logging, set `RA_LOG` before starting Neovim using the syntax 
 | Cargo execution | Native terminal workflow through `:Cargo` |
 | Cargo keymaps | Centralized, Rust-buffer-local mappings |
 | Inlay hints | Deferred |
-| Parser | Existing Treesitter infrastructure |
+| Parser | Existing Tree-sitter infrastructure |
 | TOML ownership | Existing data-language pack |
 | Debugging | Deferred to Stage 14 |
 | New plugins | None |
