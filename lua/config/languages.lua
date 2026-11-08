@@ -46,6 +46,7 @@ return {
     powershell = true,
     shell = true,
     rust = true,
+    sql = true,
   },
 
   -- Optional shared tool integrations.

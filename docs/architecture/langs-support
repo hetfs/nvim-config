@@ -1,6 +1,6 @@
 # Language Support Architecture Guide
 
-## 1\. Purpose
+## 1. Purpose
 
 This document defines the long-term architecture for language and technology support in the Neovim configuration.
 
@@ -20,7 +20,7 @@ The architecture must accommodate different technology groups, including:
 
 The goal is to support a growing technology ecosystem without turning the language registry into a collection of technology-specific configuration or duplicating shared infrastructure.
 
-## 2\. Architectural principles
+## 2. Architectural principles
 
 All future language support should follow these principles.
 
@@ -60,6 +60,8 @@ Examples include:
 | Installation | External executable management |
 | Validation | Smoke tests and configuration validation |
 
+These responsibilities describe architectural ownership. They do not imply that every integration is currently implemented or available to every language pack.
+
 A language pack should not install or initialize a second copy of shared infrastructure.
 
 ### 2.3 Native-first integration
@@ -90,7 +92,7 @@ New technology support should be introduced when needed.
 
 Do not create empty modules, speculative abstractions, or framework-specific infrastructure before there is a concrete requirement.
 
-## 3\. Technology classification
+## 3. Technology classification
 
 Technology categories provide an organizational reference. They do not determine whether technologies must share a language pack.
 
@@ -254,13 +256,13 @@ Examples:
 
 A domain-specific language should receive an independent pack when its support requires distinct configuration or workflows.
 
-## 4\. Directory architecture
+## 4. Directory architecture
 
 The registry should discover language packs from the root of `lua/langs/`.
 
 Recommended structure:
 
-``` text
+```text
 lua/
 └── langs/
     ├── init.lua
@@ -294,11 +296,13 @@ lua/
 
 This is an illustrative future structure, not a list of technologies to implement immediately.
 
+The existing `data.lua` remains a grouped pack for now. Its decomposition is deliberately deferred until a concrete requirement justifies the change.
+
 ### 4.1 Root-level discovery
 
 The current registry discovers Lua files directly under:
 
-``` text
+```text
 lua/langs/*.lua
 ```
 
@@ -313,7 +317,7 @@ Therefore:
 
 For example:
 
-``` text
+```text
 lua/langs/
 ├── init.lua
 ├── rust.lua
@@ -325,23 +329,23 @@ lua/langs/
 
 The registry discovers `langs.rust`, not its internal modules.
 
-## 5\. Language pack contract
+## 5. Language pack contract
 
-Every language pack must expose a consistent public interface.
+Every language pack must follow the public interface and metadata conventions supported by the current registry.
 
-The basic contract is:
+The following example illustrates the contract. It is not a requirement for every pack to declare every field. The actual metadata schema and accepted shapes are defined by the registry implementation.
 
-``` lua
+```lua
 local M = {
-  formatters = {},
-  filetypes = {},
-  parsers = {},
-  servers = {},
-  executables = {},
+    formatters = {},
+    filetypes = {},
+    parsers = {},
+    servers = {},
+    executables = {},
 }
 
 function M.setup()
-  -- Technology-specific initialization.
+    -- Technology-specific initialization.
 end
 
 return M
@@ -397,7 +401,9 @@ A pack must fail visibly when its own required configuration is invalid.
 
 Missing optional executables should be handled according to the declared optionality policy rather than causing unrelated configuration failures.
 
-## 6\. Discovery and activation
+A missing optional executable does not automatically make its entire language pack optional. The pack may still initialize while skipping the unavailable integration.
+
+## 6. Discovery and activation
 
 Discovery and activation are separate architectural responsibilities.
 
@@ -407,13 +413,20 @@ Discovery and activation are separate architectural responsibilities.
 
 The current registry discovers root-level modules and calls each pack's `setup()` function.
 
-This means the current implementation automatically initializes discovered packs. Independent discovery does not yet imply user-controlled activation.
+The current behavior can therefore be summarized as:
+
+- Discovery is based on root-level Lua modules.
+- Every discovered pack is initialized by the current registry.
+- User-controlled pack activation is not currently implemented.
+- Optional executable availability is handled separately from pack discovery and initialization.
+
+Independent discovery does not yet imply user-controlled activation.
 
 A future registry evolution should distinguish these operations.
 
 The intended model is:
 
-``` text
+```text
                  Language registry
                          |
                   Discover packs
@@ -441,7 +454,7 @@ Do not implement activation controls until their configuration contract is defin
 
 The existing registry should remain stable while the architecture is being documented.
 
-## 7\. Shared tooling and dependencies
+## 7. Shared tooling and dependencies
 
 Independent language packs must not result in duplicated external tools or shared infrastructure.
 
@@ -475,6 +488,8 @@ The installation manifest should remain the authoritative source for installatio
 
 Language packs should describe integration requirements, not duplicate installation logic.
 
+A language pack may declare that an executable is required or optional, but it must not become the installation owner of that executable. Installation ownership belongs to the centralized dependency and installation system.
+
 ### 7.2 Optional dependencies
 
 A language pack may support optional tools.
@@ -488,7 +503,9 @@ Optional tools must:
 - Not become mandatory dependencies of unrelated packs.
 - Be documented with their installation and activation requirements.
 
-## 8\. Data pack evolution
+Optional integration availability must not be confused with language pack activation.
+
+## 8. Data pack evolution
 
 The current `data.lua` supports:
 
@@ -528,7 +545,7 @@ A technology such as jq may eventually deserve its own pack because its query an
 
 The data architecture will be reviewed separately. The current `data.lua` should not be refactored merely to anticipate future technologies.
 
-## 9\. Technology pack versus shared infrastructure
+## 9. Technology pack versus shared infrastructure
 
 The following distinction should guide future implementation decisions.
 
@@ -546,6 +563,8 @@ The following distinction should guide future implementation decisions.
 | Technology activation policy | Registry and pack configuration |
 | Shared diagnostics presentation | Shared infrastructure |
 
+These ownership boundaries describe where responsibilities belong. They do not require every listed integration to exist for every technology.
+
 The goal is to avoid two architectural extremes:
 
 - A single enormous module containing every technology.
@@ -553,7 +572,7 @@ The goal is to avoid two architectural extremes:
 
 A module should be separated when it has a clear responsibility and improves maintainability.
 
-## 10\. Adding a new technology
+## 10. Adding a new technology
 
 Every new language pack should follow a consistent implementation process.
 
@@ -586,16 +605,17 @@ Identify:
 - Shared tools.
 - Installation methods.
 - Version requirements.
+- Installation ownership.
 
 ### Step 4: Create the root-level pack
 
-Follow the language pack contract.
+Follow the language pack contract and the metadata conventions enforced by the current registry.
 
 ### Step 5: Integrate with shared infrastructure
 
 Use existing metadata aggregation and shared integrations.
 
-Do not create duplicate plugin configurations.
+Do not create duplicate plugin configurations or installation logic.
 
 ### Step 6: Validate independently
 
@@ -614,7 +634,7 @@ Test:
 
 Record its support scope, dependencies, installation instructions, activation behavior, and validation results.
 
-## 11\. Architectural constraints
+## 11. Architectural constraints
 
 The following rules should remain consistent across the project.
 
@@ -631,7 +651,7 @@ The following rules should remain consistent across the project.
 11. Validate each technology independently.
 12. Avoid changing unrelated language packs when introducing new support.
 
-## 12\. Current implementation versus future architecture
+## 12. Current implementation versus future architecture
 
 It is important to distinguish the current implementation from the intended future architecture.
 
@@ -647,9 +667,11 @@ It is important to distinguish the current implementation from the intended futu
 | External tool installation | Separate installation system | Preserve centralized ownership |
 | Technology-specific validation | Existing smoke-test infrastructure | Extend per pack |
 
-## 13\. Final architectural direction
+The current registry behavior remains the implementation baseline. Future architecture changes should be introduced only when a concrete requirement justifies them.
 
-The long-term architecture is based on three layers:
+## 13. Final architectural direction
+
+The long-term architecture is based on three layers.
 
 **Layer 1: Technology packs**
 
@@ -657,13 +679,13 @@ Each independently supported technology owns its configuration and metadata.
 
 **Layer 2: Language registry**
 
-The registry discovers packs, validates their contracts, aggregates metadata, and eventually manages activation policy.
+The registry discovers packs and aggregates their metadata. Contract validation and user-controlled activation may be introduced as deliberate future capabilities.
 
 **Layer 3: Shared infrastructure**
 
 Common integrations such as LSP, formatting, Treesitter, completion, diagnostics, debugging, and installation remain centralized.
 
-``` text
+```text
                  Technology packs
                         |
           +-------------+-------------+

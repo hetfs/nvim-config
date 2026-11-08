@@ -318,12 +318,30 @@ function M.setup()
           default_edition = "2024",
         },
       },
+
+      -- Extend Conform's built-in SQL Formatter definition.
+      -- Resolve the dialect for the current buffer at formatting time.
+      sql_formatter = {
+        prepend_args = function(_, ctx)
+          return {
+            "--language",
+            require("langs.sql").resolve_dialect(ctx.buf),
+          }
+        end,
+
+        -- Let SQL Formatter discover .sql-formatter.json
+        -- from the SQL file's directory and its parent directories.
+        cwd = function(_, ctx)
+          return ctx.dirname
+        end,
+      },
     },
 
     default_format_opts = {
       lsp_format = "never",
     },
   }
+
   -- Conform registers its save hook only when explicitly enabled.
   conform_config.format_on_save = get_format_on_save_config(language_config)
 
