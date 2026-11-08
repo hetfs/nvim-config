@@ -385,6 +385,180 @@ map("n", "<leader>cw", "<cmd>ShellcheckWiki<CR>", {
 })
 
 -- ============================================================
+-- Lua
+-- ============================================================
+
+local function lua_project_root(bufnr)
+  local root = vim.fs.root(bufnr, {
+    ".busted",
+    ".git",
+    "spec",
+  })
+
+  if root then
+    return root
+  end
+
+  local name = vim.api.nvim_buf_get_name(bufnr)
+
+  return name ~= "" and vim.fs.dirname(name) or vim.fn.getcwd()
+end
+
+local function run_lua_buffer(bufnr)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local source = table.concat(lines, "\n")
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  local chunk, err = load(source, "@" .. (name ~= "" and name or "lua-buffer"))
+
+  if not chunk then
+    vim.notify(err, vim.log.levels.ERROR, {
+      title = "Lua buffer",
+    })
+    return
+  end
+
+  local ok, result = pcall(chunk)
+
+  if not ok then
+    vim.notify(result, vim.log.levels.ERROR, {
+      title = "Lua buffer",
+    })
+    return
+  end
+
+  vim.notify("Executed current Lua buffer", vim.log.levels.INFO, {
+    title = "Lua buffer",
+  })
+end
+
+local function run_lua_tests(bufnr)
+  if vim.fn.executable("busted") ~= 1 then
+    vim.notify(
+      "Busted is unavailable. Install it with: luarocks install busted",
+      vim.log.levels.WARN,
+      { title = "Lua tests" }
+    )
+    return
+  end
+
+  local root = lua_project_root(bufnr)
+
+  vim.cmd("botright 12new")
+
+  local output_buf = vim.api.nvim_get_current_buf()
+
+  vim.bo[output_buf].buftype = "nofile"
+  vim.bo[output_buf].bufhidden = "wipe"
+  vim.bo[output_buf].swapfile = false
+  vim.bo[output_buf].filetype = "text"
+
+  vim.api.nvim_buf_set_lines(output_buf, 0, -1, false, {
+    "Running Busted...",
+    "Project: " .. root,
+    "",
+  })
+
+  local function show_output(lines)
+    vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(output_buf) then
+        return
+      end
+
+      vim.bo[output_buf].modifiable = true
+      vim.api.nvim_buf_set_lines(output_buf, 0, -1, false, lines)
+      vim.bo[output_buf].modifiable = false
+    end)
+  end
+
+  local ok, process = pcall(vim.system, { "busted" }, {
+    cwd = root,
+    text = true,
+  }, function(result)
+    local lines = {}
+
+    local stdout = vim.split(result.stdout or "", "\n", {
+      trimempty = true,
+    })
+
+    local stderr = vim.split(result.stderr or "", "\n", {
+      trimempty = true,
+    })
+
+    vim.list_extend(lines, stdout)
+
+    if #stderr > 0 then
+      if #lines > 0 then
+        table.insert(lines, "")
+      end
+
+      table.insert(lines, "Standard error:")
+      vim.list_extend(lines, stderr)
+    end
+
+    if #lines == 0 then
+      table.insert(lines, "Busted produced no output.")
+    end
+
+    table.insert(lines, "")
+    table.insert(
+      lines,
+      string.format("Busted exited with code %d", result.code)
+    )
+
+    show_output(lines)
+
+    vim.schedule(function()
+      if result.code == 0 then
+        vim.notify("Lua tests passed", vim.log.levels.INFO, {
+          title = "Busted",
+        })
+      else
+        vim.notify(
+          string.format("Lua tests failed (exit code %d)", result.code),
+          vim.log.levels.ERROR,
+          { title = "Busted" }
+        )
+      end
+    end)
+  end)
+
+  if not ok then
+    show_output({
+      "Failed to start Busted:",
+      tostring(process),
+    })
+
+    vim.notify("Failed to start Busted", vim.log.levels.ERROR, {
+      title = "Lua tests",
+    })
+  end
+end
+
+function M.lua(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  map("n", "<leader>cr", "<cmd>luafile %<cr>", {
+    buffer = bufnr,
+    desc = "Run Lua file",
+  })
+
+  map("n", "<leader>cb", function()
+    run_lua_buffer(bufnr)
+  end, {
+    buffer = bufnr,
+    desc = "Run Lua buffer",
+  })
+
+  map("n", "<leader>ct", function()
+    run_lua_tests(bufnr)
+  end, {
+    buffer = bufnr,
+    desc = "Run Lua tests",
+  })
+end
+
+
+-- ============================================================
 -- Python
 -- ============================================================
 

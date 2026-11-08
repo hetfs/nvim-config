@@ -17,8 +17,12 @@ local M = {
 -- Project Configuration
 -- ============================================================
 
+local function is_json_null(value)
+  return value == nil or value == vim.NIL
+end
+
 local function has_luarc(dir)
-  if not dir then
+  if is_json_null(dir) or type(dir) ~= "string" or dir == "" then
     return false
   end
 
@@ -87,6 +91,44 @@ local function lua_settings()
 end
 
 -- ============================================================
+-- Workspace Resolution
+-- ============================================================
+
+local function workspace_root(params, config)
+  local root_dir = config.root_dir
+
+  if not is_json_null(root_dir) and type(root_dir) == "string" and root_dir ~= "" then
+    return root_dir
+  end
+
+  local folders = params.workspaceFolders
+
+  if is_json_null(folders) or type(folders) ~= "table" then
+    return nil
+  end
+
+  local folder = folders[1]
+
+  if is_json_null(folder) or type(folder) ~= "table" then
+    return nil
+  end
+
+  local uri = folder.uri
+
+  if is_json_null(uri) or type(uri) ~= "string" or uri == "" then
+    return nil
+  end
+
+  local ok, root = pcall(vim.uri_to_fname, uri)
+
+  if not ok or type(root) ~= "string" or root == "" then
+    return nil
+  end
+
+  return root
+end
+
+-- ============================================================
 -- Setup
 -- ============================================================
 
@@ -100,16 +142,7 @@ function M.setup()
     -- cmd, filetypes, and root markers come from nvim-lspconfig.
 
     before_init = function(params, config)
-      local root_dir = config.root_dir
-
-      -- Fall back to the initialization workspace folder.
-      if not root_dir and params.workspaceFolders then
-        local folder = params.workspaceFolders[1]
-
-        if folder then
-          root_dir = vim.uri_to_fname(folder.uri)
-        end
-      end
+      local root_dir = workspace_root(params, config)
 
       -- Allow project-specific configuration to take precedence.
       if has_luarc(root_dir) then

@@ -177,6 +177,19 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 })
 
 -- ============================================================
+-- Lua
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+  group = group,
+  desc = "Configure Lua buffers",
+  pattern = "lua",
+  callback = function(event)
+    require("config.keymaps").lua(event.buf)
+  end,
+})
+
+-- ============================================================
 -- C and C++
 -- ============================================================
 
@@ -197,11 +210,12 @@ vim.api.nvim_create_autocmd("FileType", {
 -- ============================================================
 
 vim.api.nvim_create_autocmd("FileType", {
-    group = group,
-    pattern = "python",
-    callback = function(event)
-        require("config.keymaps").python(event.buf)
-    end,
+  group = group,
+  desc = "Configure Python buffers",
+  pattern = "python",
+  callback = function(event)
+    require("config.keymaps").python(event.buf)
+  end,
 })
 
 -- ============================================================

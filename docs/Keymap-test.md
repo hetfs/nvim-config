@@ -226,17 +226,75 @@ Python run and test workflows execute in a terminal split using the detected pro
 
 The mappings do not change Neovim's global working directory.
 
+## Lua Workflows
+
+Lua mappings are registered through the central keymap module and are buffer-local to Lua buffers.
+
+| Mapping | Description | Action |
+|---|---|---|
+| `<leader>cr` | Run Lua file | Execute the saved Lua file using `:luafile %`. |
+| `<leader>cb` | Run Lua buffer | Execute the current buffer contents, including unsaved changes. |
+| `<leader>ct` | Run Lua tests | Execute the project's Busted test suite. |
+
+### Lua file execution
+
+`<leader>cr` runs the current saved Lua file using Neovim's native `:luafile %` command.
+
+The mapping executes the file from disk. Save changes first if the latest buffer contents should be executed.
+
+### Lua buffer execution
+
+`<leader>cb` executes the current buffer contents directly using Lua's `load()` and `pcall()` functions.
+
+Unlike the file execution mapping, this workflow does not require the buffer to be saved. It executes the in-memory buffer contents, including unsaved changes.
+
+Compilation and runtime errors are reported through Neovim notifications.
+
+### Busted test execution
+
+`<leader>ct` runs Busted from the detected Lua project root.
+
+The workflow:
+
+- Checks whether the `busted` executable is available through `PATH`.
+- Resolves the project root using `.busted`, `.git`, or `spec` markers.
+- Runs Busted asynchronously through `vim.system()`.
+- Displays standard output, standard error, and the process exit code in a bottom split.
+- Reports whether the test run passed or failed.
+
+The completion callback schedules Neovim UI operations through `vim.schedule()` to avoid invoking editor APIs from a fast event context.
+
+Busted uses the conventional `spec/` directory and `*_spec.lua` filename pattern unless the project provides its own Busted configuration. A project without discoverable tests will report a test-discovery error rather than a successful test run.
+
+### Busted dependency
+
+Busted is an optional external development dependency. It is not a Neovim plugin and is not installed automatically.
+
+Install it separately with LuaRocks:
+
+```powershell
+luarocks install busted
+```
+
+Verify availability with:
+
+```powershell
+busted --version
+```
+
+The Busted executable must be available through Neovim's `PATH`. Refer to the [Busted documentation](https://lunarmodules.github.io/busted/) for test conventions and configuration.
+
 ## Language Mapping Isolation
 
 Some mappings intentionally share key sequences across languages:
 
-| Mapping | C/C++ action | Rust action | Python action |
-|---|---|---|---|
-| `<leader>cb` | CMake build | Cargo build | — |
-| `<leader>cr` | CMake run | Cargo run | Run current file |
-| `<leader>ct` | — | Cargo test | Run pytest |
-| `<leader>cc` | — | Cargo check | Run Ty |
-| `<leader>cl` | — | — | Run Ruff |
+| Mapping | C/C++ action | Rust action | Python action | Lua action |
+|---|---|---|---|---|
+| `<leader>cb` | CMake build | Cargo build | — | Run Lua buffer |
+| `<leader>cr` | CMake run | Cargo run | Run current file | Run Lua file |
+| `<leader>ct` | — | Cargo test | Run pytest | Run Busted tests |
+| `<leader>cc` | — | Cargo check | Run Ty | — |
+| `<leader>cl` | — | — | Run Ruff | — |
 
 This overlap is intentional. The mappings are buffer-local and registered for their respective filetypes, so the active language determines the action.
 
@@ -294,7 +352,11 @@ For language-specific workflows, verify both the mapping and its real project be
 - Test C/C++ mappings inside a configured CMake project.
 - Test Rust mappings inside a Cargo project.
 - Test Python mappings inside a Python project with and without a project virtual environment.
-- Confirm that overlapping C/C++, Rust, and Python mappings remain buffer-local and isolated.
+- Test Lua file execution with `<leader>cr`.
+- Test Lua buffer execution with `<leader>cb`, including unsaved changes.
+- Test Lua Busted execution with `<leader>ct` in a project containing a valid `spec/` directory and `*_spec.lua` files.
+- Confirm Busted reports its output and exit code without fast-event callback errors.
+- Confirm that overlapping C/C++, Rust, Python, and Lua mappings remain buffer-local and isolated.
 - Confirm that shared LSP and formatting mappings remain available independently of language-specific mappings.
 - Confirm that `<leader>tq` closes terminal windows but does not close ordinary editing windows.
 - Confirm that optional external tools fail with a clear warning when unavailable.
