@@ -111,7 +111,14 @@ map("t", "<A-l>", "<C-\\><C-n><C-w>l", {
   desc = "Focus right window",
 })
 
-map("n", "<leader>tq", "<cmd>close<CR>", {
+map("n", "<leader>tq", function()
+  if vim.bo.buftype ~= "terminal" then
+    vim.notify("Current buffer is not a terminal", vim.log.levels.WARN)
+    return
+  end
+
+  vim.cmd("close")
+end, {
   desc = "Close terminal window",
 })
 
@@ -376,6 +383,188 @@ map("n", "<leader>ca", vim.lsp.buf.code_action, {
 map("n", "<leader>cw", "<cmd>ShellcheckWiki<CR>", {
   desc = "Open ShellCheck wiki",
 })
+
+-- ============================================================
+-- Python
+-- ============================================================
+
+local python_root_markers = {
+  "pyproject.toml",
+  "pytest.ini",
+  "tox.ini",
+  "setup.cfg",
+  "setup.py",
+  "requirements.txt",
+  "Pipfile",
+  "uv.lock",
+  "poetry.lock",
+  ".git",
+}
+
+local function python_root(bufnr)
+  local root = vim.fs.root(bufnr, python_root_markers)
+
+  if root then
+    return root
+  end
+
+  local filename = vim.api.nvim_buf_get_name(bufnr)
+
+  return vim.fn.fnamemodify(filename, ":p:h")
+end
+
+local function python_interpreter(root)
+  local is_windows = vim.fn.has("win32") == 1
+  local python_relative_path = is_windows and { ".venv", "Scripts", "python.exe" } or { ".venv", "bin", "python" }
+
+  -- Prefer the project's virtual environment.
+  local project_python = vim.fs.joinpath(root, unpack(python_relative_path))
+
+  if vim.fn.executable(project_python) == 1 then
+    return project_python, "project"
+  end
+
+  -- Fall back to the virtual environment active when Neovim started.
+  local active_venv = vim.env.VIRTUAL_ENV
+
+  if active_venv and active_venv ~= "" then
+    local active_python = is_windows and vim.fs.joinpath(active_venv, "Scripts", "python.exe") or vim.fs.joinpath(active_venv, "bin", "python")
+
+    if vim.fn.executable(active_python) == 1 then
+      return active_python, "active"
+    end
+  end
+
+  -- Use the system Python executable as the final fallback.
+  local system_python = is_windows and "python" or "python3"
+  local executable = vim.fn.exepath(system_python)
+
+  if executable ~= "" then
+    return executable, "system"
+  end
+
+  return nil
+end
+
+local function python_terminal(command, root)
+  vim.cmd("botright 12new")
+
+  local ok, job = pcall(vim.fn.jobstart, command, {
+    cwd = root,
+    term = true,
+  })
+
+  if not ok or job <= 0 then
+    vim.cmd("close")
+    vim.notify("Failed to start Python workflow", vim.log.levels.ERROR)
+    return
+  end
+
+  vim.cmd("startinsert")
+end
+
+local function python_tool(name, args, root)
+  local executable = vim.fn.exepath(name)
+
+  if executable == "" then
+    vim.notify(name .. " is not installed or not available on PATH", vim.log.levels.ERROR)
+    return
+  end
+
+  local command = { executable }
+  vim.list_extend(command, args)
+
+  python_terminal(command, root)
+end
+
+-- Register buffer-local Python workflow mappings.
+function M.python(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  local function python_map(lhs, callback, description)
+    map("n", lhs, callback, {
+      buffer = bufnr,
+      desc = "Python: " .. description,
+    })
+  end
+
+  local function get_context()
+    local filename = vim.api.nvim_buf_get_name(bufnr)
+
+    if filename == "" then
+      vim.notify("Python workflow requires a saved file", vim.log.levels.WARN)
+      return
+    end
+
+    return filename, python_root(bufnr)
+  end
+
+  local function run_python(args)
+    local filename, root = get_context()
+
+    if not filename then
+      return
+    end
+
+    local interpreter, source = python_interpreter(root)
+
+    if not interpreter then
+      vim.notify("Python interpreter not found. Check the project .venv or system PATH.", vim.log.levels.ERROR)
+      return
+    end
+
+    if source == "system" then
+      vim.notify("Project and active virtual environments were not found; using system Python", vim.log.levels.INFO)
+    end
+
+    local command = { interpreter }
+    vim.list_extend(command, args)
+
+    python_terminal(command, root)
+  end
+
+  -- Run the current Python file.
+  python_map("<leader>cr", function()
+    local filename = vim.api.nvim_buf_get_name(bufnr)
+
+    if filename == "" then
+      vim.notify("Python workflow requires a saved file", vim.log.levels.WARN)
+      return
+    end
+
+    run_python({ vim.fn.fnamemodify(filename, ":p") })
+  end, "Run file")
+
+  -- Run the project's pytest suite.
+  python_map("<leader>ct", function()
+    run_python({ "-m", "pytest" })
+  end, "Run tests")
+
+  -- Run project type checking with ty.
+  python_map("<leader>cc", function()
+    local _, root = get_context()
+
+    if not root then
+      return
+    end
+
+    python_tool("ty", { "check", "." }, root)
+  end, "Type check")
+
+  -- Lint the current Python file with Ruff.
+  python_map("<leader>cl", function()
+    local filename = vim.api.nvim_buf_get_name(bufnr)
+
+    if filename == "" then
+      vim.notify("Python workflow requires a saved file", vim.log.levels.WARN)
+      return
+    end
+
+    local root = python_root(bufnr)
+
+    python_tool("ruff", { "check", vim.fn.fnamemodify(filename, ":p") }, root)
+  end, "Lint file")
+end
 
 -- ============================================================
 -- Rust

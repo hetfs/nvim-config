@@ -211,6 +211,87 @@ The Python parser is installed in the shared Tree-sitter parser directory, and h
 
 The Python parser installation and highlighting have been verified in the current Windows environment.
 
+### Python workflow keymaps
+
+The Python language pack also registers buffer-local workflow mappings through the existing
+`FileType` autocmd. These mappings are implemented in `lua/config/keymaps.lua`; they do not
+install tools or change the language-server, formatter, or Tree-sitter configuration.
+
+| Mapping | Description | Command behavior |
+|---|---|---|
+| `<leader>cr` | Run file | Runs the current Python file with the selected Python interpreter |
+| `<leader>ct` | Run tests | Runs `python -m pytest` with the selected Python interpreter |
+| `<leader>cc` | Type check | Runs `ty check .` from the detected project root |
+| `<leader>cl` | Lint file | Runs `ruff check` against the current file |
+
+The mappings are buffer-local and are registered for Python buffers. Their key choices are
+intentionally independent of Rust and C/C++ mappings that reuse some of the same leader keys.
+
+#### Python interpreter resolution
+
+The run-file and test mappings resolve the interpreter in this order:
+
+1. The project virtual environment at `.venv`.
+2. The virtual environment identified by `VIRTUAL_ENV`.
+3. The system Python executable (`python` on Windows and `python3` on other platforms).
+
+The project environment takes precedence over the active environment. If neither environment
+is available, the mapping uses system Python and displays an informational notification. If no
+interpreter can be found, the workflow stops and reports an error.
+
+On Windows, the project interpreter is resolved as `.venv\\Scripts\\python.exe`. On Unix-like
+systems, it is resolved as `.venv/bin/python`.
+
+The mappings use the selected interpreter directly. They do not invoke `uv run`. A project
+environment created and maintained by `uv` is supported when it uses the expected `.venv`
+layout. `uv` remains the project and environment manager; interpreter selection in the editor
+is handled by the keymap implementation.
+
+#### External tool resolution
+
+The type-check and lint mappings resolve their executables independently through Neovim's
+`PATH` lookup:
+
+- `<leader>cc` resolves `ty` and runs `ty check .` with the project root as its working directory.
+- `<leader>cl` resolves `ruff` and runs `ruff check` against the absolute path of the current file.
+
+These mappings do not select the Python interpreter and do not automatically invoke `uv run`.
+If `ty` or Ruff is installed only inside a project environment, that environment's executable
+directory must be available on Neovim's `PATH`. Otherwise, install or expose the tools through
+the user's external tool-management workflow.
+
+#### Project-root resolution
+
+The keymap workflow searches upward from the current Python buffer for the nearest ancestor
+containing one of these markers:
+
+- `pyproject.toml`
+- `pytest.ini`
+- `tox.ini`
+- `setup.cfg`
+- `setup.py`
+- `requirements.txt`
+- `Pipfile`
+- `uv.lock`
+- `poetry.lock`
+- `.git`
+
+If no marker is found, the current file's directory is used as the working directory.
+
+This is the keymap workflow's root-detection policy. It is separate from the root-marker
+configuration used by the `ty` and Ruff language-server definitions. Nested-project and
+monorepo behavior should be evaluated against the actual repository layout rather than
+assuming that all three root resolvers select the same directory.
+
+#### Terminal behavior
+
+Python commands open in a bottom terminal split with a height of 12 lines. The terminal is
+started with the detected project root as its working directory. The workflow requires a
+saved Python file for file-based operations.
+
+The keymaps do not install dependencies, create virtual environments, or modify project
+configuration. Those responsibilities remain with the external Python and `uv` workflows.
+
 ## 3. Dependencies
 
 | Dependency | Purpose | Validation status |
@@ -301,6 +382,13 @@ Do not assume every Python project uses the same Python version, dependency grou
 | Ruff formatting through Conform | Passed | `ruff_format` workflow worked |
 | Python Tree-sitter parser | Passed | Parser was installed and inspected successfully |
 | Python Tree-sitter highlighting | Passed | Highlighting was active after restart and opening a Python file |
+
+| Python run-file mapping (`<leader>cr`) | Passed | Executed the current Python file using the system Python fallback |
+| Python test mapping (`<leader>ct`) | Passed | Ran the project's pytest suite successfully |
+| Python type-check mapping (`<leader>cc`) | Passed | Ran `ty check .` successfully |
+| Python lint mapping (`<leader>cl`) | Passed | Ran Ruff linting against the current Python file successfully |
+| Python interpreter fallback | Passed | Project and active virtual environments were absent; system Python was selected and reported |
+| Python workflow terminal | Passed | Commands ran in a terminal split using the detected project root |
 
 These results describe the tested scenarios. They do not establish that every Python project layout or environment has been validated.
 
@@ -410,6 +498,11 @@ This language pack must preserve the following boundaries:
 - Python-specific smoke tests remain outside the current scope.
 - Manual completion shortcut configuration remains outside Stage 13.
 
+- Python workflow mappings are buffer-local and are registered for Python buffers.
+- Run-file and test workflows use `.venv`, then `VIRTUAL_ENV`, then system Python.
+- Type-check and lint workflows resolve `ty` and Ruff independently through `PATH`.
+- The editor mappings do not invoke `uv run`; `uv` remains the external project and environment manager.
+
 ## 9. Completion criteria
 
 Python support is complete because the following criteria have been validated:
@@ -425,6 +518,10 @@ Python support is complete because the following criteria have been validated:
 - Formatting remains separate from LSP diagnostics, with formatting fallback disabled.
 - Python Tree-sitter highlighting works through the existing shared configuration.
 - Applicable tested repository and language workflows pass.
+
+- Python run-file, test, type-check, and lint mappings work in the tested Windows environment.
+- Interpreter selection follows the documented project `.venv`, `VIRTUAL_ENV`, and system fallback order.
+- `ty` and Ruff are resolved independently through `PATH` by the workflow mappings.
 
 Ruff's editor linting integration has been approved and validated for the tested scenarios.
 
@@ -442,4 +539,4 @@ A Python-specific smoke-test suite is not a completion requirement under the cur
 
 ---
 
-**Current status:** Python language support is complete for the defined Stage 13 scope. The tested `uv` project workflow, Ty language-server functionality and diagnostics, Ruff CLI linting, Ruff native LSP diagnostic publication and clearing, Ty and Ruff coexistence, fresh-start attachment, Ruff formatting through Conform, automatic completion, and Tree-sitter highlighting have passed. Formatting remains separate from LSP diagnostics. Python-specific smoke tests are intentionally skipped. Manual completion shortcut configuration belongs to Stage 10.
+**Current status:** Python language support is complete for the defined Stage 13 scope. The tested `uv` project workflow, Ty language-server functionality and diagnostics, Ruff CLI linting, Ruff native LSP diagnostic publication and clearing, Ty and Ruff coexistence, fresh-start attachment, Ruff formatting through Conform, automatic completion, Tree-sitter highlighting, and the four Python workflow mappings have passed in the documented test scenarios. The run-file and test mappings select Python from the project `.venv`, then `VIRTUAL_ENV`, then system PATH. The type-check and lint mappings resolve `ty` and Ruff independently through PATH; they do not invoke `uv run`. Formatting remains separate from LSP diagnostics. Python-specific smoke tests are intentionally skipped. Manual completion shortcut configuration belongs to Stage 10.

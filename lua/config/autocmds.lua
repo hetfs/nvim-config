@@ -193,6 +193,18 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 -- ============================================================
+-- Python
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+    group = group,
+    pattern = "python",
+    callback = function(event)
+        require("config.keymaps").python(event.buf)
+    end,
+})
+
+-- ============================================================
 -- Rust
 -- ============================================================
 

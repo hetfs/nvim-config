@@ -31,6 +31,18 @@ Custom mappings must use the `desc` field so their purpose can be inspected thro
 
 Shared native workflows should not be duplicated by language-specific or plugin-specific mappings.
 
+### Terminal Workflows
+
+Terminal management uses Neovim's built-in terminal support.
+
+| Mapping | Description | Action | Scope |
+|---|---|---|---|
+| `<leader>tq` | Close terminal window | Close the current terminal window. | Global normal-mode mapping with a terminal-buffer guard. |
+
+The terminal-close mapping checks the current buffer type before closing the window. If the current buffer is not a terminal, it displays a warning and leaves the window open.
+
+This guard prevents the mapping from accidentally closing ordinary editing windows.
+
 ## LSP Workflows
 
 Shared LSP mappings are registered through the central keymap module when an LSP client attaches to a buffer.
@@ -158,18 +170,77 @@ Rust mappings are registered independently from C/C++ mappings and are buffer-lo
 
 These mappings are provided by the Rust language integration.
 
-### Language mapping isolation
+## Python Workflows
+
+Python mappings are registered through the central keymap module and are buffer-local to Python buffers.
+
+| Mapping | Description | Action |
+|---|---|---|
+| `<leader>cr` | Python: Run file | Run the current Python file. |
+| `<leader>ct` | Python: Run tests | Run `python -m pytest` from the detected project root. |
+| `<leader>cc` | Python: Type check | Run `ty check .` from the detected project root. |
+| `<leader>cl` | Python: Lint file | Run Ruff against the current file. |
+
+### Python interpreter resolution
+
+The run-file and test mappings resolve the Python interpreter in this order:
+
+1. Project `.venv`.
+2. Active environment from `VIRTUAL_ENV`.
+3. System Python.
+
+On Windows, the project interpreter is resolved from `.venv\Scripts\python.exe`. On Unix-like systems, the expected path is `.venv/bin/python`.
+
+If neither a project environment nor an active environment is available, the workflow falls back to the system Python executable. The fallback is reported to the user.
+
+### Python project root
+
+The Python workflow detects the project root using these markers:
+
+- `pyproject.toml`
+- `pytest.ini`
+- `tox.ini`
+- `setup.cfg`
+- `setup.py`
+- `requirements.txt`
+- `Pipfile`
+- `uv.lock`
+- `poetry.lock`
+- `.git`
+
+The nearest ancestor matching a marker is used. If no marker is found, the current file's directory is used.
+
+This root detection belongs to the Python keymap workflow. It does not replace or modify the root detection policies used by language servers or other project integrations.
+
+### Type checking and linting
+
+`<leader>cc` runs `ty check .` from the detected Python project root.
+
+`<leader>cl` runs Ruff against the current file.
+
+The Ty and Ruff executables are resolved independently through `PATH`. These mappings do not invoke `uv run` or automatically install tools. If Ty or Ruff is installed only inside a project environment, its executable directory must be available through Neovim's `PATH`.
+
+### Terminal execution
+
+Python run and test workflows execute in a terminal split using the detected project root as the working directory.
+
+The mappings do not change Neovim's global working directory.
+
+## Language Mapping Isolation
 
 Some mappings intentionally share key sequences across languages:
 
-| Mapping | C/C++ action | Rust action |
-|---|---|---|
-| `<leader>cb` | CMake build | Cargo build |
-| `<leader>cr` | CMake run | Cargo run |
+| Mapping | C/C++ action | Rust action | Python action |
+|---|---|---|---|
+| `<leader>cb` | CMake build | Cargo build | — |
+| `<leader>cr` | CMake run | Cargo run | Run current file |
+| `<leader>ct` | — | Cargo test | Run pytest |
+| `<leader>cc` | — | Cargo check | Run Ty |
+| `<leader>cl` | — | — | Run Ruff |
 
 This overlap is intentional. The mappings are buffer-local and registered for their respective filetypes, so the active language determines the action.
 
-Do not make these mappings global or register both language workflows on the same buffer.
+Do not make these mappings global or register unrelated language workflows on the same buffer.
 
 ## Shared Formatting
 
@@ -222,8 +293,10 @@ For language-specific workflows, verify both the mapping and its real project be
 
 - Test C/C++ mappings inside a configured CMake project.
 - Test Rust mappings inside a Cargo project.
-- Confirm that overlapping C/C++ and Rust mappings remain buffer-local and isolated.
+- Test Python mappings inside a Python project with and without a project virtual environment.
+- Confirm that overlapping C/C++, Rust, and Python mappings remain buffer-local and isolated.
 - Confirm that shared LSP and formatting mappings remain available independently of language-specific mappings.
+- Confirm that `<leader>tq` closes terminal windows but does not close ordinary editing windows.
 - Confirm that optional external tools fail with a clear warning when unavailable.
 
 Automated tests validate mapping registration, buffer scope, and selected workflow behavior. Interactive tests remain necessary for verifying the complete user experience.
