@@ -47,6 +47,7 @@ return {
     shell = true,
     rust = true,
     sql = true,
+    docker = true,
   },
 
   -- Optional shared tool integrations.
