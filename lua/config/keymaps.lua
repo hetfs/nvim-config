@@ -433,11 +433,7 @@ end
 
 local function run_lua_tests(bufnr)
   if vim.fn.executable("busted") ~= 1 then
-    vim.notify(
-      "Busted is unavailable. Install it with: luarocks install busted",
-      vim.log.levels.WARN,
-      { title = "Lua tests" }
-    )
+    vim.notify("Busted is unavailable. Install it with: luarocks install busted", vim.log.levels.WARN, { title = "Lua tests" })
     return
   end
 
@@ -500,10 +496,7 @@ local function run_lua_tests(bufnr)
     end
 
     table.insert(lines, "")
-    table.insert(
-      lines,
-      string.format("Busted exited with code %d", result.code)
-    )
+    table.insert(lines, string.format("Busted exited with code %d", result.code))
 
     show_output(lines)
 
@@ -513,11 +506,7 @@ local function run_lua_tests(bufnr)
           title = "Busted",
         })
       else
-        vim.notify(
-          string.format("Lua tests failed (exit code %d)", result.code),
-          vim.log.levels.ERROR,
-          { title = "Busted" }
-        )
+        vim.notify(string.format("Lua tests failed (exit code %d)", result.code), vim.log.levels.ERROR, { title = "Busted" })
       end
     end)
   end)
@@ -556,7 +545,6 @@ function M.lua(bufnr)
     desc = "Run Lua tests",
   })
 end
-
 
 -- ============================================================
 -- Python
@@ -839,6 +827,8 @@ end
 -- ============================================================
 -- Markdown
 -- ============================================================
+
+-- Preview
 vim.keymap.set("n", "<leader>mp", "<Plug>(md-render-preview)", {
   desc = "Markdown preview (toggle)",
 })
@@ -849,6 +839,23 @@ vim.keymap.set("n", "<leader>mt", "<Plug>(md-render-preview-tab)", {
 
 vim.keymap.set("n", "<leader>md", "<Plug>(md-render-demo)", {
   desc = "Markdown render demo",
+})
+
+-- Linting
+vim.keymap.set("n", "<leader>ml", "<cmd>MarkdownLint<cr>", {
+  desc = "Markdown lint",
+})
+
+-- Table of contents
+vim.keymap.set("n", "<leader>mo", "<cmd>MarkdownToc<cr>", {
+  desc = "Markdown update table of contents",
+})
+
+-- Diagnostics
+vim.keymap.set("n", "<leader>mc", function()
+  vim.diagnostic.reset(nil, 0)
+end, {
+  desc = "Clear Markdown diagnostics",
 })
 
 return M
