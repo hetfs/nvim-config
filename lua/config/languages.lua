@@ -48,6 +48,8 @@ return {
     rust = true,
     sql = true,
     docker = true,
+    markdown = true,
+    latex = true,
   },
 
   -- Optional shared tool integrations.

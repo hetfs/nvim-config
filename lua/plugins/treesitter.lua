@@ -37,11 +37,14 @@ require("nvim-treesitter").setup({
   install_dir = vim.fn.stdpath("data") .. "/site",
 })
 
--- Obtain filetype-to-parser mappings from enabled language packs.
+-- Obtain Tree-sitter metadata from enabled language packs.
 -- Disabled packs do not contribute Tree-sitter support.
-local filetype_parsers = require("langs").collect("parser_by_filetype")
+local langs = require("langs")
 
--- Validate the registry metadata before creating the autocmd.
+local filetype_parsers = langs.collect("parser_by_filetype")
+local parser_dependencies = langs.collect("parser_dependencies_by_filetype")
+
+-- Validate primary parser mappings.
 for filetype, parser in pairs(filetype_parsers) do
   assert(
     type(filetype) == "string" and filetype ~= "",
@@ -50,30 +53,78 @@ for filetype, parser in pairs(filetype_parsers) do
 
   assert(
     type(parser) == "string" and parser ~= "",
-    string.format(
-      "Tree-sitter parser mapping for '%s' must be a non-empty string",
-      tostring(filetype)
-    )
+    string.format("Tree-sitter parser mapping for '%s' must be a non-empty string", tostring(filetype))
   )
 end
 
+-- Validate additional parser dependencies.
+for filetype, dependencies in pairs(parser_dependencies) do
+  assert(
+    type(filetype) == "string" and filetype ~= "",
+    "Tree-sitter dependency mappings must use non-empty string keys"
+  )
+
+  assert(
+    filetype_parsers[filetype] ~= nil,
+    string.format("Tree-sitter dependencies for '%s' require a primary parser mapping", filetype)
+  )
+
+  assert(
+    type(dependencies) == "table" and #dependencies > 0,
+    string.format("Tree-sitter dependencies for '%s' must be a non-empty list", filetype)
+  )
+
+  local count = 0
+
+  for index, parser in pairs(dependencies) do
+    assert(
+      type(index) == "number" and index >= 1 and math.floor(index) == index,
+      string.format("Tree-sitter dependencies for '%s' must use sequential numeric indices", filetype)
+    )
+
+    assert(
+      type(parser) == "string" and parser ~= "",
+      string.format("Tree-sitter dependency at index %s for '%s' must be a non-empty string", tostring(index), filetype)
+    )
+
+    assert(
+      parser ~= filetype_parsers[filetype],
+      string.format("Tree-sitter dependency '%s' for '%s' duplicates its primary parser", parser, filetype)
+    )
+
+    count = count + 1
+  end
+
+  assert(
+    count == #dependencies,
+    string.format("Tree-sitter dependencies for '%s' must not contain missing list entries", filetype)
+  )
+end
+
+-- Register parser mappings with Neovim's native Tree-sitter API.
+-- This supports filetypes whose names differ from their parser names.
+-- Examples: plaintex -> latex, jsonc -> json, typescriptreact -> tsx.
+for filetype, parser in pairs(filetype_parsers) do
+  vim.treesitter.language.register(parser, filetype)
+end
+
 -- Track installations to avoid duplicate requests.
+-- Each waiting buffer records whether the parser should enable highlighting.
 local pending = {}
 
--- Check for the actual parser binary before attempting to load it.
+-- Check for the actual parser binary and verify that Neovim can load it.
 local function parser_available(parser)
-  local files = vim.api.nvim_get_runtime_file(
-    "parser/" .. parser .. ".*",
-    false
-  )
+  local files = vim.api.nvim_get_runtime_file("parser/" .. parser .. ".*", false)
 
   if #files == 0 then
     return false
   end
 
-  local ok = pcall(vim.treesitter.language.add, parser)
+  local ok, result = pcall(vim.treesitter.language.add, parser)
 
-  return ok
+  -- pcall() only indicates whether the function raised an exception.
+  -- A nil or false result means the parser was not loaded successfully.
+  return ok and result ~= nil and result ~= false
 end
 
 local function start_highlighting(buf, parser)
@@ -92,11 +143,7 @@ local function start_highlighting(buf, parser)
 
   if not ok then
     vim.notify(
-      string.format(
-        "Could not start Tree-sitter for '%s': %s",
-        parser,
-        err
-      ),
+      string.format("Could not start Tree-sitter for '%s': %s", parser, err),
       vim.log.levels.WARN,
       { title = "Tree-sitter" }
     )
@@ -113,8 +160,10 @@ local function wait_for_parser(parser, state)
     if parser_available(parser) then
       pending[parser] = nil
 
-      for buf in pairs(state.buffers) do
-        start_highlighting(buf, parser)
+      for buf, should_highlight in pairs(state.buffers) do
+        if should_highlight then
+          start_highlighting(buf, parser)
+        end
       end
 
       return
@@ -141,22 +190,29 @@ local function wait_for_parser(parser, state)
   end, 500)
 end
 
-local function ensure_parser(buf, parser)
+local function ensure_parser(buf, parser, should_highlight)
   -- Reuse an installed parser immediately.
   if parser_available(parser) then
-    start_highlighting(buf, parser)
+    if should_highlight then
+      start_highlighting(buf, parser)
+    end
+
     return
   end
 
   -- Register buffers waiting for the same parser installation.
   if pending[parser] then
-    pending[parser].buffers[buf] = true
+    local previous = pending[parser].buffers[buf]
+
+    -- A primary-parser request takes precedence over a dependency request.
+    pending[parser].buffers[buf] = previous == true or should_highlight
+
     return
   end
 
   local state = {
     buffers = {
-      [buf] = true,
+      [buf] = should_highlight,
     },
     attempts = 0,
   }
@@ -172,11 +228,7 @@ local function ensure_parser(buf, parser)
     pending[parser] = nil
 
     vim.notify(
-      string.format(
-        "Could not install the '%s' parser: %s",
-        parser,
-        err
-      ),
+      string.format("Could not install the '%s' parser: %s", parser, err),
       vim.log.levels.ERROR,
       { title = "Tree-sitter" }
     )
@@ -198,8 +250,17 @@ vim.api.nvim_create_autocmd("FileType", {
     local filetype = vim.bo[event.buf].filetype
     local parser = filetype_parsers[filetype]
 
-    if parser then
-      ensure_parser(event.buf, parser)
+    if not parser then
+      return
+    end
+
+    -- Install the primary parser and enable highlighting when available.
+    ensure_parser(event.buf, parser, true)
+
+    -- Install additional parsers without starting them on this buffer.
+    for _, dependency in ipairs(parser_dependencies[filetype] or {}) do
+      ensure_parser(event.buf, dependency, false)
     end
   end,
 })
+

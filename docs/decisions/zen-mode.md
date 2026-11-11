@@ -4,7 +4,6 @@
 - **Date:** 2026-10-24
 
 ## Context
-
 This project follows a native-first approach to Neovim configuration. Built-in functionality and existing plugins should be evaluated before adding dependencies for optional interface enhancements.
 
 Zen mode is a focused-editing presentation that reduces visual distractions while working in a buffer. A dedicated plugin such as `zen-mode.nvim` may provide a convenient way to manage that presentation, but its usefulness must be assessed against the project's existing configuration and dependency policy.

@@ -92,6 +92,9 @@ require("plugins.dial")
 -- Syntax parsing and highlighting.
 require("plugins.treesitter")
 
+-- Markdown preview.
+require("plugins.md-render")
+
 -- LSP server definitions and Lua development support.
 require("plugins.lsp")
 require("plugins.powershell")

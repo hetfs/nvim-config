@@ -12,17 +12,17 @@ Objective: Learn to request completion instead of waiting for automatic suggesti
 
 Type:
 
-```
+```lua
 local user_name = "Binahf"
 local user_email = "binahf@example.com"
 local user_role = "developer"
-```
+```lua
 
 Now create a new line and type:
 
-```
+```lua
 local user_
-```
+```lua
 
 1. Stop typing.
 2. Press `Ctrl-Space`.
@@ -34,9 +34,9 @@ Expected result: The completion menu opens only after you explicitly request it.
 
 Repeat with:
 
-```
+```lua
 vim.
-```
+```lua
 
 Notice how completion can provide suggestions from the LSP when available.
 
@@ -48,7 +48,7 @@ Objective: Learn to move through completion candidates.
 
 Type:
 
-```
+```lua
 local customer = {
   name = "Ama",
   email = "ama@example.com",
@@ -57,7 +57,7 @@ local customer = {
 }
 
 customer.
-```
+```lua
 
 1. Press `Ctrl-Space`.
 2. Press `Ctrl-n` several times.
@@ -79,10 +79,10 @@ Objective: Learn to insert a selected completion candidate.
 
 Type:
 
-```
+```lua
 local framework = {}
 framework.
-```
+```lua
 
 1. Press `Ctrl-Space`.
 2. Navigate using `Ctrl-n` and `Ctrl-p`.
@@ -92,9 +92,9 @@ framework.
 
 Repeat with:
 
-```
+```lua
 local message = string.
-```
+```lua
 
 Expected result: Pressing `Enter` accepts the selected candidate.
 
@@ -108,10 +108,10 @@ Objective: Close the completion menu without accepting a candidate.
 
 Type:
 
-```
+```lua
 local application = {}
 application.
-```
+```lua
 
 1. Press `Ctrl-Space`.
 2. Navigate through several candidates.
@@ -127,13 +127,13 @@ Intermediate
 
 Your mapping contains three actions:
 
-```
+```lua
 ["<C-Space>"] = {
   "show",
   "show_documentation",
   "hide_documentation",
 },
-```
+```lua
 
 Objective: Understand how Blink handles completion documentation.
 
@@ -155,9 +155,9 @@ Objective: Learn how snippet expansion and placeholder navigation work together.
 
 Open a Lua file and type:
 
-```
+```lua
 local function
-```
+```lua
 
 1. Press `Ctrl-Space`.
 2. Look for a function snippet from `friendly-snippets`.
@@ -180,11 +180,11 @@ Use a snippet with at least three placeholders.
 
 For example, after expanding a function snippet:
 
-```
+```lua
 local function calculate_total(price, quantity)
   return price * quantity
 end
-```
+```lua
 
 1. Fill in the first placeholder.
 2. Press `Tab` to move forward.
@@ -203,7 +203,7 @@ Build this small Lua module using completion and snippets.
 
 Start with:
 
-```
+```lua
 local M = {}
 
 M.users = {}
@@ -217,7 +217,7 @@ function M.get_user(name)
 end
 
 return M
-```
+```lua
 
 Complete the following tasks:
 

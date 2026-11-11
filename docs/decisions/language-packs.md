@@ -727,9 +727,7 @@ Python-specific smoke tests remain intentionally skipped and are not represented
 
 ## Guiding Principles
 
-> **Minimum installation. Compose the rest.**
-
-> **Approval is not installation.**
+> **Minimum installation. Compose the rest.** **Approval is not installation.**
 
 Every language pack and optional component must justify its responsibility, dependencies, configuration, and validation requirements.
 

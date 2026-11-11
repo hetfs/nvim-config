@@ -8,9 +8,18 @@ vim.pack.add({
   },
 })
 
+-- Configure Snacks navigation.
 require("snacks").setup({
   picker = {
     enabled = true,
+
+    -- sources = {
+    --   projects = {
+    --     dev = {
+    --       "D:\\workspace", -- Replace with your project perent directories
+    --     },
+    --   },
+    -- },
   },
   explorer = {
     enabled = true,
@@ -18,18 +27,13 @@ require("snacks").setup({
   },
 })
 
--- picker = {
---   projects = {
---   sources = {
---     workspace = {"D:\\workspace"}, -- Replace with your project perent directories
---     recent = true
---   },
---   },
--- }
+-- Apply platform-specific Snacks compatibility.
+require("config.snacks").setup()
 
 -- ============================================================
 -- Snacks Picker workspace
 -- ============================================================
+
 vim.keymap.set("n", "<leader>fp", function()
   Snacks.picker.projects()
 end, {

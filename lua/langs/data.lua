@@ -74,11 +74,12 @@ local M = {
   },
 
   -- Server names consumed by vim.lsp.enable().
+  -- String keys satisfy the language registry metadata contract.
   servers = {
-    "yamlls",
-    "jsonls",
-    "jqls",
-    "taplo",
+    yamlls = true,
+    jsonls = true,
+    jqls = true,
+    taplo = true,
   },
 
   -- A server is enabled only when its executable is available.
@@ -99,7 +100,10 @@ end
 -- Configure a server when custom settings are provided.
 -- Enable it only when its executable is available.
 local function enable(server, config)
-  local executable = assert(M.executables[server], string.format("No executable declared for data server '%s'", server))
+  local executable = assert(
+    M.executables[server],
+    string.format("No executable declared for data server '%s'", server)
+  )
 
   if config then
     vim.lsp.config(server, config)
@@ -337,3 +341,4 @@ function M.setup()
 end
 
 return M
+
