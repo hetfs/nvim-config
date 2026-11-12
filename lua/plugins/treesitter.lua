@@ -32,9 +32,24 @@ if vim.fn.has("win32") == 1 and (not vim.env.CC or vim.env.CC == "") then
   end
 end
 
--- Configure the parser and query installation directory.
+-- Configure the parser installation directory.
 require("nvim-treesitter").setup({
   install_dir = vim.fn.stdpath("data") .. "/site",
+})
+
+-- Register custom parsers using the legacy nvim-treesitter registry.
+-- The installed plugin discovers custom entries through the TSUpdate event.
+vim.api.nvim_create_autocmd("User", {
+  pattern = "TSUpdate",
+  callback = function()
+    require("nvim-treesitter.parsers").mdx = {
+      install_info = {
+        url = "https://github.com/srazzak/tree-sitter-mdx",
+        queries = "queries",
+      },
+      tier = 1,
+    }
+  end,
 })
 
 -- Obtain Tree-sitter metadata from enabled language packs.
@@ -53,7 +68,10 @@ for filetype, parser in pairs(filetype_parsers) do
 
   assert(
     type(parser) == "string" and parser ~= "",
-    string.format("Tree-sitter parser mapping for '%s' must be a non-empty string", tostring(filetype))
+    string.format(
+      "Tree-sitter parser mapping for '%s' must be a non-empty string",
+      tostring(filetype)
+    )
   )
 end
 
@@ -66,12 +84,18 @@ for filetype, dependencies in pairs(parser_dependencies) do
 
   assert(
     filetype_parsers[filetype] ~= nil,
-    string.format("Tree-sitter dependencies for '%s' require a primary parser mapping", filetype)
+    string.format(
+      "Tree-sitter dependencies for '%s' require a primary parser mapping",
+      filetype
+    )
   )
 
   assert(
     type(dependencies) == "table" and #dependencies > 0,
-    string.format("Tree-sitter dependencies for '%s' must be a non-empty list", filetype)
+    string.format(
+      "Tree-sitter dependencies for '%s' must be a non-empty list",
+      filetype
+    )
   )
 
   local count = 0
@@ -79,17 +103,28 @@ for filetype, dependencies in pairs(parser_dependencies) do
   for index, parser in pairs(dependencies) do
     assert(
       type(index) == "number" and index >= 1 and math.floor(index) == index,
-      string.format("Tree-sitter dependencies for '%s' must use sequential numeric indices", filetype)
+      string.format(
+        "Tree-sitter dependencies for '%s' must use sequential numeric indices",
+        filetype
+      )
     )
 
     assert(
       type(parser) == "string" and parser ~= "",
-      string.format("Tree-sitter dependency at index %s for '%s' must be a non-empty string", tostring(index), filetype)
+      string.format(
+        "Tree-sitter dependency at index %s for '%s' must be a non-empty string",
+        tostring(index),
+        filetype
+      )
     )
 
     assert(
       parser ~= filetype_parsers[filetype],
-      string.format("Tree-sitter dependency '%s' for '%s' duplicates its primary parser", parser, filetype)
+      string.format(
+        "Tree-sitter dependency '%s' for '%s' duplicates its primary parser",
+        parser,
+        filetype
+      )
     )
 
     count = count + 1
@@ -97,7 +132,10 @@ for filetype, dependencies in pairs(parser_dependencies) do
 
   assert(
     count == #dependencies,
-    string.format("Tree-sitter dependencies for '%s' must not contain missing list entries", filetype)
+    string.format(
+      "Tree-sitter dependencies for '%s' must not contain missing list entries",
+      filetype
+    )
   )
 end
 

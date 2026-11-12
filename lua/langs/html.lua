@@ -20,7 +20,7 @@ local M = {
   },
 
   servers = {
-    html = true,
+    "html",
   },
 
   executables = {

@@ -49,6 +49,7 @@ return {
     sql = true,
     docker = true,
     markdown = true,
+    mdx = true,
     latex = true,
   },
 

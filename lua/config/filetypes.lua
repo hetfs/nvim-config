@@ -27,3 +27,17 @@ vim.filetype.add({
     [".*/charts/[^/]+/values[^/]*%.ya?ml"] = "yaml.helm-values",
   },
 })
+
+vim.filetype.add({
+  extension = {
+    mdx = "mdx",
+  },
+
+  filename = {
+    -- Keep the existing filename mappings.
+  },
+
+  pattern = {
+    -- Keep the existing pattern mappings.
+  },
+})
