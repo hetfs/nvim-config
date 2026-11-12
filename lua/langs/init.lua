@@ -5,12 +5,22 @@
 
 local M = {}
 
-local config_root = vim.fn.fnamemodify(vim.fn.resolve(debug.getinfo(1, "S").source:sub(2)), ":p:h:h:h")
+local source = debug.getinfo(1, "S").source
 
-local langs_root = config_root .. "/lua/langs"
+assert(source:sub(1, 1) == "@", "Could not determine the language registry module path")
+
+local module_path = vim.fn.resolve(source:sub(2))
+local config_root = vim.fn.fnamemodify(module_path, ":p:h:h:h")
+local langs_root = vim.fs.joinpath(config_root, "lua", "langs")
+
+-- Return the absolute root of this Neovim configuration.
+function M.root()
+  return config_root
+end
 
 local function discover_packs()
   local files = vim.fn.globpath(langs_root, "*.lua", false, true)
+
   local packs = {}
 
   table.sort(files)
@@ -51,6 +61,7 @@ local function get_enabled_packs()
 
   local packs = {}
 
+  -- Preserve deterministic discovery order.
   for _, name in ipairs(discovered) do
     if config.packs[name] == true then
       packs[#packs + 1] = name
