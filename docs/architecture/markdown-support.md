@@ -27,38 +27,37 @@ A configuration declaration alone does not establish that a dependency is instal
 
 ### 2.1 Stage information
 
-| Property | Value |
-| --- | --- |
-| Stage | 13 — Language Packs |
-| Document status | Active implementation and validation record |
-| Core implementation | In progress |
-| Language pack | `lua/langs/markdown.lua` |
-| Central configuration | `lua/config/languages.lua` |
-| Default preview | `delphinus/md-render.nvim` |
-| Default preview status | Accepted; target-environment validation reported as passed |
+| Property               | Value                                                     |
+| ---------------------- | --------------------------------------------------------- |
+| Stage                  | 13 — Language Packs                                       |
+| Document status        | Active implementation and validation record               |
+| Core implementation    | Substantially implemented; final validation remains       |
+| Language pack          | `lua/langs/markdown.lua`                                  |
+| Central configuration  | `lua/config/languages.lua`                                |
+| Default preview        | `delphinus/md-render.nvim`                                |
+| Default preview status | Accepted; Windows + WezTerm validation reported as passed |
 
 Stages 04, 10, and 12 are complete. They are not outstanding prerequisites for Markdown implementation and must not be treated as blockers.
 
 ### 2.2 Implementation status
 
-| Component | Current status | Remaining work |
-| --- | --- | --- |
-| Markdown language pack | Implemented | Review metadata and run current regression checks |
-| Central language configuration | Implemented | Verify current configuration contract |
-| Tree-sitter `markdown` parser | Verified | Retain regression coverage |
-| Tree-sitter `markdown_inline` parser | Verified | Retain regression coverage |
-| Marksman | Declared and conditionally enabled | Verify executable, startup, and actual LSP attachment |
-| Prettier | Declared as formatter | Verify executable and interactive `:Format` behavior |
-| `markdownlint-cli2` | Integrated and interactively verified | Complete or retain fixture-level regression coverage |
-| `:MarkdownToc` | CLI verified; Neovim integration pending | Verify package resolution, execution, buffer updates, and failure handling |
-| `markdown-deps.ps1` | Management contract specified | Validate execution on Windows |
-| `md-render.nvim` | Accepted default baseline | Preserve compatibility evidence and record exact revision |
-| `render-markdown.nvim` | Optional in-buffer renderer | Evaluate independently if selected |
-| `markdown-preview.nvim` | Independent optional browser preview | Evaluate independently if selected |
-| Mermaid | Default diagram format | Verify renderer integration |
-| D2 | Optional diagram format | Evaluate only when needed |
-| archDraw | Optional specialized diagram format | Evaluate only when needed |
-| Japanese phrase segmentation | Optional capability | Validate optional `budoux.lua` integration if selected |
+| Component                            | Current status                        | Remaining work                                            |
+| ------------------------------------ | ------------------------------------- | --------------------------------------------------------- |
+| Markdown language pack               | Implemented                           | Final regression checks                                   |
+| Central language configuration       | Implemented                           | Retain configuration-contract checks                      |
+| Tree-sitter `markdown` parser        | Verified                              | Retain regression coverage                                |
+| Tree-sitter `markdown_inline` parser | Verified                              | Retain regression coverage                                |
+| Marksman                             | Implemented and verified              | Retain attachment regression coverage                     |
+| Prettier                             | Installed and verified                | Retain `:Format` regression coverage                      |
+| `markdownlint-cli2`                  | Integrated and interactively verified | Retain fixture-level regression coverage                  |
+| `:MarkdownToc`                       | CLI and Neovim integration verified   | Retain regression coverage                                |
+| `markdown-deps.ps1`                  | Management contract specified         | Validate execution on Windows                             |
+| `md-render.nvim`                     | Accepted default baseline             | Preserve compatibility evidence and record exact revision |
+| `render-markdown.nvim`               | Optional in-buffer renderer           | Evaluate independently if selected                        |
+| Mermaid                              | Default diagram format                | Complete final Lua integration and rendering verification |
+| D2                                   | Optional diagram format               | Evaluate only when needed                                 |
+| archDraw                             | Optional specialized diagram format   | Evaluate only when needed                                 |
+| Japanese phrase segmentation         | Optional capability                   | Validate optional `budoux.lua` integration if selected    |
 
 ### 2.3 Completion policy
 
@@ -68,7 +67,7 @@ Keep three completion boundaries separate:
 
 1. **Core Markdown support:** Language intelligence, formatting, linting, syntax parsing, and TOC generation.
 2. **Default rendering:** The accepted `md-render.nvim` baseline and its required compatibility behavior.
-3. **Optional extensions:** Alternative in-buffer rendering, browser preview, additional diagram formats, and Japanese phrase segmentation.
+3. **Optional extensions:** Alternative in-buffer rendering, additional diagram formats, and Japanese phrase segmentation.
 
 Completing one boundary does not automatically complete the others.
 
@@ -102,21 +101,20 @@ The implementation follows these principles:
 
 Markdown support is composed of independent components.
 
-| Component | Responsibility |
-| --- | --- |
-| Markdown language pack | Coordinates Markdown-specific integrations |
-| Tree-sitter | Markdown syntax parsing and highlighting |
-| Marksman | Markdown language intelligence |
-| Prettier | Markdown source formatting |
-| `markdownlint-cli2` | Markdown style and consistency checks |
-| `markdown-toc` | On-demand table-of-contents generation |
-| `md-render.nvim` | Default in-editor Markdown rendering |
-| `render-markdown.nvim` | Optional alternative in-buffer rendering |
-| `markdown-preview.nvim` | Independent optional browser preview |
-| Mermaid | Default diagram format |
-| D2 | Optional diagram format |
-| archDraw | Optional specialized cloud infrastructure diagrams |
-| `budoux.lua` | Optional Japanese phrase segmentation |
+| Component              | Responsibility                                     |
+| ---------------------- | -------------------------------------------------- |
+| Markdown language pack | Coordinates Markdown-specific integrations         |
+| Tree-sitter            | Markdown syntax parsing and highlighting           |
+| Marksman               | Markdown language intelligence                     |
+| Prettier               | Markdown source formatting                         |
+| `markdownlint-cli2`    | Markdown style and consistency checks              |
+| `markdown-toc`         | On-demand table-of-contents generation             |
+| `md-render.nvim`       | Default in-editor Markdown rendering               |
+| `render-markdown.nvim` | Optional alternative in-buffer rendering           |
+| Mermaid                | Default diagram format                             |
+| D2                     | Optional diagram format                            |
+| archDraw               | Optional specialized cloud infrastructure diagrams |
+| `budoux.lua`           | Optional Japanese phrase segmentation              |
 
 These components are complementary, not interchangeable.
 
@@ -141,28 +139,30 @@ lua/
 ├── langs/
 │   ├── markdown.lua
 │   └── markdown/
-│       └── toc.lua
+│       ├── lint.lua
+│       ├── toc.lua
+│       └── mermaid.lua
 │
 └── plugins/
     ├── treesitter.lua
     └── markdown/
         ├── md-render.lua
-        ├── render-markdown.lua
-        └── markdown-preview.lua
+        └── render-markdown.lua
 ```
 
 Responsibilities:
 
 - `lua/langs/markdown.lua`: Markdown language-pack metadata and explicit setup.
+- `lua/langs/markdown/lint.lua`: Lint command and structured diagnostic integration.
 - `lua/langs/markdown/toc.lua`: TOC command and external CLI integration.
+- `lua/langs/markdown/mermaid.lua`: Mermaid code-block extraction, CLI execution, browser configuration, and SVG opening.
 - `lua/plugins/treesitter.lua`: Shared parser installation and highlighting infrastructure.
 - `lua/plugins/markdown/md-render.lua`: Default in-editor renderer configuration.
 - `lua/plugins/markdown/render-markdown.lua`: Optional alternative in-buffer renderer.
-- `lua/plugins/markdown/markdown-preview.lua`: Optional browser-preview configuration.
 - `lua/config/languages.lua`: Central language-pack enablement and existing formatter preferences.
 - `lua/config/keymaps.lua`: User-facing Markdown mappings.
 
-The three preview modules must remain independent. The presence of one module must not automatically install, configure, or activate another.
+The preview modules must remain independent. The presence of one module must not automatically install, configure, or activate another.
 
 Do not introduce a separate Markdown loader or duplicate the shared language infrastructure.
 
@@ -174,11 +174,11 @@ The Markdown language pack lives in:
 
 It declares metadata consumed by existing shared infrastructure:
 
-| Metadata | Markdown value |
-| --- | --- |
-| Primary parser | `markdown` |
+| Metadata          | Markdown value    |
+| ----------------- | ----------------- |
+| Primary parser    | `markdown`        |
 | Parser dependency | `markdown_inline` |
-| Formatter | `prettier` |
+| Formatter         | `prettier`        |
 
 The pack uses the existing metadata fields:
 
@@ -186,11 +186,11 @@ The pack uses the existing metadata fields:
 - `parser_by_filetype`
 - `parser_dependencies_by_filetype`
 
-Marksman, linting, and TOC generation are initialized through the pack's explicit `setup()` implementation.
+Marksman, linting, TOC generation, and Mermaid rendering are initialized through the pack's explicit `setup()` implementation.
 
 Do not introduce `servers` or `executables` metadata unless a shared consumer is implemented and validated.
 
-The TOC integration is resolved by `lua/langs/markdown/toc.lua`. It is an external CLI workflow, not an installation responsibility of Neovim or the language registry.
+The TOC and Mermaid integrations are external CLI workflows, not installation responsibilities of Neovim or the language registry.
 
 ### 4.4 Shared infrastructure
 
@@ -349,7 +349,7 @@ Do not add another Markdown syntax-highlighting plugin to duplicate the existing
 
 ## 7. Markdown Language Server
 
-**Implementation target:** Marksman.
+**Implementation:** Marksman.
 
 Repository:
 
@@ -357,7 +357,7 @@ https://github.com/artempyanykh/marksman
 
 Marksman provides Markdown language intelligence, including supported link completion, navigation, references, and diagnostics.
 
-The Markdown pack declares the Marksman server and its executable. Its setup checks executable availability before enabling the server through Neovim's native LSP API.
+The Markdown pack initializes Marksman through the existing native LSP architecture.
 
 ### 7.1 Implementation requirements
 
@@ -378,22 +378,24 @@ Verify the actual behavior rather than assuming that every Markdown file has the
 
 Do not introduce a second project-root detection mechanism solely for Markdown. Reuse existing root-detection behavior where compatible and document any verified Marksman-specific requirements.
 
-### 7.2 Validation
+### 7.2 Validation record
 
-Verify that:
+**Status: Implemented and verified.**
 
-1. The Marksman server definition is available.
-2. The executable is detected correctly.
-3. The server starts and attaches when its executable and configuration are available.
-4. Missing executables are reported clearly.
-5. Link navigation and other supported features work in a representative Markdown project.
-6. Individual files and project files produce understandable workspace behavior.
-7. Workspace-root behavior is tested rather than inferred.
-8. Existing LSP behavior and other language packs remain unaffected.
+Marksman has been configured through the existing native LSP architecture. The user has verified that the server attaches successfully.
+
+Retain regression coverage for:
+
+1. The Marksman server definition.
+2. Executable detection.
+3. Server startup and attachment.
+4. Missing-executable diagnostics.
+5. Link navigation and other supported features.
+6. Individual-file and project-workspace behavior.
+7. Workspace-root behavior.
+8. Compatibility with other language packs.
 
 Automated checks should validate the configuration contract without requiring a live server process. Interactive verification must establish actual startup and attachment.
-
-**Current status:** Declared and conditionally enabled. Interactive LSP attachment verification remains outstanding.
 
 ## 8. Markdown Formatting
 
@@ -418,9 +420,13 @@ Formatting uses the existing manual interface through `:Format` and Conform.
 
 Do not introduce a Markdown-only formatter preference mechanism.
 
-### 8.2 Validation
+### 8.2 Validation record
 
-Format representative documents containing:
+**Status: Installed and verified.**
+
+Prettier is installed and declared in Markdown formatter metadata.
+
+Retain regression coverage for:
 
 - Headings and paragraphs.
 - Ordered and unordered lists.
@@ -429,18 +435,16 @@ Format representative documents containing:
 - Fenced code blocks.
 - Inline code and emphasis.
 - Long paragraphs and nested content.
+- Formatter selection through shared configuration.
+- Missing-executable diagnostics.
 
-Confirm that `:Format` invokes the intended formatter and produces expected output.
+Confirm that:
 
-Also verify that:
-
-1. Formatting remains an explicit user action.
-2. Format-on-save has not been enabled inadvertently.
-3. LSP formatting is not silently used as a fallback.
-4. Formatter selection respects shared configuration.
+1. `:Format` invokes the intended formatter.
+2. Formatting remains an explicit user action.
+3. Format-on-save has not been enabled inadvertently.
+4. LSP formatting is not silently used as a fallback.
 5. Other filetypes retain their existing formatter behavior.
-
-**Current status:** Prettier is declared in formatter metadata. Interactive executable and `:Format` verification remain outstanding.
 
 ## 9. Markdown Linting
 
@@ -461,7 +465,7 @@ Formatting and linting are independent operations:
 - Prettier formats Markdown source.
 - `markdownlint-cli2` checks Markdown against an explicit rule policy.
 
-The linter uses the existing external-tool and language-pack conventions. A dedicated Neovim lint plugin is not required unless the existing infrastructure cannot provide the necessary workflow.
+The linter uses the existing external-tool and language-pack conventions. A dedicated Neovim lint plugin is not required because the existing integration provides the required workflow.
 
 ### 9.2 Implementation requirements
 
@@ -472,18 +476,37 @@ The linter uses the existing external-tool and language-pack conventions. A dedi
 - Report findings with useful file and line information.
 - Distinguish rule violations from executable failures and invalid configuration.
 - Report missing executables clearly.
-- Support the current Markdown file and, where practical, project-level linting.
+- Support the current Markdown file and project-level linting where practical.
 - Keep linting independent of `:Format`.
-- Do not silently lint on save without a separate explicit decision.
+- Do not silently lint on save.
 - Do not make linting a prerequisite for opening or editing Markdown files.
 
 ### 9.3 Configuration policy
 
-Use the repository's established configuration conventions.
+The CLI2 configuration belongs in the repository's `.markdownlint-cli2.yaml` file.
 
-The lint rule configuration must be version-controlled. Rule changes must be intentional and validated against representative fixtures.
+Markdown rule overrides belong under `config:`. CLI2 execution options remain at the configuration root.
 
-Avoid a separate Markdown-only preference system or duplicate shared tool management.
+The current configuration includes:
+
+- `config.default: true`.
+- Explicit rule overrides and rule parameters.
+- `noBanner`.
+- `noProgress`.
+- `showFound`.
+- `outputFormatters`.
+
+The custom formatter is:
+
+`scripts/markdownlint/formatter.mjs`
+
+It produces structured JSON consumed by `lua/langs/markdown/lint.lua`.
+
+Do not move CLI2 options into the Markdown rule configuration. Do not validate `.markdownlint-cli2.yaml` against the schema for `.markdownlint.yaml`.
+
+Reference:
+
+https://github.com/DavidAnson/markdownlint-cli2/blob/main/schema/markdownlint-cli2-config-schema.json
 
 ### 9.4 Implementation and validation record
 
@@ -494,6 +517,10 @@ The current integration:
 - Uses stdin so unsaved buffer contents are linted.
 - Produces structured JSON through a custom formatter.
 - Publishes findings through `vim.diagnostic`.
+- Uses asynchronous execution.
+- Rejects stale results using buffer change tracking and request identifiers.
+- Handles malformed output and process failures.
+- Supports manual `:MarkdownLint` execution.
 
 Verified behavior:
 
@@ -558,13 +585,12 @@ The command must:
 - Avoid automatic package installation.
 - Report missing executables, invalid markers, and process failures.
 - Reject stale asynchronous results.
+- Avoid overwriting changes made while generation is running.
 - Remain independent of linting, formatting, LSP, and preview rendering.
 
 The module resolves `node` and `markdown-toc` through Neovim's PATH, then locates the Node entrypoint from the npm global package layout.
 
 It supports the original `markdown-toc` package and the maintained `@frat/markdown-toc` fork.
-
-Package resolution must be verified inside Neovim on the target Windows environment.
 
 ### 10.2 CLI validation record
 
@@ -580,45 +606,253 @@ Its help output confirmed file input, stdin input, and `-i` in-place marker-base
 
 A temporary-file test confirmed that the CLI generated a nested TOC between the configured markers. Running it a second time produced identical content, confirming CLI-level idempotency.
 
-This verifies the external CLI in PowerShell. It does not verify package resolution, process execution, command registration, or buffer updates inside Neovim.
+### 10.3 Neovim integration validation record
 
-### 10.3 Neovim validation
+**Status: Implemented and tested.**
 
-Verify that:
+The Neovim integration has been exercised through the Markdown language-pack workflow.
 
-1. `:MarkdownToc` is registered when the Markdown pack is enabled.
-2. A valid Markdown buffer receives the generated TOC.
-3. Unsaved buffer content is included.
-4. Repeated generation does not duplicate entries.
-5. The buffer becomes modified when output changes.
-6. The file is not saved automatically.
-7. Missing, duplicated, or incorrectly ordered markers produce clear warnings.
-8. Missing Node.js or `markdown-toc` produces actionable errors.
-9. The command works with `@frat/markdown-toc` on Windows + WezTerm.
-10. Edits made while generation is running are not overwritten by stale results.
-11. Wiped buffers and superseded requests are handled safely.
-12. Non-modifiable buffers are not changed.
-13. Temporary files are removed after success, failure, or superseded requests.
-14. The original buffer's `endofline` setting is preserved.
-15. No automatic TOC generation or dependency installation occurs.
+Retain regression coverage for:
 
-**Current status:** CLI generation and idempotency verified in PowerShell. Neovim integration remains pending interactive validation.
+1. `:MarkdownToc` registration when the Markdown pack is enabled.
+2. Valid Markdown buffer updates.
+3. Unsaved-buffer content.
+4. Repeated generation without duplicate entries.
+5. Buffer modification state when output changes.
+6. No automatic file saving.
+7. Missing, duplicated, or incorrectly ordered markers.
+8. Missing Node.js or `markdown-toc`.
+9. Package resolution on Windows + WezTerm.
+10. Edits made while generation is running.
+11. Wiped buffers and superseded requests.
+12. Non-modifiable buffers.
+13. Temporary-file cleanup after success, failure, or superseded requests.
+14. Preservation of the original buffer's `endofline` setting.
+15. No automatic TOC generation or dependency installation.
 
-## 11. Markdown Rendering and Preview
+## 11. Mermaid Diagram Rendering
+
+**Diagram format:** Mermaid
+**CLI:** Mermaid CLI (`mmdc`)
+**Browser automation:** Puppeteer
+**Output:** SVG
+
+Official documentation:
+
+- Mermaid: https://mermaid.js.org/
+- Mermaid CLI: https://github.com/mermaid-js/mermaid-cli
+- Puppeteer: https://pptr.dev/
+
+Mermaid is the baseline diagram format for Markdown documentation.
+
+The implementation belongs to:
+
+`lua/langs/markdown/mermaid.lua`
+
+It provides an explicit `:MermaidRender` command that extracts the fenced Mermaid block containing the cursor, renders it through the installed Mermaid CLI, and opens the resulting SVG using the operating system's default application.
+
+### 11.1 Responsibility and behavior
+
+The implementation must:
+
+- Extract only the Mermaid code block containing the cursor.
+- Support backtick and tilde fenced code blocks.
+- Validate the opening and closing fences.
+- Reject non-Mermaid fenced blocks.
+- Write extracted source to a temporary `.mmd` file.
+- Invoke the installed `mmdc` executable.
+- Supply an explicit Puppeteer browser configuration.
+- Render an SVG output.
+- Open the SVG through `vim.ui.open()`.
+- Preserve the original Markdown buffer.
+- Avoid automatic source saving.
+- Avoid package installation and `npx` fallback.
+- Report extraction, dependency, process, rendering, and opening failures clearly.
+- Retain failed Mermaid source for debugging.
+- Clean up temporary files when appropriate.
+
+The Mermaid integration is independent of the Markdown preview plugin. It must not introduce another preview framework.
+
+### 11.2 Browser discovery
+
+Puppeteer must receive an explicit browser executable path.
+
+The implementation supports:
+
+- `CHROME_PATH` as an explicit browser override.
+- `CHROMIUM_PATH` as an explicit browser override.
+- Windows Chrome installation paths.
+- Windows `PATH` lookup for Chrome and Chromium.
+- macOS Chrome and Chromium application bundles.
+- Linux Chrome and Chromium executable names through `PATH`.
+
+An explicitly configured browser path takes precedence over automatic discovery.
+
+If the override is invalid, the integration must report the problem rather than silently selecting a different browser.
+
+If no supported browser is found, the command must provide an actionable error.
+
+### 11.3 Puppeteer configuration
+
+The integration creates a temporary JSON configuration:
+
+```json
+{
+  "executablePath": "path-to-chrome-or-chromium"
+}
+```
+
+The file is passed to Mermaid CLI using:
+
+```text
+--puppeteerConfigFile
+```
+
+The configuration file is removed after the CLI process completes or if process startup fails.
+
+Do not introduce browser-specific flags such as `--no-sandbox` without a demonstrated compatibility or security requirement.
+
+### 11.4 Process management
+
+Mermaid rendering uses asynchronous `vim.system()` execution.
+
+The implementation includes:
+
+- A 30-second rendering timeout.
+- Request identifiers to reject stale callbacks.
+- Termination of a previous active `mmdc` process when a new render is requested.
+- Cleanup of superseded request files.
+- Failure reporting based on process exit status and CLI output.
+- Shutdown cleanup through `VimLeavePre`.
+- A bounded wait for the active CLI process during shutdown.
+
+The timeout is intended to prevent a hung Mermaid CLI invocation from leaving a request pending indefinitely.
+
+Process cancellation targets the `mmdc` process. It must not be described as guaranteed process-tree termination unless Chrome child-process cleanup is independently verified.
+
+### 11.5 Temporary-file lifecycle
+
+Temporary files include:
+
+- Mermaid source (`.mmd`).
+- SVG output (`.svg`).
+- Puppeteer configuration (`.json`).
+
+Lifecycle policy:
+
+| File                    | Success                                   | Failure                | Shutdown |
+| ----------------------- | ----------------------------------------- | ---------------------- | -------- |
+| Mermaid source          | Retained for the active successful render | Retained for debugging | Cleaned  |
+| SVG output              | Retained for the active successful render | Removed                | Cleaned  |
+| Puppeteer configuration | Removed after process completion          | Removed                | Cleaned  |
+
+A new successful render replaces the previous successful temporary render only after the new SVG has been generated.
+
+A failed render must not delete the previous successful output.
+
+Repeated failed renders must not create an uncontrolled accumulation of temporary files. Review and test the retention policy as part of lifecycle regression coverage.
+
+### 11.6 Windows compatibility investigation
+
+The original rendering failure occurred because Puppeteer could not discover or launch its browser:
+
+```text
+TimeoutError: Timed out after 30000 ms while waiting for the WS endpoint URL to appear in stdout!
+```
+
+The user verified that explicitly configuring Chrome's executable path resolved the failure.
+
+Tested environment details:
+
+- Windows 11.
+- Neovim 0.12.6.
+- Mermaid CLI v12.2.0.
+- Google Chrome at:
+
+```text
+C:\Program Files\Google\Chrome\Application\chrome.exe
+```
+
+The PowerShell test created a Puppeteer configuration containing `executablePath` and successfully generated an SVG using `mmdc`.
+
+This confirms the external Mermaid CLI and explicit browser configuration on the tested Windows environment.
+
+It does not establish that the complete Neovim Lua module has passed interactive verification.
+
+### 11.7 Lua integration status
+
+**Status: Implemented candidate; final interactive verification pending.**
+
+The current implementation includes:
+
+- Cross-platform browser discovery.
+- Explicit Puppeteer configuration.
+- Mermaid fence extraction.
+- Asynchronous rendering.
+- Request cancellation.
+- Timeout handling.
+- Temporary-file cleanup.
+- SVG opening.
+- Shutdown cleanup.
+
+Before declaring the integration complete, verify:
+
+1. `require("langs.markdown.mermaid").setup()` is called from the Markdown language pack.
+2. `:MermaidRender` is registered.
+3. A valid Mermaid block generates an SVG.
+4. The SVG opens through the operating system's default application.
+5. Invalid Mermaid syntax produces an actionable error.
+6. The source file is retained after a rendering failure.
+7. The Markdown buffer is never modified.
+8. Cursor placement outside a Mermaid block produces a warning.
+9. Missing `mmdc` is reported clearly.
+10. Missing or invalid browser configuration is reported clearly.
+11. A second render cancels a previous active request.
+12. A timeout is reported correctly.
+13. Shutdown cleanup removes tracked files.
+14. Previous successful output is preserved when a new render fails.
+15. Repeated rendering does not leave uncontrolled temporary files.
+
+Verify `vim.ui.open()` return-value handling against the installed Neovim version. A successful return confirms that the system opener was started; it does not prove that the external application successfully displayed the document.
+
+Also verify the bounded process wait against Neovim 0.12.6.
+
+### 11.8 Mermaid fixture
+
+```mermaid
+flowchart TD
+    A[Open Markdown] --> B[Extract Mermaid block]
+    B --> C[Run Mermaid CLI]
+    C --> D[Generate SVG]
+    D --> E[Open SVG]
+```
+
+Use additional fixtures for:
+
+- Flowcharts.
+- Sequence diagrams.
+- Class diagrams.
+- State diagrams.
+- Entity relationship diagrams.
+- Gantt charts.
+- Git graphs.
+
+Do not make every Mermaid diagram type a prerequisite for the initial renderer integration. Validate the supported baseline and expand coverage as needed.
+
+## 12. Markdown Rendering and Preview
 
 Rendering is separate from the core Markdown editing workflow.
 
-The architecture distinguishes three preview roles:
+The architecture distinguishes two in-buffer rendering roles:
 
-| Plugin | Role | Installation profile |
-| --- | --- | --- |
-| `delphinus/md-render.nvim` | In-editor rendering baseline | Default |
-| `render-markdown.nvim` | Alternative in-buffer rendering | Optional |
-| `markdown-preview.nvim` | Browser-based live preview | Independent optional extension |
+| Plugin                     | Role                                     | Installation profile |
+| -------------------------- | ---------------------------------------- | -------------------- |
+| `delphinus/md-render.nvim` | Default in-editor rendering              | Default              |
+| `render-markdown.nvim`     | Optional alternative in-buffer rendering | Optional             |
 
 These implementations must not be treated as interchangeable.
 
-### 11.1 Shared preview policies
+### 12.1 Shared preview policies
 
 Preview plugins must:
 
@@ -626,14 +860,14 @@ Preview plugins must:
 - Have independent configuration modules.
 - Keep activation under explicit user control.
 - Avoid automatic rendering during startup or buffer opening.
-- Avoid automatically opening a browser.
+- Avoid automatically opening external applications.
 - Document external dependencies and installation procedures.
 - Avoid silent downloads and implicit package installation.
 - Have independent tests and failure handling.
 - Remain independent of Marksman, formatting, and linting.
 - Fail without damaging ordinary Markdown editing.
 
-Installing a preview plugin does not authorize it to start a preview, open a browser, render a document, or download additional software.
+Installing a preview plugin does not authorize it to start a preview, open an application, render a document, or download additional software.
 
 Separate the following operations:
 
@@ -643,7 +877,7 @@ Separate the following operations:
 
 Only one in-buffer renderer should be active by default.
 
-### 11.2 Default baseline: `md-render.nvim`
+### 12.2 Default baseline: `md-render.nvim`
 
 Repository:
 
@@ -685,16 +919,16 @@ Preserve the exact plugin revision and detailed test evidence in `docs/plugin-in
 
 Identify dependencies by the feature that requires them.
 
-| Dependency | Purpose | Policy |
-| --- | --- | --- |
-| Terminal graphics support | Displays rendered images inside Neovim | Validate on Windows + WezTerm |
-| `curl` | Retrieves remote media where enabled | External dependency; install explicitly |
-| Mermaid CLI (`mmdc`) | Renders Mermaid diagrams | Explicitly manage if selected |
-| D2 | Renders D2 diagrams | Optional |
-| archDraw | Produces specialized infrastructure diagrams | Optional |
-| `budoux.lua` | Japanese phrase segmentation | Optional |
-| FFmpeg and `ffprobe` | Media conversion and video-related features | Optional |
-| ImageMagick | Image conversion fallback where supported | Optional |
+| Dependency                | Purpose                                      | Policy                                  |
+| ------------------------- | -------------------------------------------- | --------------------------------------- |
+| Terminal graphics support | Displays rendered images inside Neovim       | Validate on Windows + WezTerm           |
+| `curl`                    | Retrieves remote media where enabled         | External dependency; install explicitly |
+| Mermaid CLI (`mmdc`)      | Renders Mermaid diagrams                     | Explicitly manage                       |
+| D2                        | Renders D2 diagrams                          | Optional                                |
+| archDraw                  | Produces specialized infrastructure diagrams | Optional                                |
+| `budoux.lua`              | Japanese phrase segmentation                 | Optional                                |
+| FFmpeg and `ffprobe`      | Media conversion and video-related features  | Optional                                |
+| ImageMagick               | Image conversion fallback where supported    | Optional                                |
 
 The actual required set depends on the admitted feature set. Optional media dependencies must not become mandatory for basic Markdown preview.
 
@@ -734,6 +968,15 @@ vim.keymap.set("n", "<leader>mt", "<Plug>(md-render-preview-tab)", {
 vim.keymap.set("n", "<leader>md", "<Plug>(md-render-demo)", {
   desc = "Markdown render demo",
 })
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "markdown",
+    callback = function(event)
+        vim.keymap.set("n", "<leader>mr", "<cmd>MermaidRender<CR>", {
+            buffer = event.buf,
+            desc = "Markdown: Render Mermaid diagram",
+        })
+    end,
+})
 ```
 
 These mappings preserve manual activation.
@@ -763,7 +1006,7 @@ Retain checks for:
 
 Record the plugin revision, Neovim version, Windows environment, WezTerm version, terminal graphics behavior, dependency versions, and test results.
 
-### 11.3 Optional alternative: `render-markdown.nvim`
+### 12.3 Optional alternative: `render-markdown.nvim`
 
 Repository:
 
@@ -796,127 +1039,7 @@ Record one of the following decisions:
 
 The optional alternative does not block core Markdown support or the accepted default baseline.
 
-### 11.4 Independent optional extension: `markdown-preview.nvim`
-
-Repository:
-
-https://github.com/sammaji/markdown-preview.nvim
-
-Installation documentation:
-
-https://mkdp.sammaji.com/installation
-
-`markdown-preview.nvim` provides a browser-based preview workflow. It is not an in-buffer terminal renderer.
-
-It remains an independent optional extension and must not be confused with either `md-render.nvim` or `render-markdown.nvim`.
-
-Its absence must not affect core Markdown editing or the default in-editor preview.
-
-#### Installation and dependency policy
-
-The maintained fork documents a prebuilt Windows x64 server binary and an explicit installation procedure.
-
-Before admitting the extension:
-
-- Verify the exact repository and revision.
-- Verify the Windows x64 server binary.
-- Determine how the binary will be installed and updated explicitly.
-- Verify native `vim.pack` integration.
-- Confirm that preview startup does not trigger an unapproved installation.
-- Document browser and server requirements.
-- Keep its installation separate from the default baseline.
-
-Do not add an automatic Neovim startup installer.
-
-#### Isolated evaluation
-
-Evaluate the extension independently in a temporary checkout and clean Neovim session.
-
-Verify:
-
-1. Plugin loading without errors.
-2. Preview opening in the selected browser.
-3. Ordinary Markdown rendering.
-4. Tables, task lists, links, callouts, and fenced code blocks.
-5. Local image resolution.
-6. Remote image behavior when network access is available.
-7. Mathematical notation and supported diagrams.
-8. Preview updates after source edits.
-9. Synchronized scrolling.
-10. Reliable closing and reopening.
-11. Browser and server process cleanup.
-12. Source integrity.
-13. Failure isolation from ordinary editing.
-14. No unapproved downloads when server binaries are missing.
-
-Record the plugin revision, server version, Neovim version, Windows environment, browser, test results, and relevant errors.
-
-#### Optional admission decision
-
-Record one of the following:
-
-- **Accepted:** Browser preview works reliably and dependencies can be managed explicitly.
-- **Deferred:** Useful features work, but compatibility or stability needs further investigation.
-- **Rejected:** The extension cannot meet requirements without unacceptable complexity or instability.
-
-A deferred or rejected browser-preview extension does not invalidate the default in-editor preview or core Markdown language pack.
-
-### 11.5 Diagram support
-
-Mermaid is the baseline diagram format.
-
-D2 and archDraw are optional extensions with independent dependencies and admission decisions.
-
-#### Mermaid
-
-Official documentation:
-
-https://mermaid.js.org/
-
-Mermaid is the default diagram format for Markdown documentation.
-
-Verify that the selected renderer displays Mermaid as a visual diagram rather than an unprocessed code block.
-
-For `md-render.nvim`, verify inline image rendering using an explicitly managed Mermaid CLI installation.
-
-For browser preview, verify the extension's documented Mermaid behavior separately.
-
-Representative fixture:
-
-```mermaid
-flowchart TD
-    A[Open Markdown] --> B[Parse document]
-    B --> C[Render preview]
-    C --> D[View diagram]
-```
-
-#### D2
-
-Official documentation:
-
-https://d2lang.com/
-
-D2 is optional.
-
-Evaluate it only when the project needs capabilities that Mermaid does not adequately provide.
-
-Verify:
-
-- Explicit installation and version management.
-- Renderer compatibility.
-- Image output in the selected preview environment.
-- Clear behavior when the executable is unavailable.
-- No implicit package installation.
-
-#### archDraw
-
-archDraw is an optional specialized diagram capability for cloud infrastructure maps.
-
-It must not become a mandatory Markdown dependency.
-
-Evaluate its renderer, external requirements, output format, and compatibility independently before admission.
-
-### 11.6 Shared rendering fixtures
+### 12.4 Shared rendering fixtures
 
 Use shared Markdown fixtures to compare rendering behavior without requiring identical rendering engines or presentation.
 
@@ -975,7 +1098,7 @@ Verify that paragraph joining does not insert unintended spaces between CJK char
 
 The baseline `md-render.nvim` evaluation must cover its required CJK behavior. Do not assume that alternative renderers implement identical phrase segmentation or wrapping rules.
 
-## 12. Intended Workflow
+## 13. Intended Workflow
 
 The intended Markdown workflow is:
 
@@ -984,9 +1107,9 @@ The intended Markdown workflow is:
 3. Run `:Format` when source formatting is needed.
 4. Run `:MarkdownLint` to check rule compliance.
 5. Run `:MarkdownToc` when the document's table of contents needs to be generated or updated.
-6. Use `md-render.nvim` when in-editor visual inspection is needed.
-7. Use `render-markdown.nvim` only when the optional alternative is selected.
-8. Use `markdown-preview.nvim` only when the independent browser extension is installed and browser-based rendering is wanted.
+6. Run `:MermaidRender` with the cursor inside a Mermaid code block when an SVG diagram is needed.
+7. Use `md-render.nvim` when in-editor visual inspection is needed.
+8. Use `render-markdown.nvim` only when the optional alternative is selected.
 9. Use Mermaid for baseline diagrams.
 10. Select D2 or archDraw only when their additional capabilities are needed.
 11. Enable Japanese phrase segmentation only when the optional feature is selected.
@@ -996,35 +1119,33 @@ Neither preview starts automatically during Neovim startup or when a Markdown bu
 
 Formatting and linting remain independently usable.
 
-A preview failure must not prevent ordinary Markdown editing, language-server support, formatting, or linting.
+A preview or diagram-rendering failure must not prevent ordinary Markdown editing, language-server support, formatting, or linting.
 
-## 13. Dependencies and External Tool Management
+## 14. Dependencies and External Tool Management
 
 Dependency documentation must distinguish core requirements, default preview dependencies, optional extensions, and pending candidates.
 
-### 13.1 Dependency classification
+### 14.1 Dependency classification
 
-| Dependency | Purpose | Status and policy |
-| --- | --- | --- |
-| Marksman | Markdown language server | Configured; runtime verification pending |
-| Prettier | Markdown formatting | Declared; interactive verification pending |
-| `markdownlint-cli2` | Markdown linting | Integrated and interactively verified |
-| `markdown` parser | Markdown syntax parsing | Verified |
-| `markdown_inline` parser | Inline Markdown syntax parsing | Verified |
-| `markdown-toc` | TOC generation | CLI v1.3.0 verified in PowerShell; Neovim integration pending |
-| Node.js and npm | Runtime and package manager for CLI tools | Required for managed CLI workflows |
-| `md-render.nvim` | Default in-editor preview | Accepted; Windows + WezTerm validation reported as passed |
-| Terminal graphics support | Displays rendered images in Neovim | Target compatibility reported as passed |
-| Mermaid CLI | Mermaid rendering | Explicitly managed when used |
-| D2 | D2 diagrams | Optional |
-| archDraw | Specialized infrastructure diagrams | Optional |
-| `budoux.lua` | Japanese phrase segmentation | Optional |
-| FFmpeg and `ffprobe` | Media conversion and video-related features | Optional |
-| ImageMagick | Image conversion fallback | Optional |
-| `render-markdown.nvim` | Alternative in-buffer rendering | Optional; independent evaluation |
-| `markdown-preview.nvim` | Browser-based live preview | Optional; independent evaluation |
-| Browser | Displays browser preview | Required only when browser preview is selected |
-| Browser preview server binary | Serves rendered Markdown to browser | Windows x64 installation and update policy must be verified |
+| Dependency                | Purpose                                     | Status and policy                                                              |
+| ------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
+| Marksman                  | Markdown language server                    | Implemented and verified                                                       |
+| Prettier                  | Markdown formatting                         | Installed and verified                                                         |
+| `markdownlint-cli2`       | Markdown linting                            | Integrated and interactively verified                                          |
+| `markdown` parser         | Markdown syntax parsing                     | Verified                                                                       |
+| `markdown_inline` parser  | Inline Markdown syntax parsing              | Verified                                                                       |
+| `markdown-toc`            | TOC generation                              | CLI and Neovim integration verified                                            |
+| Node.js and npm           | Runtime and package manager for CLI tools   | Required for managed CLI workflows                                             |
+| `md-render.nvim`          | Default in-editor preview                   | Accepted; Windows + WezTerm validation reported as passed                      |
+| Terminal graphics support | Displays rendered images in Neovim          | Target compatibility reported as passed                                        |
+| Mermaid CLI               | Mermaid rendering                           | Installed and externally verified on Windows; final Neovim integration pending |
+| Chrome or Chromium        | Puppeteer browser for Mermaid rendering     | Explicit browser configuration verified on Windows                             |
+| D2                        | D2 diagrams                                 | Optional                                                                       |
+| archDraw                  | Specialized infrastructure diagrams         | Optional                                                                       |
+| `budoux.lua`              | Japanese phrase segmentation                | Optional                                                                       |
+| FFmpeg and `ffprobe`      | Media conversion and video-related features | Optional                                                                       |
+| ImageMagick               | Image conversion fallback                   | Optional                                                                       |
+| `render-markdown.nvim`    | Alternative in-buffer rendering             | Optional; independent evaluation                                               |
 
 Do not describe a tool as installed merely because its configuration or dependency is documented.
 
@@ -1032,7 +1153,7 @@ Update dependency records only after verifying installation instructions and req
 
 Do not make optional media, diagram, or preview dependencies mandatory for basic Markdown authoring.
 
-### 13.2 Windows Markdown CLI dependency management
+### 14.2 Windows Markdown CLI dependency management
 
 **Script:**
 
@@ -1040,10 +1161,10 @@ Do not make optional media, diagram, or preview dependencies mandatory for basic
 
 The script manages only the two Node.js-based Markdown CLI tools:
 
-| Tool | npm package | Executable | Responsibility |
-| --- | --- | --- | --- |
-| `markdownlint-cli2` | `markdownlint-cli2` | `markdownlint-cli2` | Markdown linting |
-| `markdown-toc` | `@frat/markdown-toc` | `markdown-toc` | TOC generation |
+| Tool                | npm package          | Executable          | Responsibility   |
+| ------------------- | -------------------- | ------------------- | ---------------- |
+| `markdownlint-cli2` | `markdownlint-cli2`  | `markdownlint-cli2` | Markdown linting |
+| `markdown-toc`      | `@frat/markdown-toc` | `markdown-toc`      | TOC generation   |
 
 Node.js and npm are prerequisites. The script does not install them.
 
@@ -1109,11 +1230,31 @@ Verify:
 
 The script is a Windows dependency-management convenience. It does not replace general dependency documentation or authorize Neovim to install external tools automatically.
 
-## 14. Testing and Validation Strategy
+### 14.3 Mermaid dependency management
 
-Validation covers shared infrastructure, the Markdown pack, the default preview, and optional extensions.
+Mermaid rendering uses an externally installed Mermaid CLI.
 
-### 14.1 Automated checks
+The integration must:
+
+- Resolve `mmdc` through Neovim's PATH.
+- Resolve Chrome or Chromium explicitly.
+- Pass the browser path through Puppeteer's configuration file.
+- Avoid `npx` fallback.
+- Avoid installing Mermaid CLI from Neovim.
+- Avoid installing a browser automatically.
+- Report missing dependencies clearly.
+
+The Mermaid CLI and browser are separate dependencies. A successful `mmdc` executable lookup does not prove that Puppeteer can launch a browser.
+
+The successful PowerShell test established that the configured Chrome executable works with the installed Mermaid CLI on the tested Windows environment.
+
+Document additional platform requirements only after testing them.
+
+## 15. Testing and Validation Strategy
+
+Validation covers shared infrastructure, the Markdown pack, the default preview, Mermaid rendering, and optional extensions.
+
+### 15.1 Automated checks
 
 Verify:
 
@@ -1127,6 +1268,8 @@ Verify:
 - Lint commands and configuration are validated.
 - Valid and invalid lint fixtures produce expected results.
 - TOC command registration, package resolution, temporary-file execution, buffer updates, stale-result handling, and cleanup are validated.
+- Mermaid module loading, command registration, and helper behavior are validated.
+- Mermaid process failure, timeout, cancellation, and cleanup paths are covered where practical.
 - The Windows dependency script's check-only behavior, explicit installation, post-install verification, PATH handling, and exit codes are tested.
 - Preview plugin configurations remain independent.
 - Default and optional installation selection is deterministic.
@@ -1137,7 +1280,7 @@ Verify:
 
 Use the repository's existing test interfaces. Do not create parallel validation frameworks when shared checks can validate the same contract.
 
-### 14.2 Markdown fixtures
+### 15.2 Markdown fixtures
 
 Maintain separate fixtures for:
 
@@ -1184,7 +1327,7 @@ Maintain separate fixtures for:
 
 Keep preview-specific checks isolated from core language-pack checks.
 
-### 14.3 Interactive checks
+### 15.3 Interactive checks
 
 Verify:
 
@@ -1194,13 +1337,16 @@ Verify:
 - `:MarkdownToc` updates the current buffer using unsaved content without automatic saving.
 - Markdown and inline Markdown syntax highlighting behave correctly.
 - `md-render.nvim` passes the required in-editor rendering, image, Mermaid, CommonMark, and CJK checks.
+- `:MermaidRender` extracts and renders the intended Mermaid block.
+- The generated SVG opens through the operating system's default application.
+- Invalid Mermaid source and missing dependencies produce actionable errors.
+- Mermaid process cancellation, timeout, and temporary-file cleanup behave correctly.
 - `render-markdown.nvim` passes its independent checks if selected.
-- `markdown-preview.nvim` passes browser, image, scrolling, cleanup, and source-integrity checks if selected.
 - Neither preview starts automatically during startup or buffer opening.
 - Neither preview silently downloads dependencies.
 - Optional Japanese segmentation behaves correctly when enabled and disabled.
 
-### 14.4 Current validation record
+### 15.4 Current validation record
 
 The following work has been reported as completed:
 
@@ -1208,6 +1354,8 @@ The following work has been reported as completed:
 - Tree-sitter parser aliases and availability were verified for Markdown.
 - Both `markdown` and `markdown_inline` parsers were loaded and exercised.
 - Markdown syntax highlighting and fenced-code parsing were interactively checked.
+- Marksman was configured through native LSP and its attachment was verified.
+- Prettier was installed and verified.
 - `markdownlint-cli2` configuration and custom JSON formatter were verified through the command shim and direct Node.js entrypoint.
 - The Neovim `:MarkdownLint` command passed for a named Markdown buffer.
 - Project-root discovery was verified with Neovim's working directory outside the repository.
@@ -1217,20 +1365,26 @@ The following work has been reported as completed:
 - `md-render.nvim` is accepted as the default baseline.
 - `@frat/markdown-toc` v1.3.0 was installed globally.
 - TOC CLI generation and repeated-run idempotency were verified in PowerShell.
+- Neovim TOC integration was implemented and tested.
+- Mermaid code-block extraction was implemented and verified.
+- Mermaid CLI v12.2.0 was installed and verified.
+- Explicit Puppeteer browser configuration successfully rendered an SVG in PowerShell using Chrome.
+- The Mermaid Lua implementation includes cross-platform browser discovery, timeout handling, request cancellation, and temporary-file cleanup.
 - Preview mappings are defined in `lua/config/keymaps.lua`.
 - Preview activation remains manual.
 - `budoux.lua` remains an optional Japanese phrase-segmentation dependency.
 
 The following work remains outstanding:
 
-- Marksman executable verification and actual LSP attachment.
-- Prettier executable verification and interactive `:Format` testing.
-- Neovim-side `:MarkdownToc` integration validation.
+- Final interactive verification of the updated Mermaid Lua renderer.
+- Confirmation that `require("langs.markdown.mermaid").setup()` is registered in the Markdown language pack.
+- Verification of `vim.ui.open()` behavior and process-wait behavior on Neovim 0.12.6.
+- Cross-platform Mermaid rendering tests on macOS and Linux.
 - Windows execution and validation of `markdown-deps.ps1`.
 - Exact `md-render.nvim` revision and detailed validation evidence in `docs/plugin-inventory.md`.
 - Required dependency documentation updates.
 - Current smoke-suite rerun and investigation of the historical failure at `scripts/smoke.lua:789`.
-- Optional renderer and browser-preview evaluation if selected.
+- Optional renderer evaluation if selected.
 - Optional diagram-format evaluation if needed.
 - Optional Japanese segmentation validation if selected.
 
@@ -1244,7 +1398,7 @@ This is a historical failure record. Rerun the current smoke suite to determine 
 
 A passing module load does not prove that external executables are installed, that a language server attaches, that linting works, or that rendering behaves correctly.
 
-### 14.5 Failure behavior
+### 15.5 Failure behavior
 
 Tests must distinguish missing optional dependencies from broken core configuration.
 
@@ -1254,36 +1408,39 @@ Tests must distinguish missing optional dependencies from broken core configurat
 - Missing npm during explicit installation must be reported without attempting installation.
 - Failed package installation or post-install checks must produce a nonzero exit code.
 - Invalid lint configuration must be reported clearly.
+- Missing Mermaid CLI must produce an actionable error.
+- Missing or invalid Chrome/Chromium configuration must produce an actionable error.
+- Mermaid rendering failures must not modify the source buffer.
+- Mermaid timeouts must be distinguished from ordinary syntax errors.
 - Missing preview dependencies must not trigger silent installation.
 - Preview failures must not damage source buffers or ordinary editing.
-- A missing optional browser-preview dependency must not affect the default preview.
 - Invalid configuration and duplicate metadata must fail visibly according to the shared architecture's validation rules.
 
-## 15. Documentation Requirements
+## 16. Documentation Requirements
 
 Update supporting documentation only when the relevant implementation or evaluation has been verified.
 
-### 15.1 `docs/dependencies.md`
+### 16.1 `docs/dependencies.md`
 
 Document:
 
-- Verified Marksman installation and executable checks.
-- Verified Prettier installation and runtime requirements.
+- Marksman installation and executable checks.
+- Prettier installation and runtime requirements.
 - `markdownlint-cli2` installation and invocation.
 - Markdown parser requirements and verification.
 - TOC CLI installation and runtime requirements.
 - `markdown-deps.ps1` behavior and limitations.
 - `md-render.nvim` installation and terminal graphics requirements.
 - Verified Windows + WezTerm compatibility.
-- Mermaid CLI requirements.
+- Mermaid CLI and Puppeteer browser requirements.
+- Explicit Chrome/Chromium configuration.
 - D2 and archDraw requirements when selected.
 - Optional dependencies such as `budoux.lua`, FFmpeg, and ImageMagick.
-- Browser and server requirements for `markdown-preview.nvim` if admitted.
 - A clear distinction between core tools, default preview dependencies, and optional extensions.
 
 Do not document a pending installation or unverified workflow as complete.
 
-### 15.2 `docs/plugin-inventory.md`
+### 16.2 `docs/plugin-inventory.md`
 
 Record:
 
@@ -1297,47 +1454,49 @@ Record:
 
 Do not list a candidate as an admitted plugin merely because it appears in this specification.
 
-### 15.3 `docs/roadmap.md`
+### 16.3 `docs/roadmap.md`
 
 Keep Stage 13 marked **In Progress** while required implementation and validation continue.
 
 Do not mark the Markdown scope complete while required core tests, interactive verification, or dependency documentation remain unfinished.
 
-Keep optional preview and diagram decisions separate from core completion.
+Keep optional rendering and diagram decisions separate from core completion.
 
-### 15.4 Decision documentation
+### 16.4 Decision documentation
 
 Record material plugin-admission and compatibility decisions in the appropriate decision record or plugin inventory entry.
 
 This specification defines the selected architecture and installation policy. It does not replace the evidence required to support compatibility decisions.
 
-## 16. Implementation Order
+## 17. Implementation Order
 
 Continue from the existing implementation. Do not recreate the language pack or repeat completed work.
 
 1. Rerun the current smoke suite. Investigate the historical failure at `scripts/smoke.lua:789` if it remains present.
-2. Verify Marksman executable availability, server startup, and actual LSP attachment.
-3. Verify Prettier executable availability and test `:Format` on representative Markdown content.
+2. Retain Marksman executable, server startup, and LSP attachment regression checks.
+3. Retain Prettier executable and `:Format` regression checks.
 4. Review Markdown pack metadata and retain only fields consumed by shared infrastructure.
-5. Complete or record remaining lint fixture coverage while preserving the verified `:MarkdownLint` workflow.
-6. Integrate and validate `lua/langs/markdown/toc.lua` through `:MarkdownToc`, including unsaved content, stale-result handling, cleanup, and no-save behavior.
-7. Validate `scripts/core/windows/markdown-deps.ps1` in check-only and explicit installation modes on Windows.
-8. Update `docs/dependencies.md` with verified core executable, parser, TOC, script, and preview requirements.
-9. Record the exact `md-render.nvim` revision and detailed Windows + WezTerm evidence in `docs/plugin-inventory.md`.
-10. Optionally improve unnamed-buffer root handling without changing the verified named-buffer workflow.
-11. Evaluate `render-markdown.nvim` separately if the alternative in-buffer renderer is selected.
-12. Evaluate `markdown-preview.nvim` separately if the browser extension is selected.
-13. Evaluate D2 or archDraw only when a demonstrated diagram requirement exists.
-14. Validate optional Japanese segmentation if selected.
-15. Close the core Markdown scope only after its required automated checks, interactive verification, and documentation are complete.
+5. Retain lint fixture coverage while preserving the verified `:MarkdownLint` workflow.
+6. Retain `:MarkdownToc` regression coverage, including unsaved content, stale-result handling, cleanup, and no-save behavior.
+7. Complete final Neovim integration testing of `:MermaidRender`.
+8. Verify Mermaid cancellation, timeout, shutdown cleanup, and preservation of previous successful output.
+9. Validate cross-platform browser discovery on macOS and Linux before documenting those platforms as tested.
+10. Validate `scripts/core/windows/markdown-deps.ps1` in check-only and explicit installation modes on Windows.
+11. Update `docs/dependencies.md` with verified core executable, parser, TOC, script, Mermaid, and preview requirements.
+12. Record the exact `md-render.nvim` revision and detailed Windows + WezTerm evidence in `docs/plugin-inventory.md`.
+13. Optionally improve unnamed-buffer root handling without changing the verified named-buffer workflow.
+14. Evaluate `render-markdown.nvim` separately if the alternative in-buffer renderer is selected.
+15. Evaluate D2 or archDraw only when a demonstrated diagram requirement exists.
+16. Validate optional Japanese segmentation if selected.
+17. Close the core Markdown scope only after its required automated checks, interactive verification, and documentation are complete.
 
 Do not combine unrelated earlier-stage closeout tasks with Markdown implementation.
 
-Do not allow optional browser preview, alternative rendering, diagram formats, or Japanese segmentation to block core Markdown work.
+Do not allow optional alternative rendering, diagram formats, or Japanese segmentation to block core Markdown work.
 
-## 17. Acceptance Criteria
+## 18. Acceptance Criteria
 
-### 17.1 Core Markdown language-pack scope
+### 18.1 Core Markdown language-pack scope
 
 The core scope is complete when:
 
@@ -1358,9 +1517,9 @@ The core scope is complete when:
 - Existing syntax and smoke checks pass.
 - Required dependencies and installation instructions are documented accurately.
 - Core Markdown editing works without any preview plugin.
-- Interactive verification confirms actual LSP, formatting, and linting workflows.
+- Interactive verification confirms actual LSP, formatting, linting, and TOC workflows.
 
-### 17.2 Default preview scope
+### 18.2 Default preview scope
 
 **Status: Accepted.**
 
@@ -1384,7 +1543,28 @@ The durable acceptance and regression contract includes:
 - Manual preview activation.
 - No automatic startup preview or implicit downloads.
 
-### 17.3 Optional alternative renderer
+### 18.3 Mermaid rendering scope
+
+Mermaid is the baseline diagram format.
+
+The rendering integration is complete when:
+
+- `:MermaidRender` is registered through the Markdown language pack.
+- The command extracts the fenced Mermaid block containing the cursor.
+- The installed Mermaid CLI is resolved without an installation fallback.
+- Chrome or Chromium is discovered or explicitly configured.
+- Puppeteer receives a valid browser configuration.
+- A valid Mermaid block generates an SVG.
+- The SVG is handed to the system opener.
+- Invalid Mermaid source produces actionable diagnostics.
+- The Markdown buffer remains unchanged.
+- Request cancellation and timeout behavior are verified.
+- Temporary-file cleanup is verified.
+- A failed new render does not delete the previous successful output.
+- The target Windows + Neovim + Chrome environment passes interactive tests.
+- Other platform support is documented only after platform-specific testing.
+
+### 18.4 Optional alternative renderer
 
 The `render-markdown.nvim` scope is complete when:
 
@@ -1395,23 +1575,20 @@ The `render-markdown.nvim` scope is complete when:
 - It does not silently replace or conflict with the default renderer.
 - An explicit admission decision is recorded.
 
-### 17.4 Optional browser-preview scope
+### 18.5 Optional diagram formats
 
-The `markdown-preview.nvim` scope is complete when:
+D2 and archDraw are complete only when:
 
-- It has been evaluated independently against a recorded revision.
-- Installation remains opt-in.
-- Browser preview and required Markdown rendering work in the target environment.
-- Local and remote image behavior has been tested.
-- Diagram behavior has been tested where supported.
-- Scrolling, cleanup, repeated operations, and source integrity have been tested.
-- Dependencies are documented accurately.
-- No unapproved automatic download occurs.
-- An explicit admission decision is recorded with supporting evidence.
+- Their requirements have been demonstrated.
+- Their dependencies are explicitly managed.
+- Their renderer compatibility has been tested.
+- Missing executables produce actionable diagnostics.
+- Their optional status is preserved.
+- An explicit admission decision is recorded.
 
-A deferred or rejected optional browser-preview extension does not invalidate a completed core language pack or accepted default preview.
+A deferred or rejected optional diagram format does not invalidate the baseline Mermaid integration.
 
-## 18. References
+## 19. References
 
 ### Markdown specifications
 
@@ -1424,17 +1601,18 @@ A deferred or rejected optional browser-preview extension does not invalidate a 
 - Marksman: https://github.com/artempyanykh/marksman
 - Prettier: https://prettier.io/docs
 - markdownlint-cli2: https://github.com/DavidAnson/markdownlint-cli2
+- markdownlint-cli2 configuration schema: https://github.com/DavidAnson/markdownlint-cli2/blob/main/schema/markdownlint-cli2-config-schema.json
 
 ### Rendering
 
 - md-render.nvim: https://github.com/delphinus/md-render.nvim
 - render-markdown.nvim: https://github.com/MeanderingProgrammer/render-markdown.nvim
-- markdown-preview.nvim: https://github.com/sammaji/markdown-preview.nvim
-- markdown-preview.nvim installation: https://mkdp.sammaji.com/installation
 
 ### Diagram tooling
 
 - Mermaid: https://mermaid.js.org/
+- Mermaid CLI: https://github.com/mermaid-js/mermaid-cli
+- Puppeteer: https://pptr.dev/
 - D2: https://d2lang.com/
 
 ---

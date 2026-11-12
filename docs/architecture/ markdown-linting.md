@@ -69,15 +69,15 @@ flowchart TD
 
 ### Component ownership
 
-| Component | Responsibility |
-|---|---|
-| `.markdownlint-cli2.yaml` | Central lint configuration |
-| `scripts/markdownlint/formatter.mjs` | Structured JSON formatter |
-| `markdownlint-cli2` | Markdown lint engine |
-| Node.js | JavaScript runtime |
-| `lua/langs/markdown/lint.lua` | Neovim integration |
-| `vim.diagnostic` | Diagnostic publication |
-| `lua/config/keymaps.lua` | User-facing keymap registration |
+| Component                            | Responsibility                  |
+| ------------------------------------ | ------------------------------- |
+| `.markdownlint-cli2.yaml`            | Central lint configuration      |
+| `scripts/markdownlint/formatter.mjs` | Structured JSON formatter       |
+| `markdownlint-cli2`                  | Markdown lint engine            |
+| Node.js                              | JavaScript runtime              |
+| `lua/langs/markdown/lint.lua`        | Neovim integration              |
+| `vim.diagnostic`                     | Diagnostic publication          |
+| `lua/config/keymaps.lua`             | User-facing keymap registration |
 
 The configuration, formatter, and Neovim integration have separate responsibilities. The formatter must not become responsible for buffer management, and the Neovim integration must not duplicate the Markdown linting rules.
 
@@ -103,19 +103,19 @@ This distinction is essential because Markdown files may belong to unrelated pro
 
 The central configuration is the default policy for Markdown linting.
 
-| Concern | Policy |
-|---|---|
-| Rule defaults | Enabled |
-| Rule exceptions | Explicitly declared |
-| Line length | Disabled |
-| Heading validation | Enabled |
-| List formatting | Consistent |
-| Whitespace | Strictly validated |
-| Fenced code blocks | Required |
-| Code fence style | Backticks |
-| Tables | Validated |
-| Inline HTML | Permitted |
-| JSON output | Required |
+| Concern            | Policy              |
+| ------------------ | ------------------- |
+| Rule defaults      | Enabled             |
+| Rule exceptions    | Explicitly declared |
+| Line length        | Disabled            |
+| Heading validation | Enabled             |
+| List formatting    | Consistent          |
+| Whitespace         | Strictly validated  |
+| Fenced code blocks | Required            |
+| Code fence style   | Backticks           |
+| Tables             | Validated           |
+| Inline HTML        | Permitted           |
+| JSON output        | Required            |
 
 The configuration uses the `config` section for markdownlint rules and the top-level CLI2 options for execution and output formatting.
 
@@ -273,17 +273,17 @@ The formatter output is expected to be a JSON array.
 
 Each finding follows the markdownlint result structure, including fields such as:
 
-| Field | Purpose |
-|---|---|
-| `fileName` | File associated with the finding |
-| `lineNumber` | One-based line number |
-| `column` | One-based column, when available |
-| `length` | Finding length, when available |
-| `severity` | Finding severity |
-| `ruleNames` | Rule identifiers and aliases |
-| `ruleDescription` | Human-readable rule description |
-| `errorDetail` | Additional rule-specific information |
-| `errorContext` | Relevant source context |
+| Field             | Purpose                              |
+| ----------------- | ------------------------------------ |
+| `fileName`        | File associated with the finding     |
+| `lineNumber`      | One-based line number                |
+| `column`          | One-based column, when available     |
+| `length`          | Finding length, when available       |
+| `severity`        | Finding severity                     |
+| `ruleNames`       | Rule identifiers and aliases         |
+| `ruleDescription` | Human-readable rule description      |
+| `errorDetail`     | Additional rule-specific information |
+| `errorContext`    | Relevant source context              |
 
 Example:
 
@@ -295,10 +295,7 @@ Example:
     "column": 1,
     "length": 2,
     "severity": "error",
-    "ruleNames": [
-      "MD018",
-      "no-missing-space-atx"
-    ],
+    "ruleNames": ["MD018", "no-missing-space-atx"],
     "ruleDescription": "No space after hash on atx style heading",
     "errorDetail": null,
     "errorContext": "#bad header"
@@ -358,16 +355,16 @@ This isolates Markdown lint diagnostics from other diagnostic providers.
 
 The integration converts markdownlint results into Neovim diagnostic objects.
 
-| markdownlint field | Neovim field |
-|---|---|
-| `lineNumber` | `lnum` |
-| `column` | `col` |
-| `length` | `end_col` |
-| `severity` | `severity` |
-| `ruleNames[1]` | `code` |
-| `ruleDescription` | `message` |
-| `errorDetail` | Additional message detail |
-| `errorContext` | Additional message context |
+| markdownlint field | Neovim field               |
+| ------------------ | -------------------------- |
+| `lineNumber`       | `lnum`                     |
+| `column`           | `col`                      |
+| `length`           | `end_col`                  |
+| `severity`         | `severity`                 |
+| `ruleNames[1]`     | `code`                     |
+| `ruleDescription`  | `message`                  |
+| `errorDetail`      | Additional message detail  |
+| `errorContext`     | Additional message context |
 
 markdownlint reports one-based line and column positions. Neovim diagnostics use zero-based positions.
 
@@ -375,10 +372,10 @@ The integration performs the required conversion and bounds-checks positions aga
 
 ### 7.2 Severity mapping
 
-| markdownlint severity | Neovim severity |
-|---|---|
-| `error` | `vim.diagnostic.severity.ERROR` |
-| `warning` | `vim.diagnostic.severity.WARN` |
+| markdownlint severity | Neovim severity                 |
+| --------------------- | ------------------------------- |
+| `error`               | `vim.diagnostic.severity.ERROR` |
+| `warning`             | `vim.diagnostic.severity.WARN`  |
 
 Unknown or absent severity values should be handled consistently with the integration's fallback policy.
 
@@ -488,11 +485,11 @@ markdownlint-cli2 uses different exit codes for clean execution, lint findings, 
 
 The integration accepts:
 
-| Exit code | Interpretation | Handling |
-|---|---|---|
-| `0` | Lint completed without errors | Decode and publish results |
-| `1` | Lint completed with findings | Decode and publish findings |
-| Other | Execution failure | Report an error |
+| Exit code | Interpretation                | Handling                    |
+| --------- | ----------------------------- | --------------------------- |
+| `0`       | Lint completed without errors | Decode and publish results  |
+| `1`       | Lint completed with findings  | Decode and publish findings |
+| Other     | Execution failure             | Report an error             |
 
 Exit code `1` must not be treated as a process-launch failure.
 
@@ -502,11 +499,11 @@ This distinction is essential because lint findings are expected results, not ex
 
 Markdown linting requires:
 
-| Dependency | Purpose |
-|---|---|
-| Node.js | Runtime |
-| markdownlint-cli2 | Markdown lint engine |
-| `formatter.mjs` | Structured JSON formatter |
+| Dependency        | Purpose                   |
+| ----------------- | ------------------------- |
+| Node.js           | Runtime                   |
+| markdownlint-cli2 | Markdown lint engine      |
+| `formatter.mjs`   | Structured JSON formatter |
 
 The CLI and formatter are external dependencies of the Neovim integration.
 
@@ -557,17 +554,17 @@ The user can inspect findings through Neovim's diagnostic interface.
 
 ### Workflow characteristics
 
-| Feature | Behavior |
-|---|---|
-| Trigger | Manual |
-| Input | Current Markdown buffer |
-| Unsaved changes | Supported |
-| Execution | Asynchronous |
-| Output | Structured JSON |
-| Diagnostics | `vim.diagnostic` |
-| Automatic saving | Disabled |
-| Automatic installation | Disabled |
-| Automatic lint-on-save | Disabled |
+| Feature                | Behavior                |
+| ---------------------- | ----------------------- |
+| Trigger                | Manual                  |
+| Input                  | Current Markdown buffer |
+| Unsaved changes        | Supported               |
+| Execution              | Asynchronous            |
+| Output                 | Structured JSON         |
+| Diagnostics            | `vim.diagnostic`        |
+| Automatic saving       | Disabled                |
+| Automatic installation | Disabled                |
+| Automatic lint-on-save | Disabled                |
 
 ## 12. Testing and verification
 
@@ -577,14 +574,14 @@ Testing must cover both the standalone CLI and the Neovim integration.
 
 The following scenarios have been verified:
 
-| Scenario | Result |
-|---|---|
-| Lint Markdown inside the configuration repository | Passed |
+| Scenario                                           | Result |
+| -------------------------------------------------- | ------ |
+| Lint Markdown inside the configuration repository  | Passed |
 | Lint Markdown outside the configuration repository | Passed |
-| Explicit central configuration using `--config` | Passed |
-| Structured JSON output | Passed |
-| Findings returned for invalid Markdown | Passed |
-| Expected exit code `1` for lint findings | Passed |
+| Explicit central configuration using `--config`    | Passed |
+| Structured JSON output                             | Passed |
+| Findings returned for invalid Markdown             | Passed |
+| Expected exit code `1` for lint findings           | Passed |
 
 The external test document used was:
 
@@ -606,22 +603,22 @@ The initial standalone invocation without the explicit configuration also report
 
 The integration should retain coverage for:
 
-| Test | Expected behavior |
-|---|---|
-| Valid Markdown buffer | Lint executes |
-| Non-Markdown buffer | Request rejected |
-| Invalid buffer | Request rejected |
-| Unsaved buffer changes | Current content is linted |
-| Buffer with no findings | Previous diagnostics cleared |
-| Buffer with findings | Diagnostics published |
-| Exit code `1` | Findings decoded successfully |
-| Missing Node.js | Actionable error |
-| Missing markdownlint-cli2 | Actionable error |
-| Missing entry point | Actionable error |
-| Invalid JSON | Formatter/output error |
-| Changed buffer during execution | Result discarded |
-| Superseded request | Older result discarded |
-| Wiped buffer | Request state cleaned up |
+| Test                            | Expected behavior             |
+| ------------------------------- | ----------------------------- |
+| Valid Markdown buffer           | Lint executes                 |
+| Non-Markdown buffer             | Request rejected              |
+| Invalid buffer                  | Request rejected              |
+| Unsaved buffer changes          | Current content is linted     |
+| Buffer with no findings         | Previous diagnostics cleared  |
+| Buffer with findings            | Diagnostics published         |
+| Exit code `1`                   | Findings decoded successfully |
+| Missing Node.js                 | Actionable error              |
+| Missing markdownlint-cli2       | Actionable error              |
+| Missing entry point             | Actionable error              |
+| Invalid JSON                    | Formatter/output error        |
+| Changed buffer during execution | Result discarded              |
+| Superseded request              | Older result discarded        |
+| Wiped buffer                    | Request state cleaned up      |
 
 The smoke test remains paused. Do not treat this document's test matrix as authorization to resume or execute it.
 
@@ -637,17 +634,17 @@ Each layer must be validated through its own tests.
 
 The integration should provide actionable messages for the following situations:
 
-| Condition | Expected response |
-|---|---|
-| Node.js unavailable | Report missing Node.js |
-| CLI unavailable | Report missing markdownlint-cli2 |
-| Entry point unavailable | Report missing CLI entry point |
+| Condition                 | Expected response                       |
+| ------------------------- | --------------------------------------- |
+| Node.js unavailable       | Report missing Node.js                  |
+| CLI unavailable           | Report missing markdownlint-cli2        |
+| Entry point unavailable   | Report missing CLI entry point          |
 | Configuration unavailable | Report configuration resolution failure |
-| Process cannot start | Report process-launch failure |
-| Unsupported exit code | Report execution failure |
-| Invalid JSON | Report output decoding failure |
-| Invalid buffer | Warn and stop |
-| Non-Markdown buffer | Warn and stop |
+| Process cannot start      | Report process-launch failure           |
+| Unsupported exit code     | Report execution failure                |
+| Invalid JSON              | Report output decoding failure          |
+| Invalid buffer            | Warn and stop                           |
+| Non-Markdown buffer       | Warn and stop                           |
 
 Error messages should identify the failing component without exposing unnecessary internal implementation details.
 
@@ -710,7 +707,7 @@ The acceptance checklist distinguishes implemented behavior from independently v
 - [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2)
 - [markdownlint-cli2 v0.24.0](https://github.com/DavidAnson/markdownlint-cli2/tree/v0.24.0)
 - [Neovim diagnostic API](https://neovim.io/doc/user/diagnostic.html)
-- [Neovim system API](https://neovim.io/doc/user/lua.html#vim.system())
+- [Neovim system API](<https://neovim.io/doc/user/lua.html#vim.system()>)
 
 ---
 

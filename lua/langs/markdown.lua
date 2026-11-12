@@ -29,5 +29,7 @@ function M.setup()
   require("lsp.servers.marksman").setup()
   require("langs.markdown.lint").setup()
   require("langs.markdown.toc").setup()
+  require("langs.markdown.mermaid").setup()
 end
+
 return M

@@ -165,3 +165,4 @@ showFound: false
 # Structured JSON output consumed by lua/langs/markdown/lint.lua.
 outputFormatters:
   - - ./scripts/markdownlint/formatter.mjs
+

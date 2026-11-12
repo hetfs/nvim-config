@@ -858,4 +858,14 @@ end, {
   desc = "Clear Markdown diagnostics",
 })
 
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "markdown",
+  callback = function(event)
+    vim.keymap.set("n", "<leader>mr", "<cmd>MermaidRender<CR>", {
+      buffer = event.buf,
+      desc = "Markdown: Render Mermaid diagram",
+    })
+  end,
+})
+
 return M
