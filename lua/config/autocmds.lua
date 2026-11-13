@@ -1,3 +1,4 @@
+
 -- Native autocommands.
 
 local group = vim.api.nvim_create_augroup("nvim_config", {
@@ -57,9 +58,7 @@ vim.api.nvim_create_autocmd("BufReadPost", {
     end
 
     -- Restore the position in a window displaying this buffer.
-    local wins = vim.fn.win_findbuf(buf)
-
-    for _, win in ipairs(wins) do
+    for _, win in ipairs(vim.fn.win_findbuf(buf)) do
       if vim.api.nvim_win_is_valid(win) then
         pcall(vim.api.nvim_win_set_cursor, win, mark)
         break
@@ -109,7 +108,7 @@ vim.api.nvim_create_autocmd("FileType", {
 
 vim.api.nvim_create_autocmd("FileType", {
   group = group,
-  desc = "Wrap and spellcheck prose",
+  desc = "Configure prose buffers",
   pattern = {
     "markdown",
     "text",
@@ -118,6 +117,30 @@ vim.api.nvim_create_autocmd("FileType", {
   callback = function()
     vim.opt_local.wrap = true
     vim.opt_local.spell = true
+  end,
+})
+
+-- ============================================================
+-- Markdown
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+  group = group,
+  desc = "Configure Markdown buffers",
+  pattern = "markdown",
+  callback = function(event)
+    -- Readable paragraph wrapping.
+    vim.opt_local.linebreak = true
+    vim.opt_local.breakindent = true
+
+    -- Consistent Markdown indentation.
+    vim.opt_local.shiftwidth = 2
+    vim.opt_local.tabstop = 2
+    vim.opt_local.softtabstop = 2
+    vim.opt_local.expandtab = true
+
+    -- Register Markdown workflow mappings.
+    require("config.keymaps").markdown(event.buf)
   end,
 })
 
@@ -238,3 +261,4 @@ vim.api.nvim_create_autocmd("FileType", {
     require("config.keymaps").rust(event.buf)
   end,
 })
+

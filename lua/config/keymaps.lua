@@ -828,44 +828,62 @@ end
 -- Markdown
 -- ============================================================
 
--- Preview
-vim.keymap.set("n", "<leader>mp", "<Plug>(md-render-preview)", {
-  desc = "Markdown preview (toggle)",
-})
+-- Register buffer-local Markdown workflow mappings.
+function M.markdown(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
 
-vim.keymap.set("n", "<leader>mt", "<Plug>(md-render-preview-tab)", {
-  desc = "Markdown preview in tab (toggle)",
-})
-
-vim.keymap.set("n", "<leader>md", "<Plug>(md-render-demo)", {
-  desc = "Markdown render demo",
-})
-
--- Linting
-vim.keymap.set("n", "<leader>ml", "<cmd>MarkdownLint<cr>", {
-  desc = "Markdown lint",
-})
-
--- Table of contents
-vim.keymap.set("n", "<leader>mo", "<cmd>MarkdownToc<cr>", {
-  desc = "Markdown update table of contents",
-})
-
--- Diagnostics
-vim.keymap.set("n", "<leader>mc", function()
-  vim.diagnostic.reset(nil, 0)
-end, {
-  desc = "Clear Markdown diagnostics",
-})
-
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = "markdown",
-  callback = function(event)
-    vim.keymap.set("n", "<leader>mr", "<cmd>MermaidRender<CR>", {
-      buffer = event.buf,
-      desc = "Markdown: Render Mermaid diagram",
+  local function markdown_map(lhs, rhs, description)
+    map("n", lhs, rhs, {
+      buffer = bufnr,
+      desc = "Markdown: " .. description,
     })
-  end,
-})
+  end
+
+  -- Preview
+  markdown_map(
+    "<leader>mp",
+    "<Plug>(md-render-preview)",
+    "Toggle preview"
+  )
+
+  markdown_map(
+    "<leader>mt",
+    "<Plug>(md-render-preview-tab)",
+    "Toggle preview in tab"
+  )
+
+  markdown_map(
+    "<leader>md",
+    "<Plug>(md-render-demo)",
+    "Open rendering demo"
+  )
+
+  -- Linting
+  markdown_map(
+    "<leader>ml",
+    "<cmd>MarkdownLint<CR>",
+    "Lint buffer"
+  )
+
+  -- Table of contents
+  markdown_map(
+    "<leader>mo",
+    "<cmd>MarkdownToc<CR>",
+    "Update table of contents"
+  )
+
+  -- Diagnostics
+  markdown_map("<leader>mc", function()
+    vim.diagnostic.reset(nil, bufnr)
+  end, "Clear buffer diagnostics")
+
+  -- Mermaid diagrams
+  markdown_map(
+    "<leader>mr",
+    "<cmd>MermaidRender<CR>",
+    "Render Mermaid diagram"
+  )
+end
 
 return M
+
