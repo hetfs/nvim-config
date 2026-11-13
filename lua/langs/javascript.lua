@@ -5,10 +5,12 @@
 local M = {
   formatters = {
     javascript = { "prettier" },
+    javascriptreact = { "prettier" },
   },
 
   parser_by_filetype = {
     javascript = "javascript",
+    javascriptreact = "javascript",
   },
 }
 

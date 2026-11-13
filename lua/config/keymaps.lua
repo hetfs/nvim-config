@@ -1141,4 +1141,492 @@ function M.markdown(bufnr)
   markdown_map("<leader>mr", "<cmd>MermaidRender<CR>", "Render Mermaid diagram")
 end
 
+-- ============================================================
+-- JavaScript and TypeScript
+-- ============================================================
+
+local package_manager_lockfiles = {
+  npm = { "package-lock.json", "npm-shrinkwrap.json" },
+  pnpm = { "pnpm-lock.yaml" },
+  yarn = { "yarn.lock" },
+  bun = { "bun.lock", "bun.lockb" },
+}
+
+local allowed_javascript_scripts = {
+  dev = true,
+  start = true,
+  test = true,
+  build = true,
+  lint = true,
+  typecheck = true,
+  check = true,
+}
+
+local function javascript_notify(message, level)
+  vim.notify(message, level or vim.log.levels.INFO, {
+    title = "JavaScript / TypeScript",
+  })
+end
+
+local function javascript_is_file(path)
+  return vim.uv.fs_stat(path) ~= nil
+end
+
+local function javascript_read_package(package_file)
+  local ok, lines = pcall(vim.fn.readfile, package_file)
+
+  if not ok or type(lines) ~= "table" then
+    return nil, "Could not read " .. package_file
+  end
+
+  local decoded, package_json = pcall(
+    vim.json.decode,
+    table.concat(lines, "\n")
+  )
+
+  if not decoded or type(package_json) ~= "table" then
+    return nil, "Could not parse " .. package_file
+  end
+
+  return package_json
+end
+
+local function javascript_dependencies(package_json)
+  local dependencies = {}
+
+  for _, field in ipairs({
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+  }) do
+    local entries = package_json[field]
+
+    if type(entries) == "table" then
+      for name, version in pairs(entries) do
+        if type(name) == "string" and version ~= nil then
+          dependencies[name] = true
+        end
+      end
+    end
+  end
+
+  return dependencies
+end
+
+-- Framework detection is package-local.
+-- Do not infer frameworks from filenames or sibling packages.
+local function javascript_frameworks(package_json)
+  local dependencies = javascript_dependencies(package_json)
+
+  local expo = dependencies.expo == true
+  local react_native_dependency = dependencies["react-native"] == true
+
+  return {
+    expo = expo,
+    react_native = react_native_dependency and not expo,
+    react_native_dependency = react_native_dependency,
+    nextjs = dependencies.next == true,
+  }
+end
+
+local function javascript_has_workspace_marker(directory, package_json)
+  if type(package_json.workspaces) == "table"
+    or type(package_json.workspaces) == "string"
+  then
+    return true
+  end
+
+  return javascript_is_file(
+    vim.fs.joinpath(directory, "pnpm-workspace.yaml")
+  )
+end
+
+-- Find the nearest workspace root above the package root.
+-- npm, pnpm, Yarn, and Bun workspace metadata is resolved here.
+local function javascript_workspace_context(package_root, package_json)
+  local directory = package_root
+
+  while directory do
+    local package_file = vim.fs.joinpath(directory, "package.json")
+    local workspace_package = {}
+
+    if javascript_is_file(package_file) then
+      local parsed, err = javascript_read_package(package_file)
+
+      if not parsed then
+        return nil, err
+      end
+
+      workspace_package = parsed
+    end
+
+    if javascript_has_workspace_marker(directory, workspace_package) then
+      return {
+        root = directory,
+        package_file = javascript_is_file(package_file)
+            and package_file
+          or nil,
+        package = workspace_package,
+      }
+    end
+
+    local parent = vim.fs.dirname(directory)
+
+    if parent == directory then
+      break
+    end
+
+    directory = parent
+  end
+
+  -- A standalone package is its own package-manager root.
+  return {
+    root = package_root,
+    package_file = vim.fs.joinpath(package_root, "package.json"),
+    package = package_json,
+  }
+end
+
+-- Resolve the nearest package.json from the current buffer.
+local function javascript_package_context(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    javascript_notify(
+      "The source buffer is no longer valid",
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  local filename = vim.api.nvim_buf_get_name(bufnr)
+
+  if filename == "" then
+    javascript_notify(
+      "Save the source file before running a workflow",
+      vim.log.levels.WARN
+    )
+    return
+  end
+
+  local absolute_filename = vim.fn.fnamemodify(filename, ":p")
+
+  local package_files = vim.fs.find("package.json", {
+    path = vim.fs.dirname(absolute_filename),
+    upward = true,
+    type = "file",
+  })
+
+  local package_file = package_files[1]
+
+  if not package_file then
+    javascript_notify(
+      "No package.json was found in the parent directories",
+      vim.log.levels.WARN
+    )
+    return
+  end
+
+  local package_json, err = javascript_read_package(package_file)
+
+  if not package_json then
+    javascript_notify(err, vim.log.levels.ERROR)
+    return
+  end
+
+  local package_root = vim.fs.dirname(package_file)
+
+  local workspace, workspace_err =
+    javascript_workspace_context(package_root, package_json)
+
+  if not workspace then
+    javascript_notify(workspace_err, vim.log.levels.ERROR)
+    return
+  end
+
+  return {
+    root = package_root,
+    package_file = package_file,
+    package = package_json,
+
+    frameworks = javascript_frameworks(package_json),
+
+    workspace_root = workspace.root,
+    workspace_package_file = workspace.package_file,
+    workspace_package = workspace.package,
+  }
+end
+
+local function javascript_parse_package_manager(value)
+  if type(value) ~= "string" then
+    return nil, "packageManager must be a string"
+  end
+
+  local manager = value:match("^([%w_-]+)@")
+
+  if not manager or not package_manager_lockfiles[manager] then
+    return nil, "Unsupported packageManager value: " .. value
+  end
+
+  return manager
+end
+
+-- Prefer explicit packageManager declarations.
+-- Reject conflicting package/workspace declarations.
+-- Otherwise inspect lockfiles at the workspace root.
+local function javascript_package_manager(context)
+  local package_value = context.package.packageManager
+  local workspace_value = context.workspace_package.packageManager
+
+  local package_manager
+  local workspace_manager
+
+  if package_value ~= nil then
+    local err
+
+    package_manager, err =
+      javascript_parse_package_manager(package_value)
+
+    if not package_manager then
+      javascript_notify(err, vim.log.levels.ERROR)
+      return
+    end
+  end
+
+  if workspace_value ~= nil then
+    local err
+
+    workspace_manager, err =
+      javascript_parse_package_manager(workspace_value)
+
+    if not workspace_manager then
+      javascript_notify(err, vim.log.levels.ERROR)
+      return
+    end
+  end
+
+  if package_manager
+    and workspace_manager
+    and package_manager ~= workspace_manager
+  then
+    javascript_notify(
+      string.format(
+        "Conflicting packageManager declarations: package uses %s, workspace uses %s",
+        package_manager,
+        workspace_manager
+      ),
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  if package_manager or workspace_manager then
+    return package_manager or workspace_manager
+  end
+
+  local detected = {}
+
+  for manager, lockfiles in pairs(package_manager_lockfiles) do
+    for _, lockfile in ipairs(lockfiles) do
+      local path = vim.fs.joinpath(context.workspace_root, lockfile)
+
+      if javascript_is_file(path) then
+        detected[manager] = true
+        break
+      end
+    end
+  end
+
+  local managers = vim.tbl_keys(detected)
+  table.sort(managers)
+
+  if #managers == 0 then
+    javascript_notify(
+      "Package manager is unknown. Declare packageManager in package.json or commit a recognized lockfile.",
+      vim.log.levels.WARN
+    )
+    return
+  end
+
+  if #managers > 1 then
+    javascript_notify(
+      "Conflicting package-manager lockfiles found: "
+        .. table.concat(managers, ", ")
+        .. ". Declare one packageManager in the workspace package.json.",
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  return managers[1]
+end
+
+-- Select the first existing, non-empty, approved script.
+local function javascript_script(context, candidates)
+  local scripts = context.package.scripts
+
+  if type(scripts) ~= "table" then
+    javascript_notify(
+      "package.json does not define any scripts",
+      vim.log.levels.WARN
+    )
+    return
+  end
+
+  for _, name in ipairs(candidates) do
+    if not allowed_javascript_scripts[name] then
+      javascript_notify(
+        "Unsupported workflow script: " .. tostring(name),
+        vim.log.levels.ERROR
+      )
+      return
+    end
+
+    local value = scripts[name]
+
+    if type(value) == "string" and vim.trim(value) ~= "" then
+      return name
+    end
+  end
+
+  javascript_notify(
+    "No matching package script was found. Expected: "
+      .. table.concat(candidates, " or "),
+    vim.log.levels.WARN
+  )
+end
+
+local function javascript_executable(manager)
+  local executable = vim.fn.exepath(manager)
+
+  if executable == "" then
+    javascript_notify(
+      manager .. " is not installed or not available on PATH",
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  return executable
+end
+
+local function javascript_command(executable, script)
+  if vim.fn.has("win32") ~= 1 then
+    return {
+      executable,
+      "run",
+      script,
+    }
+  end
+
+  -- Windows package managers commonly use .cmd shims.
+  -- Script names are restricted by allowed_javascript_scripts.
+  local command_processor = vim.env.COMSPEC
+
+  if not command_processor or command_processor == "" then
+    command_processor = "cmd.exe"
+  end
+
+  local command = '"' .. executable .. '" run ' .. script
+
+  return {
+    command_processor,
+    "/d",
+    "/s",
+    "/c",
+    '""' .. command .. '""',
+  }
+end
+
+local function javascript_terminal(command, root)
+  vim.cmd("botright 12new")
+
+  local terminal_buffer = vim.api.nvim_get_current_buf()
+
+  vim.bo[terminal_buffer].bufhidden = "hide"
+  vim.bo[terminal_buffer].swapfile = false
+
+  local ok, job = pcall(vim.fn.jobstart, command, {
+    cwd = root,
+    term = true,
+  })
+
+  if not ok or job <= 0 then
+    vim.cmd("close")
+
+    javascript_notify(
+      "Failed to start the package script",
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  vim.cmd("startinsert")
+end
+
+local function run_javascript_script(bufnr, candidates)
+  local context = javascript_package_context(bufnr)
+
+  if not context then
+    return
+  end
+
+  local script = javascript_script(context, candidates)
+
+  if not script then
+    return
+  end
+
+  local manager = javascript_package_manager(context)
+
+  if not manager then
+    return
+  end
+
+  local executable = javascript_executable(manager)
+
+  if not executable then
+    return
+  end
+
+  local command = javascript_command(executable, script)
+
+  javascript_notify(
+    string.format(
+      "Running %s with %s in %s",
+      script,
+      manager,
+      context.root
+    ),
+    vim.log.levels.INFO
+  )
+
+  javascript_terminal(command, context.root)
+end
+
+-- ============================================================
+-- Register buffer-local JavaScript and TypeScript workflows.
+-- ============================================================
+
+function M.javascript(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local function javascript_map(lhs, candidates, description)
+    map("n", lhs, function()
+      run_javascript_script(bufnr, candidates)
+    end, {
+      buffer = bufnr,
+      desc = "JavaScript: " .. description,
+    })
+  end
+
+  javascript_map("<leader>cR", { "dev", "start" }, "Start development")
+  javascript_map("<leader>ct", { "test" }, "Run tests")
+  javascript_map("<leader>cb", { "build" }, "Build project")
+  javascript_map("<leader>cl", { "lint" }, "Lint project")
+  javascript_map("<leader>cc", { "typecheck", "check" }, "Type-check project")
+end
+
 return M
