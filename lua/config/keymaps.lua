@@ -747,6 +747,286 @@ function M.rust(bufnr)
   rust_map("<leader>cc", "<cmd>Cargo check<CR>", "Check project")
 end
 
+--- ============================================================
+-- Go
+-- ============================================================
+
+local function go_notify(message, level)
+  vim.notify(message, level, {
+    title = "Go",
+  })
+end
+
+-- Create a dedicated scratch buffer for command output.
+local function go_output_buffer(command, cwd, workspace)
+  vim.cmd("botright 12new")
+
+  local bufnr = vim.api.nvim_get_current_buf()
+
+  vim.bo[bufnr].buftype = "nofile"
+  vim.bo[bufnr].bufhidden = "wipe"
+  vim.bo[bufnr].swapfile = false
+  vim.bo[bufnr].filetype = "text"
+
+  local lines = {
+    "Command: " .. vim.inspect(command),
+    "Directory: " .. cwd,
+  }
+
+  if workspace then
+    table.insert(lines, "Go workspace: " .. workspace)
+  end
+
+  table.insert(lines, "")
+  table.insert(lines, "Running...")
+
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+  vim.bo[bufnr].modifiable = false
+
+  return bufnr
+end
+
+-- Update the output buffer if it still exists.
+local function go_set_output(bufnr, lines)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  vim.bo[bufnr].modifiable = true
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+  vim.bo[bufnr].modifiable = false
+end
+
+-- Execute a Go workflow asynchronously.
+local function go_run_command(command, cwd, workspace)
+  local output_buf = go_output_buffer(command, cwd, workspace)
+
+  local ok, process = pcall(
+    vim.system,
+    command,
+    {
+      cwd = cwd,
+      text = true,
+    },
+    vim.schedule_wrap(function(result)
+      local lines = {}
+
+      local stdout = vim.split(result.stdout or "", "\n", {
+        trimempty = true,
+      })
+
+      local stderr = vim.split(result.stderr or "", "\n", {
+        trimempty = true,
+      })
+
+      vim.list_extend(lines, stdout)
+
+      if #stderr > 0 then
+        if #lines > 0 then
+          table.insert(lines, "")
+        end
+
+        table.insert(lines, "Standard error:")
+        vim.list_extend(lines, stderr)
+      end
+
+      if #lines == 0 then
+        table.insert(lines, "Process produced no output.")
+      end
+
+      table.insert(lines, "")
+
+      if result.signal and result.signal ~= 0 then
+        table.insert(lines, "Signal: " .. tostring(result.signal))
+      end
+
+      table.insert(lines, "Exit code: " .. tostring(result.code))
+
+      go_set_output(output_buf, lines)
+
+      if result.code == 0 then
+        go_notify("Command completed successfully", vim.log.levels.INFO)
+      else
+        go_notify("Command failed with exit code " .. tostring(result.code), vim.log.levels.ERROR)
+      end
+    end)
+  )
+
+  if not ok then
+    go_set_output(output_buf, {
+      "Failed to start command:",
+      tostring(process),
+    })
+
+    go_notify("Failed to start command", vim.log.levels.ERROR)
+  end
+end
+
+-- Resolve module context from the current Go source file.
+--
+-- GOMOD identifies the module containing the current package.
+-- GOWORK identifies the active workspace, when configured.
+local function go_resolve_context(bufnr, callback)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local filename = vim.api.nvim_buf_get_name(bufnr)
+
+  if filename == "" then
+    go_notify("Save the Go file before running this workflow", vim.log.levels.WARN)
+    return
+  end
+
+  local package_dir = vim.fs.dirname(filename)
+  local executable = vim.fn.exepath("go")
+
+  if executable == "" then
+    go_notify("Go toolchain is unavailable on PATH", vim.log.levels.ERROR)
+    return
+  end
+
+  local ok, process = pcall(
+    vim.system,
+    {
+      executable,
+      "env",
+      "GOMOD",
+      "GOWORK",
+    },
+    {
+      cwd = package_dir,
+      text = true,
+    },
+    vim.schedule_wrap(function(result)
+      -- Ignore stale results if the original buffer changed.
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+
+      if vim.api.nvim_buf_get_name(bufnr) ~= filename then
+        return
+      end
+
+      if result.code ~= 0 then
+        go_notify("Could not resolve Go module context: " .. vim.trim(result.stderr or ""), vim.log.levels.ERROR)
+        return
+      end
+
+      local lines = vim.split(result.stdout or "", "\n", {
+        plain = true,
+        trimempty = false,
+      })
+
+      local gomod = vim.trim(lines[1] or "")
+      local gowork = vim.trim(lines[2] or "")
+
+      if gomod == "" or gomod == "/dev/null" or gomod == "NUL" then
+        go_notify("The current file is not inside a Go module", vim.log.levels.WARN)
+        return
+      end
+
+      gomod = vim.fs.normalize(gomod)
+
+      local stat = vim.uv.fs_stat(gomod)
+
+      if not stat or stat.type ~= "file" then
+        go_notify("Go returned an invalid module file path: " .. gomod, vim.log.levels.ERROR)
+        return
+      end
+
+      local workspace
+
+      if gowork ~= "" and gowork ~= "off" then
+        workspace = vim.fs.normalize(gowork)
+      end
+
+      callback({
+        go = executable,
+        package_dir = package_dir,
+        module_root = vim.fs.dirname(gomod),
+        workspace = workspace,
+      })
+    end)
+  )
+
+  if not ok then
+    go_notify("Could not start Go module detection: " .. tostring(process), vim.log.levels.ERROR)
+  end
+end
+
+-- Register buffer-local Go workflow mappings.
+function M.go(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local function go_map(lhs, callback, description)
+    map("n", lhs, callback, {
+      buffer = bufnr,
+      desc = "Go: " .. description,
+    })
+  end
+
+  -- Resolve the module context before executing a Go command.
+  local function run_go(args, directory)
+    go_resolve_context(bufnr, function(context)
+      local command = { context.go }
+      vim.list_extend(command, args)
+
+      go_run_command(command, directory(context), context.workspace)
+    end)
+  end
+
+  -- Run the package containing the current file.
+  go_map("<leader>cr", function()
+    run_go({ "run", "." }, function(context)
+      return context.package_dir
+    end)
+  end, "Run package")
+
+  -- Build every package in the current module.
+  go_map("<leader>cb", function()
+    run_go({ "build", "./..." }, function(context)
+      return context.module_root
+    end)
+  end, "Build module")
+
+  -- Run tests in the current module.
+  go_map("<leader>ct", function()
+    run_go({ "test", "./..." }, function(context)
+      return context.module_root
+    end)
+  end, "Run module tests")
+
+  -- Run golangci-lint without applying automatic fixes.
+  go_map("<leader>cl", function()
+    local executable = vim.fn.exepath("golangci-lint")
+
+    if executable == "" then
+      go_notify("golangci-lint is unavailable on PATH", vim.log.levels.ERROR)
+      return
+    end
+
+    go_resolve_context(bufnr, function(context)
+      go_run_command({
+        executable,
+        "run",
+        "./...",
+      }, context.module_root, context.workspace)
+    end)
+  end, "Lint module")
+
+  -- Run Go's static analysis checks independently of golangci-lint.
+  go_map("<leader>cc", function()
+    run_go({ "vet", "./..." }, function(context)
+      return context.module_root
+    end)
+  end, "Vet module")
+end
+
 -- ============================================================
 -- C and C++
 -- ============================================================
@@ -840,37 +1120,17 @@ function M.markdown(bufnr)
   end
 
   -- Preview
-  markdown_map(
-    "<leader>mp",
-    "<Plug>(md-render-preview)",
-    "Toggle preview"
-  )
+  markdown_map("<leader>mp", "<Plug>(md-render-preview)", "Toggle preview")
 
-  markdown_map(
-    "<leader>mt",
-    "<Plug>(md-render-preview-tab)",
-    "Toggle preview in tab"
-  )
+  markdown_map("<leader>mt", "<Plug>(md-render-preview-tab)", "Toggle preview in tab")
 
-  markdown_map(
-    "<leader>md",
-    "<Plug>(md-render-demo)",
-    "Open rendering demo"
-  )
+  markdown_map("<leader>md", "<Plug>(md-render-demo)", "Open rendering demo")
 
   -- Linting
-  markdown_map(
-    "<leader>ml",
-    "<cmd>MarkdownLint<CR>",
-    "Lint buffer"
-  )
+  markdown_map("<leader>ml", "<cmd>MarkdownLint<CR>", "Lint buffer")
 
   -- Table of contents
-  markdown_map(
-    "<leader>mo",
-    "<cmd>MarkdownToc<CR>",
-    "Update table of contents"
-  )
+  markdown_map("<leader>mo", "<cmd>MarkdownToc<CR>", "Update table of contents")
 
   -- Diagnostics
   markdown_map("<leader>mc", function()
@@ -878,12 +1138,7 @@ function M.markdown(bufnr)
   end, "Clear buffer diagnostics")
 
   -- Mermaid diagrams
-  markdown_map(
-    "<leader>mr",
-    "<cmd>MermaidRender<CR>",
-    "Render Mermaid diagram"
-  )
+  markdown_map("<leader>mr", "<cmd>MermaidRender<CR>", "Render Mermaid diagram")
 end
 
 return M
-

@@ -1,4 +1,3 @@
-
 -- Native autocommands.
 
 local group = vim.api.nvim_create_augroup("nvim_config", {
@@ -262,3 +261,20 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
+-- ============================================================
+-- Go
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+  group = group,
+  desc = "Configure Go buffers",
+  pattern = "go",
+  callback = function(event)
+    vim.opt_local.shiftwidth = 4
+    vim.opt_local.tabstop = 4
+    vim.opt_local.softtabstop = 4
+    vim.opt_local.expandtab = true
+
+    require("config.keymaps").go(event.buf)
+  end,
+})

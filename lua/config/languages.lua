@@ -51,6 +51,7 @@ return {
     markdown = true,
     mdx = true,
     latex = true,
+    go = true,
   },
 
   -- Optional shared tool integrations.
