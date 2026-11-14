@@ -278,3 +278,21 @@ vim.api.nvim_create_autocmd("FileType", {
     require("config.keymaps").go(event.buf)
   end,
 })
+
+-- ============================================================
+-- javascript
+-- ============================================================
+
+vim.api.nvim_create_autocmd("FileType", {
+  group = group,
+  desc = "Configure JavaScript and TypeScript workflows",
+  pattern = {
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+  },
+  callback = function(event)
+    require("config.keymaps").javascript(event.buf)
+  end,
+})

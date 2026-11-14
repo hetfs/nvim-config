@@ -18,4 +18,9 @@ function M.setup()
   require("lsp.servers.vtsls").setup()
 end
 
+-- Internal test interface. Not part of the user-facing workflow API.
+M._test = {
+  build_command = build_command,
+}
+
 return M
