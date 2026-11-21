@@ -1,4 +1,3 @@
-
 -- Native Neovim options.
 -- Reference: :help option-list
 
@@ -10,35 +9,57 @@ local opt = vim.opt
 
 -- Windows: prefer PowerShell 7, with Windows PowerShell fallback.
 if vim.fn.has("win32") == 1 then
-  local shell = vim.fn.executable("pwsh") == 1 and "pwsh" or "powershell"
+  local pwsh = vim.fn.exepath("pwsh")
+  local windows_powershell = vim.fn.exepath("powershell")
 
-  opt.shell = shell
+  -- Prefer PowerShell 7+, then fall back to Windows PowerShell 5.1.
+  local shell
 
-  local shellcmdflag = table.concat({
-    "-NoLogo",
-    "-NoProfile",
-    "-ExecutionPolicy RemoteSigned",
-    "-Command",
-  }, " ")
-
-  local shell_init = table.concat({
-    "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new();",
-    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new();",
-    "$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8';",
-  }, " ")
-
-  if shell == "pwsh" then
-    shell_init = shell_init .. " $PSStyle.OutputRendering = 'PlainText';"
+  if pwsh ~= "" then
+    shell = pwsh
+  elseif windows_powershell ~= "" then
+    shell = windows_powershell
   end
 
-  opt.shellcmdflag = shellcmdflag .. " " .. shell_init
+  if shell then
+    local is_pwsh = pwsh ~= "" and shell == pwsh
 
-  -- PowerShell-compatible redirection.
-  opt.shellredir = "> %s 2>&1"
-  opt.shellpipe = "> %s 2>&1"
-  opt.shellquote = ""
-  opt.shellxquote = ""
-  opt.shelltemp = false
+    -- Quote executable paths containing spaces.
+    vim.opt.shell = '"' .. shell .. '"'
+
+    -- Shared initialization for both PowerShell runtimes.
+    local shell_init = {
+      "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new();",
+      "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new();",
+      "$OutputEncoding = [Console]::OutputEncoding;",
+      "$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8';",
+    }
+
+    -- PowerShell 7-specific output configuration.
+    if is_pwsh then
+      table.insert(shell_init, "$PSStyle.OutputRendering = 'PlainText';")
+    end
+
+    -- Configure PowerShell command execution.
+    vim.opt.shellcmdflag = table.concat({
+      "-NoLogo",
+      "-NoProfile",
+      "-ExecutionPolicy RemoteSigned",
+      "-Command",
+      table.concat(shell_init, " "),
+    }, " ")
+
+    -- PowerShell-compatible output and error redirection.
+    vim.opt.shellredir = "> %s 2>&1"
+    vim.opt.shellpipe = "> %s 2>&1"
+
+    -- Preserve the original PowerShell shell options.
+    vim.opt.shellquote = ""
+    vim.opt.shellxquote = ""
+    vim.opt.shelltemp = false
+  else
+    vim.notify("PowerShell was not found. Install PowerShell 7+ or Windows PowerShell 5.1.", vim.log.levels.WARN)
+  end
 end
 
 -- ============================================================
