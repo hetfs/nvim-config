@@ -34,16 +34,16 @@ Go is an independent Stage 13 language pack. It follows the existing language re
 | Conform | Manual Go formatting |
 | `gopls` | Language intelligence and import organization |
 | `golangci-lint` | Static analysis |
-| Go toolchain | Build, run, test, benchmark and vet |
-| `config.languages.lua` | Language-pack activation |
-| `config.keymaps.lua` | Go workflow mappings and command execution |
-| `config.autocmds.lua` | Go buffer mapping registration |
+| Go toolchain | Build, run, test, benchmark, and vet |
+| `lua/config/languages.lua` | Language-pack activation |
+| `lua/config/keymaps.lua` | Go workflow mappings and command execution |
+| `lua/config/autocmds.lua` | Go buffer mapping registration |
 | Tree-sitter | Parser registration and highlighting |
 | External dependency management | Tool installation, when supported by the repository's shared dependency architecture |
 
 The language pack declares Go-specific capabilities. Shared infrastructure owns execution and lifecycle management.
 
-Do not introduce a second language registry, LSP manager, formatter framework, root detector, test runner or automatic installer.
+Do not introduce a second language registry, LSP manager, formatter framework, root detector, test runner, or automatic installer.
 
 ### Target structure
 
@@ -68,7 +68,7 @@ Do not introduce `lua/lsp/servers/gopls.lua` unless custom configuration becomes
 Preserve the existing contracts:
 
 - Language packs are discovered through `langs`.
-- Language activation is controlled by `config.languages`.
+- Language activation is controlled by `lua/config/languages.lua`.
 - Formatter metadata is collected through `langs.collect("formatters")`.
 - Tree-sitter metadata is collected through the existing language registry.
 - LSP activation uses native Neovim APIs.
@@ -88,6 +88,8 @@ The language pack owns:
 - Go formatter metadata.
 - Tree-sitter parser mappings.
 - `gopls` activation.
+- Go template filetype registration.
+- Go template extension configuration for `gopls`.
 
 ### Formatter metadata
 
@@ -112,9 +114,9 @@ Do not add `gofumpt` as a second default formatter.
 
 Declare these through `parser_by_filetype`.
 
-The existing Tree-sitter integration owns parser registration, installation and highlighting.
+The existing Tree-sitter integration owns parser registration, installation, and highlighting.
 
-Go workflow mappings should be registered only for Go source buffers with the `go` filetype. Supporting parser mappings for `gomod`, `gowork` and `gotmpl` does not automatically enable Go source workflows for those filetypes.
+Go workflow mappings should be registered only for Go source buffers with the `go` filetype. Supporting parser mappings for `gomod`, `gowork`, and `gotmpl` does not automatically enable Go source workflows for those filetypes.
 
 ## 4. Language Server
 
@@ -132,7 +134,7 @@ The server definition comes from `nvim-lspconfig`.
 
 Do not use:
 
-- `require("lspconfig").gopls.setup()`
+- `require("lspconfig").gopls.setup()`.
 - Mason or Mason-LSPConfig.
 - A second LSP client.
 - A custom server wrapper without a demonstrated requirement.
@@ -140,6 +142,46 @@ Do not use:
 Start with upstream defaults. Preserve the upstream filetypes and root detection.
 
 The Go language pack must activate `gopls` only when Go support is enabled.
+
+### Go template support
+
+The Go language pack registers standard template extensions through Neovim's filetype association:
+
+- `.tmpl`
+- `.gotmpl`
+- `.gohtml`
+
+The configured `gopls` template extensions are:
+
+```lua
+templateExtensions = {
+  "tmpl",
+  "gotmpl",
+  "gohtml",
+}
+```
+
+The `.tmpl` association also covers compound extensions such as `.html.tmpl` and `.yaml.tmpl`.
+
+The existing Tree-sitter integration provides the `gotmpl` parser.
+
+Template support must remain within the existing Go language pack and shared infrastructure. Do not introduce a separate template language pack without a demonstrated architectural requirement.
+
+#### Template validation findings
+
+The following behavior has been confirmed:
+
+- `gopls` attaches to Go source and template buffers.
+- The configured template extensions are active.
+- Go source diagnostics work.
+- Malformed template syntax produces diagnostics.
+- Tree-sitter loads the `gotmpl` parser for the tested template files.
+
+Definition and reference navigation remain unresolved. The server advertises definition and reference capabilities, but the tested template symbol requests returned no locations.
+
+Do not interpret these results as proof that `gopls` does not support template navigation. Further investigation must verify the cursor position, symbol, template context, and exact LSP requests.
+
+The next validation checkpoint is to inspect the actual template buffer and test definition and reference requests against a known template symbol.
 
 ### Import organization
 
@@ -164,7 +206,7 @@ Use Conform with `gofmt`.
 | Operation | Owner |
 |---|---|
 | Source formatting | Conform |
-| Import organization | gopls |
+| Import organization | `gopls` |
 | Format-on-save | Existing user-controlled policy |
 
 Preserve the existing formatting contract:
@@ -174,11 +216,35 @@ Preserve the existing formatting contract:
 - Format-on-save disabled by default.
 - No LSP formatting fallback.
 - Language-pack-owned formatter defaults.
-- User preferences in `config.languages`.
+- User preferences in `lua/config/languages.lua`.
 
-Do not configure Conform and gopls to compete for the same formatting operation.
+Do not configure Conform and `gopls` to compete for the same formatting operation.
 
 Formatting must remain consistent with the existing formatter resolver. Do not introduce a Go-specific formatting framework.
+
+### Formatting validation
+
+**Validation date:** 2026-11-22
+
+Manual Go formatting through Conform is fully validated.
+
+The validation used a temporary Go source file with deliberately inconsistent formatting.
+
+The following checks passed:
+
+- Conform recognized `gofmt` as the formatter for the Go buffer.
+- The `gofmt` executable resolved correctly.
+- Running `:Format` produced the expected Go formatting.
+- `vim.bo.modified` returned `true` after formatting, confirming that the in-memory buffer changed.
+- The formatted buffer was saved.
+- Running `:!gofmt -d .\format_probe.go` produced no differences.
+- The earlier Go fixture formatting checks also completed successfully.
+
+The buffer-modified check is important because it confirms that Conform actually transformed the buffer. Formatter availability alone would not establish that.
+
+<badge color="success">Manual Conform formatting validated</badge>
+
+No formatter implementation changes are required based on these results.
 
 ## 6. Linting
 
@@ -205,9 +271,9 @@ Respect project-owned configuration files:
 - `.golangci.toml`
 - `.golangci.json`
 
-Do not create a global lint configuration in the Neovim repository.
-
 For current v2 releases, use configuration version 2.
+
+Do not create a global lint configuration in the Neovim repository.
 
 ### go vet
 
@@ -252,7 +318,7 @@ The repository does not currently have a shared external dependency manifest or 
 
 When the repository establishes these shared facilities, integrate Go dependencies into their existing contracts rather than creating Go-specific dependency management.
 
-The language pack must not install, upgrade or download executables.
+The language pack must not install, upgrade, or download executables.
 
 ### Executable requirements
 
@@ -270,12 +336,66 @@ The Go toolchain provides `gofmt`. The remaining external tools must be availabl
 
 Missing executables must produce useful diagnostics. Do not silently install dependencies or modify the user's environment.
 
+### Windows Go tooling script
+
+The Windows Go tooling script is implemented at:
+
+`scripts/core/windows/go.ps1`
+
+It manages and verifies the external Go development tools independently of Neovim.
+
+#### Script responsibilities
+
+- Detect Windows and PowerShell 7.
+- Detect the existing Go toolchain.
+- Resolve the Go binary directory.
+- Verify `go`, `gofmt`, `gopls`, and `golangci-lint`.
+- Install missing supported development tools.
+- Update supported development tools when requested.
+- Refresh the process and user PATH where required.
+- Provide a check-only mode.
+
+#### Supported execution modes
+
+| Command | Responsibility |
+|---|---|
+| `.\go.ps1` | Detect and install missing supported tools |
+| `.\go.ps1 -Check` | Verify existing tools without installing or updating |
+| `.\go.ps1 -Update` | Update supported development tools |
+
+The Go toolchain itself remains managed separately through the user's existing toolchain manager.
+
+The script does not install Go dependencies through Neovim. It preserves the architecture's external dependency management boundary.
+
+#### Windows validation results
+
+**Validation date:** 2026-11-22
+
+| Component | Verified version or result |
+|---|---|
+| Operating system | Windows, `windows/amd64` |
+| PowerShell | 7.6.9 |
+| Go | 1.23.0 |
+| gofmt | Available from the Go 1.23.0 installation |
+| gopls | 0.24.0 |
+| golangci-lint | 2.15.0 |
+| Normal execution | Passed |
+| Check-only execution | Passed |
+
+The script successfully detected the existing mise-managed Go installation and verified all four required executables.
+
+The `-Check` mode confirmed that installation and updates were disabled during verification.
+
+**Toolchain version note:** golangci-lint reports that it was built with Go 1.27.0. This is the version used to build golangci-lint, not the active Go toolchain. The active Go installation remains 1.23.0.
+
+The Windows tooling script is considered validated. This status does not imply that the overall Go language pack or Stage 13 is complete.
+
 ## 8. Go Modules and Workspaces
 
 Go modules and Go workspaces are different concepts.
 
 - `go.mod` identifies a module.
-- `go.work` defines a workspace containing multiple modules.
+- `go.work` defines a workspace containing one or more modules.
 - A Git repository may contain one or multiple Go modules.
 
 Use Go's environment information:
@@ -314,6 +434,52 @@ Do not claim that one `go test ./...` invocation from a workspace root tests eve
 
 If module context cannot be resolved, report the problem rather than guessing a working directory.
 
+### Module and workspace validation results
+
+The November 22 validation session confirmed:
+
+| Test | Result |
+|---|---|
+| `GOMOD` from project root | Correct `go.mod` detected |
+| `GOWORK` without a workspace file | Empty, as expected |
+| `GOMOD` from nested directory | Parent module correctly detected |
+| Neovim working directory | Correct project root |
+| Nested Go buffer mapping | Registered |
+| Nested module build | Passed, exit code 0 |
+| Workspace discovery after `go work init` | Correct `go.work` detected |
+| Workspace build before adding the module | Failed as expected because the workspace contained no modules |
+| Workspace build after `go work use .` | Passed, exit code 0 |
+| Workspace cleanup | Temporary `go.work` removed |
+| `GOWORK` after cleanup | Empty, as expected |
+
+The workspace test initially failed with:
+
+```text
+pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies
+```
+
+This was a workspace configuration issue, not evidence of a Neovim workflow defect.
+
+After adding the current module with:
+
+```powershell
+go work use .
+```
+
+the workspace contained:
+
+```go
+go 1.23.0
+
+use .
+```
+
+The nested build then completed successfully.
+
+The temporary workspace file was removed after validation. The fixture was returned to module-only mode.
+
+**Validation boundary:** Single-module workspace discovery and build execution have been tested. Multi-module workspace orchestration remains deferred.
+
 ## 9. Development Workflows
 
 ### Initial commands
@@ -338,7 +504,7 @@ Execute commands using argument lists rather than concatenated shell strings.
 | `<leader>cl` | Go: Lint module |
 | `<leader>cc` | Go: Vet module |
 
-Register mappings through the existing `config.keymaps.lua` and `config.autocmds.lua` conventions.
+Register mappings through the existing `lua/config/keymaps.lua` and `lua/config/autocmds.lua` conventions.
 
 Register the mappings for Go source buffers only.
 
@@ -383,61 +549,226 @@ A successful process should produce a success notification. A failed process sho
 
 Closing the output buffer must not interrupt or corrupt the editor's normal workflow.
 
+### Workflow validation results
+
+The November 22 session confirmed:
+
+- Go workflow mappings are registered for Go source buffers.
+- The `FileType` autocmd for `go` is registered.
+- The autocmd calls `require("config.keymaps").go(event.buf)`.
+- All five mappings were confirmed with `:verbose nmap`.
+- The nested Go buffer received the build mapping.
+- The nested module build passed.
+- The workspace-mode build passed after the module was added to `go.work`.
+- Both successful build executions returned exit code `0`.
+
+The following individual workflow executions still require validation through their Neovim mappings:
+
+- Run package.
+- Test module.
+- Lint module.
+- Vet module.
+
+Successful standalone CLI checks do not automatically validate the corresponding Neovim workflow mappings.
+
 ## 10. Testing and Validation
 
-Keep metadata tests independent of installed external executables.
+### Validation checkpoint — 2026-11-22
 
-The repository's smoke-test infrastructure is undergoing modularization. Do not add Go smoke-test suites or modify smoke-test files until that work is complete.
+The following results were confirmed during the Windows validation session. This is a progress snapshot, not a declaration that Stage 13 is complete.
 
-Until smoke-test modularization is complete, validate Go support using focused manual checks and the existing applicable syntax, formatting and regression checks.
+### Environment
+
+| Component | Verified version or result |
+|---|---|
+| Operating system | Windows, `windows/amd64` |
+| PowerShell | 7.6.9 |
+| Go toolchain | `go1.23.0` |
+| Formatter | `gofmt` available |
+| Language server | `gopls v0.24.0` |
+| Linter | `golangci-lint v2.15.0` |
+| Go template support | `templateExtensions` active with `tmpl`, `gotmpl`, and `gohtml` |
+
+### Confirmed Windows Go tooling results
+
+- [x] `scripts/core/windows/go.ps1` executes successfully.
+- [x] `scripts/core/windows/go.ps1 -Check` completes successfully.
+- [x] Windows and PowerShell 7.6.9 detection works.
+- [x] Go 1.23.0 is detected.
+- [x] The Go binary directory managed by mise is resolved correctly.
+- [x] `gofmt` is detected in the Go installation directory.
+- [x] `gopls v0.24.0` is detected.
+- [x] `golangci-lint v2.15.0` is detected.
+- [x] Check-only mode verifies dependencies without installing or updating them.
+- [x] The script reports successful Go tooling verification.
+
+### Confirmed Go fixture results
+
+The following checks were performed in the `go-template-test` module:
+
+- [x] `go fmt ./...` completed successfully.
+- [x] `go vet ./...` completed successfully.
+- [x] `go test ./...` completed successfully; the fixture currently has no test files.
+- [x] `go run .` completed and rendered the four template fixtures.
+- [x] `gofmt -d .\main.go` produced no differences after the saved file was formatted.
+- [x] `golangci-lint run --verbose` completed successfully with **zero issues**.
+- [x] The active golangci-lint configuration ran five linters: `errcheck`, `govet`, `ineffassign`, `staticcheck`, and `unused`.
+- [x] The linter loaded the Go module and analyzed its packages successfully.
+
+The successful lint run was performed from the fixture's module root.
+
+### Confirmed Tree-sitter and template results
+
+- [x] The `gotmpl` and `gowork` Tree-sitter parsers are installed.
+- [x] The four template fixtures (`index.tmpl`, `page.gotmpl`, `email.gohtml`, and `config.yaml.tmpl`) are detected as `gotmpl`.
+- [x] Tree-sitter loads the `gotmpl` parser for those template buffers.
+- [x] `gopls` attaches to both `main.go` and the template buffers.
+- [x] The active `gopls` client reports the configured `templateExtensions` values.
+- [x] A deliberate Go type mismatch produced a `gopls` diagnostic.
+- [x] A deliberately malformed template conditional produced a template diagnostic from `gopls`. The temporary malformed test was reverted.
+
+### Confirmed Neovim workflow and LSP results
+
+- [x] The Go `FileType` autocmd is registered.
+- [x] The Tree-sitter `FileType` autocmd is registered for Go buffers.
+- [x] The Go buffer autocmd invokes `require("config.keymaps").go(event.buf)`.
+- [x] All five Go workflow mappings are registered.
+- [x] The nested Go source buffer receives the Go workflow mappings.
+- [x] The nested module build workflow succeeds with exit code `0`.
+- [x] The workspace-mode build workflow succeeds with exit code `0` after the module is added to `go.work`.
+- [x] Go LSP completion works when invoked from Insert mode.
+- [x] Go module discovery works from the project root.
+- [x] Go module discovery works from a nested directory.
+- [x] Go workspace discovery works after creating `go.work`.
+- [x] The temporary workspace configuration was removed successfully after testing.
+
+### Confirmed formatting results
+
+- [x] Conform resolves `gofmt` for Go buffers.
+- [x] The `:Format` command produces the expected Go formatting.
+- [x] The in-memory buffer changes after `:Format`.
+- [x] `vim.bo.modified` returns `true` after formatting.
+- [x] The formatted buffer saves successfully.
+- [x] `gofmt -d .\format_probe.go` produces no differences after saving.
+- [x] The earlier Go fixture formatting check produces no differences for the saved `main.go`.
+
+These results confirm both the Conform execution path and the saved-file formatting result.
+
+### Pending or inconclusive results
+
+- [ ] **Definition navigation:** The server advertises `definitionProvider = true`, but a direct `textDocument/definition` request at the tested template position returned an empty result (`{}`). `vim.lsp.buf.definition()` also reported `no location found`.
+- [ ] **References:** The tested template symbol produced `no references found`.
+- [ ] **Import organization:** The `gopls` `source.organizeImports` code action has not yet been tested.
+- [ ] **LSP root detection:** Module and workspace discovery through the Go environment and workflow have been tested. Native `gopls` root detection still requires independent confirmation.
+- [ ] **LSP activation control:** Verify that `gopls` activates only when Go support is enabled.
+- [ ] **Duplicate LSP clients:** Verify that no duplicate `gopls` client is started.
+- [ ] **Run workflow:** The `<leader>cr` mapping has not yet been validated by executing a package.
+- [ ] **Test workflow:** The `<leader>ct` mapping has not yet been validated by executing module tests.
+- [ ] **Lint workflow:** The `<leader>cl` mapping has not yet been validated by executing `golangci-lint`.
+- [ ] **Vet workflow:** The `<leader>cc` mapping has not yet been validated by executing `go vet`.
+- [ ] **Failure handling:** Process startup errors, unsuccessful executions, and missing executables still require focused workflow validation.
+- [ ] **Import modification policy:** Confirm that import organization remains manual and is not triggered on save.
+
+The template navigation results must not be interpreted as proof that `gopls` lacks template navigation. The server advertises definition and reference capabilities, while the tested requests returned no locations.
+
+The next investigation must verify the exact template filetype, cursor position, symbol, template context, and LSP requests. Definition and reference tests should be performed independently.
+
+### Validation status
+
+| Area | Status |
+|---|---|
+| Windows Go tooling script | Validated |
+| Go toolchain and executable detection | Validated |
+| Check-only mode | Validated |
+| Go fixture linting | Passed, zero issues |
+| Go source and template diagnostics | Validated |
+| Go LSP completion | Validated |
+| Go workflow mapping registration | Validated |
+| Nested module discovery and build | Validated |
+| Single-module workspace discovery and build | Validated |
+| Manual Conform formatting | Validated |
+| Saved-file formatting verification | Passed |
+| Template definition navigation | Inconclusive |
+| Template reference navigation | Inconclusive |
+| Import organization | Pending |
+| Individual run, test, lint, and vet workflows | Pending |
+| Go language-pack implementation | Under validation |
+| Stage 13 | Incomplete |
+
+**Important boundary:** Windows Go tooling validation and manual Conform formatting validation are complete. They must remain separate from the overall Go language-pack validation.
+
+### Current testing checkpoint
+
+The formatting investigation is complete.
+
+The next active investigation is Go template navigation through `gopls`.
+
+Proceed in this order:
+
+1. Inspect `templates/index.tmpl` and confirm its actual Neovim filetype.
+2. Confirm that the expected `gopls` client is attached to the template buffer.
+3. Identify a known template symbol and place the cursor directly on its definition.
+4. Test definition navigation.
+5. Test references independently.
+6. Inspect the corresponding LSP request and response if either operation returns no location.
+
+Do not change the language-pack architecture or introduce a custom LSP handler until the tests identify a specific limitation or configuration issue.
 
 ### Language-pack tests
 
 - [ ] Go pack discovery works.
 - [ ] Activation is controlled by `config.languages.packs.go`.
 - [ ] Disabled packs contribute no metadata.
-- [ ] `gofmt` is registered correctly.
-- [ ] Parser mappings are valid.
+- [x] `gofmt` is registered and resolves correctly.
+- [x] Parser mappings are declared and the tested Go template parsers load.
 - [ ] `gopls` activates only when Go support is enabled.
 
 ### LSP tests
 
 - [ ] Upstream `gopls` definition is available.
-- [ ] Native LSP activation works.
-- [ ] Go buffers attach correctly.
-- [ ] Root detection works for modules and workspaces.
-- [ ] Completion works.
-- [ ] Diagnostics work.
-- [ ] Navigation works.
+- [x] Native LSP activation works.
+- [x] Go buffers attach correctly.
+- [ ] Native LSP root detection works for modules and workspaces.
+- [x] Completion works.
+- [x] Diagnostics work for Go source and Go templates.
+- [ ] Definition navigation works.
+- [ ] Reference navigation works.
 - [ ] Import organization works.
 - [ ] No duplicate LSP client is started.
 
 ### Formatting and lint tests
 
-- [ ] Conform resolves `gofmt`.
-- [ ] Manual formatting works.
+- [x] Conform resolves `gofmt`.
+- [x] Manual `:Format` execution is confirmed.
+- [x] The in-memory Go buffer changes after formatting.
+- [x] The modified-buffer state is confirmed.
+- [x] Saved-file formatting verification passes.
 - [ ] Format-on-save remains disabled.
 - [ ] LSP formatting fallback remains disabled.
 - [ ] `gopls` import organization works.
-- [ ] `golangci-lint` runs from the correct module.
-- [ ] Project lint configuration is respected.
+- [x] `golangci-lint` executes successfully in the Go fixture.
+- [ ] `golangci-lint` runs from the correct module through the Neovim workflow.
+- [ ] Project lint configuration is respected through the Neovim workflow.
 - [ ] Automatic fixes are not applied.
-- [ ] Missing tools produce useful diagnostics.
+- [x] Missing-tool verification is covered by the Windows tooling script's executable checks.
 
 ### Workflow tests
 
 - [ ] Run uses the current package directory.
-- [ ] Build uses the correct module root.
-- [ ] Test uses the correct module root.
-- [ ] Lint uses the correct module root.
-- [ ] Vet uses the correct module root.
-- [ ] Module detection works from nested package directories.
-- [ ] Workspace context is handled without assuming the workspace root is a module root.
+- [x] Build uses the correct module root.
+- [x] Build works from a nested Go source buffer.
+- [x] Build works in the tested single-module workspace configuration.
+- [ ] Test uses the correct module root through the Neovim workflow.
+- [ ] Lint uses the correct module root through the Neovim workflow.
+- [ ] Vet uses the correct module root through the Neovim workflow.
+- [x] Module discovery works from nested package directories.
+- [x] Single-module workspace context is handled after the module is added to `go.work`.
 - [ ] Directories without a Go module produce useful diagnostics.
-- [ ] stdout and stderr are captured.
-- [ ] Exit codes are preserved.
+- [ ] stdout and stderr are captured in both successful and failed workflow executions.
+- [x] Exit codes are preserved in the tested build workflows.
 - [ ] Failed process startup is handled.
-- [ ] Workspace limitations are documented.
+- [ ] Missing executables produce useful diagnostics.
+- [x] Multi-module workspace orchestration remains explicitly deferred.
 
 ### Regression tests
 
@@ -468,21 +799,23 @@ Do not claim completion until the implementation and relevant tests pass.
 Implement incrementally within Stage 13.
 
 1. Add `lua/langs/go.lua`.
-2. Enable Go in `config.languages`.
+2. Enable Go in `lua/config/languages.lua`.
 3. Verify `gopls` activation and root detection.
 4. Integrate and test `gofmt`.
 5. Verify import organization.
 6. Add the `golangci-lint` workflow.
-7. Add run, build, test, lint and vet mappings.
+7. Add run, build, test, lint, and vet mappings.
 8. Register Go buffer mappings.
 9. Validate module detection from nested package directories.
 10. Validate asynchronous command execution and output handling.
 11. Perform focused manual validation.
-12. Run applicable syntax, formatting and regression checks.
+12. Run applicable syntax, formatting, and regression checks.
 13. Update dependency documentation when the shared dependency-management architecture is available.
 14. Add Go smoke tests after smoke-test modularization is complete.
 
-Do not create a dependency manifest, health module or placeholder smoke-test directory solely for Go.
+The Windows Go tooling script has been implemented and validated independently. Manual Conform formatting has also been validated. Neither result replaces the remaining Neovim language-pack implementation and testing steps.
+
+Do not create a dependency manifest, health module, or placeholder smoke-test directory solely for Go.
 
 Do not implement debugging in this sequence.
 
@@ -500,7 +833,7 @@ Explicitly defer:
 - Standalone `goimports`.
 - `gofumpt` as a default.
 - Dedicated Go test-runner plugins.
-- Automatic dependency installation.
+- Automatic dependency installation through Neovim.
 - Go-specific root-management infrastructure.
 - Workspace-wide build and test orchestration.
 - Go smoke-test integration before smoke-test modularization is complete.
@@ -518,4 +851,3 @@ Evaluate these separately after core Go support is stable.
 - [golangci-lint](https://golangci-lint.run/)
 - [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)
 - [Conform.nvim](https://github.com/stevearc/conform.nvim)
-
