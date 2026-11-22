@@ -82,12 +82,15 @@ require("plugins.icons")
 require("plugins.snacks")
 require("plugins.fzf-lua")
 require("plugins.flash")
+require("plugins.grug-far")
+require("plugins.todo-comments")
 
 -- Editing plugins.
 require("plugins.mini-ai")
 require("plugins.mini-surround")
 require("plugins.mini-move")
 require("plugins.dial")
+require("plugins.csvview")
 
 -- Syntax parsing and highlighting.
 require("plugins.treesitter")
@@ -127,8 +130,9 @@ require("plugins.conform")
 require("config.format").setup()
 require("config.autocmds")
 
--- Sessions
+-- Sessions and Git.
 require("plugins.gitsigns")
+require("plugins.diffview")
 require("plugins.project")
 require("plugins.mini-sessions")
 
