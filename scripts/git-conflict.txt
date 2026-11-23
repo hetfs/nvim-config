@@ -1,0 +1,11 @@
+
+
+Configuration example:
+
+<<<<<<< HEAD
+server_port = 8080
+environment = "development"
+=======
+server_port = 9090
+environment = "production"
+>>>>>>> feature/configuration

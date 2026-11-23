@@ -1,4 +1,4 @@
-# Stage 13: Go Language Support
+# Stage 14: Go Language Support
 
 ## 1. Purpose
 
@@ -167,21 +167,101 @@ The existing Tree-sitter integration provides the `gotmpl` parser.
 
 Template support must remain within the existing Go language pack and shared infrastructure. Do not introduce a separate template language pack without a demonstrated architectural requirement.
 
-#### Template validation findings
+### Template validation findings
 
-The following behavior has been confirmed:
+The November 22, 2026 validation session confirmed the following:
 
 - `gopls` attaches to Go source and template buffers.
 - The configured template extensions are active.
 - Go source diagnostics work.
 - Malformed template syntax produces diagnostics.
 - Tree-sitter loads the `gotmpl` parser for the tested template files.
+- Named-template definition navigation works.
+- Named-template reference discovery works.
+- `.Title` references are found across multiple template files.
+- `.Name` references are found across multiple template files.
 
-Definition and reference navigation remain unresolved. The server advertises definition and reference capabilities, but the tested template symbol requests returned no locations.
+#### Named-template definition
 
-Do not interpret these results as proof that `gopls` does not support template navigation. Further investigation must verify the cursor position, symbol, template context, and exact LSP requests.
+The fixture declares a named template:
 
-The next validation checkpoint is to inspect the actual template buffer and test definition and reference requests against a known template symbol.
+```gotemplate
+{{define "pageTitle"}}Go Templates{{end}}
+```
+
+It invokes that template with:
+
+```gotemplate
+{{template "pageTitle"}}
+```
+
+With the cursor positioned on `pageTitle` in the invocation, running:
+
+```vim
+:lua vim.lsp.buf.definition()
+```
+
+moved the cursor to the declaration.
+
+**Result: Passed.**
+
+#### Named-template references
+
+With the cursor positioned on `pageTitle` in the declaration, running:
+
+```vim
+:lua vim.lsp.buf.references()
+```
+
+returned both the declaration and invocation:
+
+```text
+templates/index.tmpl|10 col 15-24| {{define "pageTitle"}}Go Templates{{end}}
+templates/index.tmpl|11 col 17-26| {{template "pageTitle"}}
+```
+
+**Result: Passed.**
+
+#### `.Title` cross-file references
+
+Running `vim.lsp.buf.references()` on `.Title` returned four occurrences:
+
+```text
+templates/index.tmpl|5 col 15-20| <title>{{.Title}}</title>
+templates/index.tmpl|8 col 12-17| <h1>{{.Title}}</h1>
+templates/page.gotmpl|5 col 15-20| <title>{{.Title}}</title>
+templates/page.gotmpl|9 col 16-21| <h1>{{.Title}}</h1>
+```
+
+**Result: Passed.**
+
+#### `.Name` cross-file references
+
+Running `vim.lsp.buf.references()` on `.Name` returned three occurrences:
+
+```text
+templates/config.yaml.tmpl|2 col 12-16| name: {{.Name}}
+templates/email.gohtml|4 col 18-22| <h2>Hello {{.Name}},</h2>
+templates/index.tmpl|9 col 20-24| <p>Welcome, {{.Name}}!</p>
+```
+
+**Result: Passed.**
+
+#### Go struct-field definition navigation
+
+Running `vim.lsp.buf.definition()` on `.Title` returned:
+
+```text
+no location found
+```
+
+This is distinct from named-template definition navigation.
+
+Template fields such as `.Title` and `.Name` are field accesses on the template's data object. They are not Go variable declarations or named-template declarations.
+
+The current test does not establish whether `gopls` can resolve a template field to the corresponding Go struct field. This behavior remains unresolved and requires a focused test using a known Go data structure and the actual template execution context.
+
+Do not classify all template definition navigation as unsupported. Named-template definition navigation has already passed.
 
 ### Import organization
 
@@ -242,7 +322,7 @@ The following checks passed:
 
 The buffer-modified check is important because it confirms that Conform actually transformed the buffer. Formatter availability alone would not establish that.
 
-<badge color="success">Manual Conform formatting validated</badge>
+Manual Conform formatting is validated.
 
 No formatter implementation changes are required based on these results.
 
@@ -641,6 +721,12 @@ The successful lint run was performed from the fixture's module root.
 - [x] Go module discovery works from a nested directory.
 - [x] Go workspace discovery works after creating `go.work`.
 - [x] The temporary workspace configuration was removed successfully after testing.
+- [x] `gotmpl` filetype detection works in the tested template buffers.
+- [x] `gopls` attaches to the tested template buffer with the expected project root.
+- [x] Named-template definition navigation works from the invocation to the declaration.
+- [x] Named-template references return both the declaration and invocation.
+- [x] `.Title` references are found across `index.tmpl` and `page.gotmpl`.
+- [x] `.Name` references are found across `config.yaml.tmpl`, `email.gohtml`, and `index.tmpl`.
 
 ### Confirmed formatting results
 
@@ -656,8 +742,7 @@ These results confirm both the Conform execution path and the saved-file formatt
 
 ### Pending or inconclusive results
 
-- [ ] **Definition navigation:** The server advertises `definitionProvider = true`, but a direct `textDocument/definition` request at the tested template position returned an empty result (`{}`). `vim.lsp.buf.definition()` also reported `no location found`.
-- [ ] **References:** The tested template symbol produced `no references found`.
+- [ ] **Go struct-field definition navigation:** Running `vim.lsp.buf.definition()` on `.Title` returned `no location found`. Named-template definition navigation is confirmed working; this remaining test concerns resolving template data fields to Go struct declarations.
 - [ ] **Import organization:** The `gopls` `source.organizeImports` code action has not yet been tested.
 - [ ] **LSP root detection:** Module and workspace discovery through the Go environment and workflow have been tested. Native `gopls` root detection still requires independent confirmation.
 - [ ] **LSP activation control:** Verify that `gopls` activates only when Go support is enabled.
@@ -669,9 +754,7 @@ These results confirm both the Conform execution path and the saved-file formatt
 - [ ] **Failure handling:** Process startup errors, unsuccessful executions, and missing executables still require focused workflow validation.
 - [ ] **Import modification policy:** Confirm that import organization remains manual and is not triggered on save.
 
-The template navigation results must not be interpreted as proof that `gopls` lacks template navigation. The server advertises definition and reference capabilities, while the tested requests returned no locations.
-
-The next investigation must verify the exact template filetype, cursor position, symbol, template context, and LSP requests. Definition and reference tests should be performed independently.
+Template definition and reference navigation must be assessed by symbol type. Named-template definition and reference navigation, along with cross-file template field references, have passed. Go struct-field definition navigation remains unresolved.
 
 ### Validation status
 
@@ -688,31 +771,36 @@ The next investigation must verify the exact template filetype, cursor position,
 | Single-module workspace discovery and build | Validated |
 | Manual Conform formatting | Validated |
 | Saved-file formatting verification | Passed |
-| Template definition navigation | Inconclusive |
-| Template reference navigation | Inconclusive |
+| Named-template definition navigation | Validated |
+| Named-template reference navigation | Validated |
+| `.Title` cross-file references | Validated |
+| `.Name` cross-file references | Validated |
+| Go struct-field definition navigation | Unresolved |
 | Import organization | Pending |
 | Individual run, test, lint, and vet workflows | Pending |
 | Go language-pack implementation | Under validation |
 | Stage 13 | Incomplete |
 
-**Important boundary:** Windows Go tooling validation and manual Conform formatting validation are complete. They must remain separate from the overall Go language-pack validation.
+**Important boundary:** Windows Go tooling validation, manual Conform formatting validation, and the tested template navigation features are complete. They must remain separate from the overall Go language-pack validation.
 
 ### Current testing checkpoint
 
-The formatting investigation is complete.
+The formatting investigation and the named-template and template-reference navigation investigation are complete.
 
-The next active investigation is Go template navigation through `gopls`.
+The next active work should focus on the remaining Go language-pack requirements.
 
 Proceed in this order:
 
-1. Inspect `templates/index.tmpl` and confirm its actual Neovim filetype.
-2. Confirm that the expected `gopls` client is attached to the template buffer.
-3. Identify a known template symbol and place the cursor directly on its definition.
-4. Test definition navigation.
-5. Test references independently.
-6. Inspect the corresponding LSP request and response if either operation returns no location.
+1. Test `gopls` import organization through the existing code-action mapping.
+2. Verify native `gopls` root detection for modules and workspaces.
+3. Verify that `gopls` activation follows the Go language-pack enablement setting.
+4. Confirm that only one `gopls` client is started.
+5. Test the run, test, lint, and vet workflow mappings individually.
+6. Test workflow failure handling and missing-executable diagnostics.
+7. Investigate Go struct-field definition navigation separately, using a known Go data structure and its template execution context.
+8. Run applicable syntax, formatting, and regression checks.
 
-Do not change the language-pack architecture or introduce a custom LSP handler until the tests identify a specific limitation or configuration issue.
+Do not change the language-pack architecture or introduce a custom LSP handler until the remaining tests identify a specific limitation or configuration issue.
 
 ### Language-pack tests
 
@@ -731,8 +819,10 @@ Do not change the language-pack architecture or introduce a custom LSP handler u
 - [ ] Native LSP root detection works for modules and workspaces.
 - [x] Completion works.
 - [x] Diagnostics work for Go source and Go templates.
-- [ ] Definition navigation works.
-- [ ] Reference navigation works.
+- [x] Named-template definition navigation works.
+- [x] Named-template reference navigation works.
+- [x] Template field references work across files.
+- [ ] Go struct-field definition navigation resolves to Go declarations.
 - [ ] Import organization works.
 - [ ] No duplicate LSP client is started.
 
@@ -813,7 +903,7 @@ Implement incrementally within Stage 13.
 13. Update dependency documentation when the shared dependency-management architecture is available.
 14. Add Go smoke tests after smoke-test modularization is complete.
 
-The Windows Go tooling script has been implemented and validated independently. Manual Conform formatting has also been validated. Neither result replaces the remaining Neovim language-pack implementation and testing steps.
+The Windows Go tooling script has been implemented and validated independently. Manual Conform formatting has also been validated. Named-template navigation and cross-file template field references have passed their focused tests. None of these results replaces the remaining Neovim language-pack implementation and testing steps.
 
 Do not create a dependency manifest, health module, or placeholder smoke-test directory solely for Go.
 
@@ -847,6 +937,7 @@ Evaluate these separately after core Go support is stable.
 - [Go modules reference](https://go.dev/ref/mod)
 - [Go workspaces](https://go.dev/doc/tutorial/workspaces)
 - [gopls documentation](https://go.dev/gopls/)
+- [gopls template support](https://go.dev/gopls/features/template)
 - [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)
 - [golangci-lint](https://golangci-lint.run/)
 - [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)

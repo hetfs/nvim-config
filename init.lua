@@ -2,14 +2,25 @@
 -- Native-first, modular Neovim configuration.
 -- Minimum supported version: Neovim 0.12.
 
+-- ============================================================
+-- Core Requirements
+-- ============================================================
+
 -- Disable unused remote providers.
 vim.g.loaded_perl_provider = 0
 vim.g.loaded_ruby_provider = 0
 
 -- Enforce the minimum supported Neovim version.
 if vim.fn.has("nvim-0.12") ~= 1 then
-  error(string.format("nvim-config requires Neovim >= 0.12.0; detected %s.", tostring(vim.version())), 0)
+  local version = vim.version()
+  local detected = string.format("%d.%d.%d", version.major, version.minor, version.patch)
+
+  error(string.format("nvim-config requires Neovim >= 0.12.0; detected %s.", detected), 0)
 end
+
+-- ============================================================
+-- Configuration Root
+-- ============================================================
 
 -- Resolve this configuration's root directory.
 local source = debug.getinfo(1, "S").source
@@ -18,6 +29,10 @@ local config_root = vim.fn.fnamemodify(vim.fn.resolve(init_path), ":p:h")
 
 -- Make this configuration's Lua modules discoverable.
 vim.opt.runtimepath:prepend(config_root)
+
+-- ============================================================
+-- Global Settings
+-- ============================================================
 
 -- Define leader keys before loading any keymaps.
 vim.g.mapleader = " "
@@ -29,9 +44,14 @@ vim.loader.enable()
 -- Set this according to the font used by the terminal or GUI.
 vim.g.have_nerd_font = true
 
+-- ============================================================
+-- Neovide
+-- ============================================================
+
 -- Configure the Neovide font when running in Neovide.
 if vim.g.neovide then
   local font_size = 12
+
   local font_candidates = {
     "JetBrainsMono Nerd Font",
     "JetBrainsMonoNL Nerd Font",
@@ -42,17 +62,20 @@ if vim.g.neovide then
     "Monospace",
   }
 
-  -- Use a platform-appropriate fallback when font discovery is unavailable.
+  -- Use a platform-appropriate fallback when font discovery
+  -- is unavailable.
   local selected_font
+
   if vim.fn.has("win32") == 1 then
     selected_font = "Consolas"
-  elseif vim.fn.has("mac") == 1 then
+  elseif vim.fn.has("macunix") == 1 then
     selected_font = "Menlo"
   else
     selected_font = "Monospace"
   end
 
-  -- fc-list is available on many Linux systems, but not normally on Windows.
+  -- fc-list is available on many Linux systems and can also
+  -- be installed on macOS. It is not normally available on Windows.
   if vim.fn.executable("fc-list") == 1 then
     local output = vim.fn.system({ "fc-list", ":", "family" })
 
@@ -69,72 +92,176 @@ if vim.g.neovide then
   vim.o.guifont = string.format("%s:h%d", selected_font, font_size)
 end
 
--- Load required modules directly in a fixed order.
--- A failing require aborts the remaining startup sequence.
+-- ============================================================
+-- Core Options and Appearance
+-- ============================================================
 
--- Core options and appearance.
 require("config.options")
 require("config.filetypes")
 require("plugins.colorscheme")
 require("plugins.icons")
+require("plugins.trouble")
 
--- Navigation plugins.
+
+-- ============================================================
+-- Navigation Plugins
+-- ============================================================
+
+-- Snacks must load before Yanky because Yanky registers
+-- its Snacks Picker integration during setup.
 require("plugins.snacks")
+require("plugins.yanky")
 require("plugins.fzf-lua")
 require("plugins.flash")
+require("plugins.spider")
+require("plugins.harpoon")
 require("plugins.grug-far")
 require("plugins.todo-comments")
 
--- Editing plugins.
+-- ============================================================
+-- Editing Plugins
+-- ============================================================
+
 require("plugins.mini-ai")
 require("plugins.mini-surround")
 require("plugins.mini-move")
 require("plugins.dial")
 require("plugins.csvview")
 
--- Syntax parsing and highlighting.
-require("plugins.treesitter")
+-- ============================================================
+-- Syntax Parsing and Highlighting
+-- ============================================================
 
--- Markdown preview.
+require("plugins.treesitter")
+require("plugins.ts-autotag")
+
+-- ============================================================
+-- Markdown
+-- ============================================================
+
 require("plugins.md-render")
 
--- LSP server definitions and Lua development support.
+-- ============================================================
+-- LSP and Language Tooling
+-- ============================================================
+
+-- Load LSP server definitions and language-specific integrations.
 require("plugins.lsp")
 require("plugins.powershell")
+
+-- Configure shell integration.
 require("plugins.shell").setup()
+
+-- Configure Lua development support.
 require("plugins.lazydev")
 
--- Completion and snippets.
+-- ============================================================
+-- Completion and Snippets
+-- ============================================================
+
 require("plugins.blink-cmp")
 require("plugins.friendly-snippets")
 require("plugins.mini-pairs")
 
--- General configuration and native LSP behavior.
+-- ============================================================
+-- Optional AI Integrations
+-- ============================================================
+
+-- AI activation is independent of language-pack activation.
+local ai = require("config.ai")
+
+assert(type(ai.enabled) == "boolean", "AI configuration 'enabled' must be boolean")
+
+assert(type(ai.providers) == "table", "AI configuration must define a 'providers' table")
+
+for name, enabled in pairs(ai.providers) do
+  assert(type(name) == "string" and name ~= "", "AI provider names must be non-empty strings")
+
+  assert(type(enabled) == "boolean", string.format("AI provider configuration for '%s' must be boolean", name))
+end
+
+if ai.enabled then
+  if ai.providers.blink_edit then
+    require("plugins.blink-edit").setup()
+  end
+
+  if ai.providers.codecompanion then
+    require("plugins.codecompanion").setup()
+  end
+end
+
+-- ============================================================
+-- General Configuration
+-- ============================================================
+
+-- Load centralized keymaps after their required plugins.
 require("config.keymaps")
+
+-- Configure native LSP behavior and buffer-local integrations.
 require("config.lsp")
+require("plugins.illuminate")
+
+-- Configure CMake workflows.
 require("config.cmake").setup()
 
--- Optional shared LSP integrations.
+-- ============================================================
+-- Shared LSP Integrations
+-- ============================================================
+
 require("lsp.servers.emmet").setup()
 
--- Language packs.
+-- ============================================================
+-- Language Packs
+-- ============================================================
+
+-- Activate explicitly enabled language packs.
 require("langs").setup()
 
--- Native Rust and Cargo workflows.
+-- ============================================================
+-- Rust and Cargo
+-- ============================================================
+
+-- Configure native Rust and Cargo workflows only when
+-- the Rust language pack is enabled.
 if require("config.languages").packs.rust then
   require("config.rust").setup()
 end
 
--- Formatting (Conform reads formatter metadata from language packs).
+-- ============================================================
+-- Formatting
+-- ============================================================
+
+-- Conform reads formatter metadata from the activated language packs.
 require("plugins.conform")
 require("config.format").setup()
+
+-- ============================================================
+-- Autocommands
+-- ============================================================
+
 require("config.autocmds")
 
--- Sessions and Git.
+-- ============================================================
+-- Git and Sessions
+-- ============================================================
+
 require("plugins.gitsigns")
 require("plugins.diffview")
+require("plugins.git-conflict")
+require("plugins.octo")
 require("plugins.project")
 require("plugins.mini-sessions")
 
--- Configure keymap discovery after mappings have been registered.
+-- UI plugins.
+require("plugins.lualine")
+require("plugins.bufferline")
+require("plugins.zen-mode")
+require("plugins.noice")
+
+-- ============================================================
+-- Keymap Discovery
+-- ============================================================
+
+-- Configure keymap discovery after plugin and workflow mappings
+-- have been registered.
 require("plugins.which-key")

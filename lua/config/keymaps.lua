@@ -209,6 +209,7 @@ map("i", "jk", "<Esc>", {
   desc = "Exit insert mode",
 })
 
+-- Preserve the unnamed register when replacing visual selections.
 map("x", "p", '"_dP', {
   desc = "Paste without overwriting clipboard",
 })
@@ -223,6 +224,36 @@ map("x", ">", ">gv", {
 
 map("n", "<leader>e", "$", {
   desc = "Jump to end of line",
+})
+
+-- Yanky handles normal-mode put operations.
+-- Keep visual-mode p unchanged to preserve clipboard contents.
+map("n", "p", "<Plug>(YankyPutAfter)", {
+  desc = "Put after cursor",
+})
+
+map("n", "P", "<Plug>(YankyPutBefore)", {
+  desc = "Put before cursor",
+})
+
+-- ============================================================
+-- Yank History
+-- ============================================================
+
+-- Cycle through entries after a put operation.
+map("n", "[y", "<Plug>(YankyPreviousEntry)", {
+  desc = "Previous yank history entry",
+})
+
+map("n", "]y", "<Plug>(YankyNextEntry)", {
+  desc = "Next yank history entry",
+})
+
+-- Search yank history using Snacks Picker.
+map("n", "<leader>ry", function()
+  Snacks.picker.yanky()
+end, {
+  desc = "Search yank history",
 })
 
 -- ============================================================
@@ -242,6 +273,24 @@ map("n", "<leader>cf", "<cmd>Format<CR>", {
 -- Review the replacement before executing.
 map("n", "<leader>rs", ":%s/<C-r>//g<Left><Left>", {
   desc = "Replace previous search in buffer",
+})
+
+-- Open the search-and-replace interface.
+map("n", "<leader>rp", function()
+  require("grug-far").open()
+end, {
+  desc = "Open search and replace",
+})
+
+-- Open search and replace with the word under the cursor.
+map("n", "<leader>rw", function()
+  require("grug-far").open({
+    prefills = {
+      search = vim.fn.expand("<cword>"),
+    },
+  })
+end, {
+  desc = "Search and replace word under cursor",
 })
 
 -- ============================================================
@@ -313,7 +362,7 @@ function M.gitsigns(bufnr)
     })
   end
 
-  -- Hunk operations
+  -- Hunk operations.
   git_map("<leader>ghs", gs.stage_hunk, "Stage hunk")
   git_map("<leader>ghr", gs.reset_hunk, "Reset hunk")
   git_map("<leader>ghp", gs.preview_hunk, "Preview hunk")
@@ -321,15 +370,72 @@ function M.gitsigns(bufnr)
     gs.blame_line({ full = true })
   end, "Blame line")
 
-  -- Buffer operations
+  -- Buffer operations.
   git_map("<leader>ghS", gs.stage_buffer, "Stage buffer")
   git_map("<leader>ghR", gs.reset_buffer, "Reset buffer")
   git_map("<leader>ghd", gs.diffthis, "Diff buffer")
 
-  -- Git visualization
+  -- Git visualization.
   git_map("<leader>gb", gs.toggle_current_line_blame, "Toggle line blame")
   git_map("<leader>gw", gs.toggle_word_diff, "Toggle word diff")
 end
+
+-- Open a view of working-tree changes against the Git index.
+map("n", "<leader>gD", "<cmd>DiffviewOpen<CR>", {
+  desc = "Git: Open diff view",
+})
+
+-- Open the history of the current file.
+map("n", "<leader>gH", "<cmd>DiffviewFileHistory %<CR>", {
+  desc = "Git: Current file history",
+})
+
+-- Close the active Diffview.
+map("n", "<leader>gq", "<cmd>DiffviewClose<CR>", {
+  desc = "Git: Close diff view",
+})
+
+-- Git merge conflict operations.
+map("n", "<leader>gcq", "<cmd>GitConflictListQf<CR>", {
+  desc = "Git: List merge conflicts",
+})
+
+map("n", "<leader>gcr", "<cmd>GitConflictRefresh<CR>", {
+  desc = "Git: Refresh merge conflicts",
+})
+on_attach = function(bufnr)
+  vim.schedule(function()
+    require("config.keymaps").gitsigns(bufnr)
+  end)
+end
+
+-- ============================================================
+-- GitHub (Octo)
+-- ============================================================
+
+map("n", "<leader>oi", "<cmd>Octo issue list<CR>", {
+  desc = "GitHub: List issues",
+})
+
+map("n", "<leader>op", "<cmd>Octo pr list<CR>", {
+  desc = "GitHub: List pull requests",
+})
+
+map("n", "<leader>od", "<cmd>Octo discussion list<CR>", {
+  desc = "GitHub: List discussions",
+})
+
+map("n", "<leader>on", "<cmd>Octo notification list<CR>", {
+  desc = "GitHub: List notifications",
+})
+
+map("n", "<leader>os", function()
+  require("octo.utils").create_base_search_command({
+    include_current_repo = true,
+  })
+end, {
+  desc = "GitHub: Search",
+})
 
 -- ============================================================
 -- Sessions
@@ -365,7 +471,7 @@ end, {
 })
 
 -- ============================================================
--- Central LSP operations.
+-- Central LSP operations
 -- ============================================================
 
 map("n", "<leader>rn", vim.lsp.buf.rename, {
@@ -374,6 +480,26 @@ map("n", "<leader>rn", vim.lsp.buf.rename, {
 
 map("n", "<leader>ca", vim.lsp.buf.code_action, {
   desc = "LSP: Code actions",
+})
+
+-- ============================================================
+-- TODO Comments
+-- ============================================================
+
+map("n", "]t", function()
+  require("todo-comments").jump_next()
+end, {
+  desc = "Next TODO comment",
+})
+
+map("n", "[t", function()
+  require("todo-comments").jump_prev()
+end, {
+  desc = "Previous TODO comment",
+})
+
+map("n", "<leader>fT", "<cmd>TodoFzfLua<CR>", {
+  desc = "Find TODO comments",
 })
 
 -- ============================================================
@@ -433,7 +559,9 @@ end
 
 local function run_lua_tests(bufnr)
   if vim.fn.executable("busted") ~= 1 then
-    vim.notify("Busted is unavailable. Install it with: luarocks install busted", vim.log.levels.WARN, { title = "Lua tests" })
+    vim.notify("Busted is unavailable. Install it with: luarocks install busted", vim.log.levels.WARN, {
+      title = "Lua tests",
+    })
     return
   end
 
@@ -506,7 +634,9 @@ local function run_lua_tests(bufnr)
           title = "Busted",
         })
       else
-        vim.notify(string.format("Lua tests failed (exit code %d)", result.code), vim.log.levels.ERROR, { title = "Busted" })
+        vim.notify(string.format("Lua tests failed (exit code %d)", result.code), vim.log.levels.ERROR, {
+          title = "Busted",
+        })
       end
     end)
   end)
@@ -526,7 +656,7 @@ end
 function M.lua(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
-  map("n", "<leader>cr", "<cmd>luafile %<cr>", {
+  map("n", "<leader>cr", "<cmd>luafile %<CR>", {
     buffer = bufnr,
     desc = "Run Lua file",
   })
@@ -747,7 +877,7 @@ function M.rust(bufnr)
   rust_map("<leader>cc", "<cmd>Cargo check<CR>", "Check project")
 end
 
---- ============================================================
+-- ============================================================
 -- Go
 -- ============================================================
 
@@ -1119,25 +1249,23 @@ function M.markdown(bufnr)
     })
   end
 
-  -- Preview
+  -- Preview.
   markdown_map("<leader>mp", "<Plug>(md-render-preview)", "Toggle preview")
-
   markdown_map("<leader>mt", "<Plug>(md-render-preview-tab)", "Toggle preview in tab")
-
   markdown_map("<leader>md", "<Plug>(md-render-demo)", "Open rendering demo")
 
-  -- Linting
+  -- Linting.
   markdown_map("<leader>ml", "<cmd>MarkdownLint<CR>", "Lint buffer")
 
-  -- Table of contents
+  -- Table of contents.
   markdown_map("<leader>mo", "<cmd>MarkdownToc<CR>", "Update table of contents")
 
-  -- Diagnostics
+  -- Diagnostics.
   markdown_map("<leader>mc", function()
     vim.diagnostic.reset(nil, bufnr)
   end, "Clear buffer diagnostics")
 
-  -- Mermaid diagrams
+  -- Mermaid diagrams.
   markdown_map("<leader>mr", "<cmd>MermaidRender<CR>", "Render Mermaid diagram")
 end
 
@@ -1546,7 +1674,7 @@ local function run_javascript_script(bufnr, candidates)
 end
 
 -- ============================================================
--- Register buffer-local JavaScript and TypeScript workflows.
+-- Register buffer-local JavaScript and TypeScript workflows
 -- ============================================================
 
 function M.javascript(bufnr)
@@ -1571,5 +1699,144 @@ function M.javascript(bufnr)
   javascript_map("<leader>cl", { "lint" }, "Lint project")
   javascript_map("<leader>cc", { "typecheck", "check" }, "Type-check project")
 end
+
+-- ============================================================
+-- Diagnostics and Navigation (Trouble)
+-- ============================================================
+
+map("n", "<leader>xx", "<cmd>Trouble diagnostics toggle<CR>", {
+  desc = "Diagnostics: Workspace",
+})
+
+map("n", "<leader>xX", "<cmd>Trouble diagnostics toggle filter.buf=0<CR>", {
+  desc = "Diagnostics: Current buffer",
+})
+
+map("n", "<leader>xS", "<cmd>Trouble symbols toggle focus=false win.position=right<CR>", {
+  desc = "LSP: Document symbols",
+})
+
+map("n", "<leader>xL", "<cmd>Trouble lsp toggle focus=false win.position=right<CR>", {
+  desc = "LSP: Definitions and references",
+})
+
+map("n", "<leader>xl", "<cmd>Trouble loclist toggle<CR>", {
+  desc = "Diagnostics: Location list",
+})
+
+map("n", "<leader>xq", "<cmd>Trouble qflist toggle<CR>", {
+  desc = "Diagnostics: Quickfix list",
+})
+
+map("n", "<leader>xt", "<cmd>Trouble todo toggle<CR>", {
+  desc = "Search: TODO annotations",
+})
+
+-- ============================================================
+-- Harpoon
+-- ============================================================
+
+map("n", "<leader>ha", function()
+  require("harpoon"):list():add()
+end, {
+  desc = "Harpoon: Add current file",
+})
+
+map("n", "<leader>hh", function()
+  local harpoon = require("harpoon")
+  harpoon.ui:toggle_quick_menu(harpoon:list())
+end, {
+  desc = "Harpoon: Open file list",
+})
+
+for i = 1, 4 do
+  local index = i
+
+  map("n", "<leader>h" .. index, function()
+    require("harpoon"):list():select(index)
+  end, {
+    desc = "Harpoon: Select file " .. index,
+  })
+end
+
+-- Bufferline navigation.
+map("n", "<leader>bn", "<cmd>BufferLineCycleNext<CR>", {
+  desc = "Buffer: Next",
+})
+
+map("n", "<leader>bp", "<cmd>BufferLineCyclePrev<CR>", {
+  desc = "Buffer: Previous",
+})
+
+map("n", "<leader>bc", "<cmd>BufferLinePick<CR>", {
+  desc = "Buffer: Pick",
+})
+
+map("n", "<leader>bC", "<cmd>BufferLinePickClose<CR>", {
+  desc = "Buffer: Pick and close",
+})
+
+map("n", "<leader>b1", "<cmd>BufferLineGoToBuffer 1<CR>", {
+  desc = "Buffer: Select 1",
+})
+
+map("n", "<leader>b2", "<cmd>BufferLineGoToBuffer 2<CR>", {
+  desc = "Buffer: Select 2",
+})
+
+map("n", "<leader>b3", "<cmd>BufferLineGoToBuffer 3<CR>", {
+  desc = "Buffer: Select 3",
+})
+
+map("n", "<leader>b4", "<cmd>BufferLineGoToBuffer 4<CR>", {
+  desc = "Buffer: Select 4",
+})
+
+-- Zen Mode.
+map("n", "<leader>uz", "<cmd>ZenMode<CR>", {
+  desc = "UI: Toggle Zen Mode",
+})
+
+map("n", "<leader>uZ", function()
+  require("zen-mode").close()
+end, {
+  desc = "UI: Exit Zen Mode",
+})
+
+-- Noice message history.
+map("n", "<leader>um", "<cmd>Noice<CR>", {
+  desc = "UI: Message history",
+})
+
+map("n", "<leader>uM", "<cmd>Noice last<CR>", {
+  desc = "UI: Last message",
+})
+
+map("n", "<leader>ue", "<cmd>Noice errors<CR>", {
+  desc = "UI: Message errors",
+})
+
+
+-- ============================================================
+-- Symbol Reference Highlighting
+-- ============================================================
+
+map("n", "<leader>ui", function()
+  require("illuminate").toggle()
+end, {
+  desc = "UI: Toggle symbol highlighting",
+})
+
+map("n", "<leader>un", function()
+  require("illuminate").goto_next_reference(false)
+end, {
+  desc = "LSP: Next symbol reference",
+})
+
+map("n", "<leader>up", function()
+  require("illuminate").goto_prev_reference(false)
+end, {
+  desc = "LSP: Previous symbol reference",
+})
 
 return M

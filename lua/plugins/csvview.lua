@@ -47,3 +47,25 @@ require("csvview").setup({
     },
   },
 })
+
+-- ============================================================
+-- CSVView Keymaps
+-- ============================================================
+
+local map = vim.keymap.set
+
+map("n", "<leader>vv", "<Cmd>CsvViewToggle<CR>", {
+  desc = "Toggle CSV view",
+})
+
+map("n", "<leader>ve", "<Cmd>CsvViewEnable<CR>", {
+  desc = "Enable CSV view",
+})
+
+map("n", "<leader>vd", "<Cmd>CsvViewDisable<CR>", {
+  desc = "Disable CSV view",
+})
+
+map("n", "<leader>vi", "<Cmd>CsvViewInfo<CR>", {
+  desc = "Show CSV information",
+})
