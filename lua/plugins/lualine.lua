@@ -1,5 +1,5 @@
 -- Stage 24: Statusline.
--- Use built-in components and avoid optional icon dependencies.
+-- Use Catppuccin, mini.icons, and built-in Lualine components.
 
 vim.pack.add({
   {
@@ -10,15 +10,31 @@ vim.pack.add({
 
 require("lualine").setup({
   options = {
-    icons_enabled = false,
-    theme = "auto",
-    component_separators = "|",
-    section_separators = "",
+    icons_enabled = true,
+    theme = "catppuccin-nvim",
+
+    component_separators = {
+      left = "",
+      right = "",
+    },
+
+    section_separators = {
+      left = "",
+      right = "",
+    },
+
     globalstatus = false,
     always_divide_middle = true,
+
     disabled_filetypes = {
       statusline = {},
       winbar = {},
+    },
+
+    refresh = {
+      statusline = 250,
+      tabline = 500,
+      winbar = 500,
     },
   },
 
@@ -70,6 +86,7 @@ require("lualine").setup({
   inactive_sections = {
     lualine_a = {},
     lualine_b = {},
+
     lualine_c = {
       {
         "filename",
@@ -77,12 +94,18 @@ require("lualine").setup({
         file_status = true,
       },
     },
+
     lualine_x = {
       "location",
     },
+
     lualine_y = {},
     lualine_z = {},
   },
+
+  tabline = {},
+  winbar = {},
+  inactive_winbar = {},
 
   extensions = {},
 })

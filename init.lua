@@ -102,7 +102,6 @@ require("plugins.colorscheme")
 require("plugins.icons")
 require("plugins.trouble")
 
-
 -- ============================================================
 -- Navigation Plugins
 -- ============================================================
@@ -154,6 +153,7 @@ require("plugins.shell").setup()
 
 -- Configure Lua development support.
 require("plugins.lazydev")
+require("plugins.neotest")
 
 -- ============================================================
 -- Completion and Snippets
@@ -254,9 +254,9 @@ require("plugins.mini-sessions")
 
 -- UI plugins.
 require("plugins.lualine")
-require("plugins.bufferline")
+-- require("plugins.bufferline")
 require("plugins.zen-mode")
-require("plugins.noice")
+-- require("plugins.noice")
 
 -- ============================================================
 -- Keymap Discovery

@@ -403,11 +403,6 @@ map("n", "<leader>gcq", "<cmd>GitConflictListQf<CR>", {
 map("n", "<leader>gcr", "<cmd>GitConflictRefresh<CR>", {
   desc = "Git: Refresh merge conflicts",
 })
-on_attach = function(bufnr)
-  vim.schedule(function()
-    require("config.keymaps").gitsigns(bufnr)
-  end)
-end
 
 -- ============================================================
 -- GitHub (Octo)
@@ -1816,7 +1811,6 @@ map("n", "<leader>ue", "<cmd>Noice errors<CR>", {
   desc = "UI: Message errors",
 })
 
-
 -- ============================================================
 -- Symbol Reference Highlighting
 -- ============================================================
@@ -1839,4 +1833,75 @@ end, {
   desc = "LSP: Previous symbol reference",
 })
 
+-- ============================================================
+-- Neotest
+-- ============================================================
+
+-- Test management.
+map("n", "<leader>t", "<Nop>", {
+  desc = "+test",
+})
+
+map("n", "<leader>ta", function()
+  require("neotest").run.attach()
+end, {
+  desc = "Test: Attach to running test",
+})
+
+map("n", "<leader>tf", function()
+  require("plugins.neotest.run").run_current()
+end, {
+  desc = "Test: Run current file",
+})
+
+map("n", "<leader>tT", function()
+  require("neotest").run.run(vim.fn.getcwd())
+end, {
+  desc = "Test: Run all tests",
+})
+
+map("n", "<leader>tr", function()
+  require("neotest").run.run()
+end, {
+  desc = "Test: Run nearest test",
+})
+
+map("n", "<leader>tl", function()
+  require("neotest").run.run_last()
+end, {
+  desc = "Test: Run last test",
+})
+
+map("n", "<leader>ts", function()
+  require("neotest").summary.toggle()
+end, {
+  desc = "Test: Toggle summary",
+})
+
+map("n", "<leader>to", function()
+  require("neotest").output.open({
+    enter = true,
+    auto_close = true,
+  })
+end, {
+  desc = "Test: Show output",
+})
+
+map("n", "<leader>tO", function()
+  require("neotest").output_panel.toggle()
+end, {
+  desc = "Test: Toggle output panel",
+})
+
+map("n", "<leader>tS", function()
+  require("neotest").run.stop()
+end, {
+  desc = "Test: Stop execution",
+})
+
+map("n", "<leader>tw", function()
+  require("neotest").watch.toggle(vim.fn.expand("%:p"))
+end, {
+  desc = "Test: Toggle watch",
+})
 return M

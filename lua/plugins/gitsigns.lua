@@ -10,9 +10,13 @@ vim.pack.add({
 
 require("gitsigns").setup({
   on_attach = function(bufnr)
-    -- Defer the lookup until startup has loaded the central keymap module.
+    -- Register buffer-local Gitsigns mappings after startup.
     vim.schedule(function()
-      require("config.keymaps").gitsigns(bufnr)
+      local keymaps = require("config.keymaps")
+
+      if type(keymaps.gitsigns) == "function" then
+        keymaps.gitsigns(bufnr)
+      end
     end)
   end,
 })
