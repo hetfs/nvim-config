@@ -257,6 +257,28 @@ end, {
 })
 
 -- ============================================================
+-- Restart / Resume / Rerun
+-- ============================================================
+
+local restart = require("config.restart")
+
+map("n", "<leader>R", "<Nop>", {
+  desc = "+restart",
+})
+
+map("n", "<leader>Rr", restart.restart, {
+  desc = "Restart: Restart Neovim",
+})
+
+map("n", "<leader>Rs", restart.resume, {
+  desc = "Restart: Resume session",
+})
+
+map("n", "<leader>Rl", restart.rerun_last_command, {
+  desc = "Restart: Rerun last Ex command",
+})
+
+-- ============================================================
 -- Formatting
 -- ============================================================
 
@@ -1833,6 +1855,7 @@ end, {
   desc = "LSP: Previous symbol reference",
 })
 
+
 -- ============================================================
 -- Neotest
 -- ============================================================
@@ -1849,7 +1872,8 @@ end, {
 })
 
 map("n", "<leader>tf", function()
-  require("plugins.neotest.run").run_current()
+  local path = vim.api.nvim_buf_get_name(0)
+  require("neotest").run.run({ path })
 end, {
   desc = "Test: Run current file",
 })

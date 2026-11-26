@@ -156,7 +156,7 @@ require("plugins.lazydev")
 require("plugins.neotest")
 
 -- ============================================================
--- Completion and Snippets
+-- completion and snippets
 -- ============================================================
 
 require("plugins.blink-cmp")
@@ -164,20 +164,20 @@ require("plugins.friendly-snippets")
 require("plugins.mini-pairs")
 
 -- ============================================================
--- Optional AI Integrations
+-- optional ai integrations
 -- ============================================================
 
--- AI activation is independent of language-pack activation.
+-- ai activation is independent of language-pack activation.
 local ai = require("config.ai")
 
-assert(type(ai.enabled) == "boolean", "AI configuration 'enabled' must be boolean")
+assert(type(ai.enabled) == "boolean", "ai configuration 'enabled' must be boolean")
 
-assert(type(ai.providers) == "table", "AI configuration must define a 'providers' table")
+assert(type(ai.providers) == "table", "ai configuration must define a 'providers' table")
 
 for name, enabled in pairs(ai.providers) do
-  assert(type(name) == "string" and name ~= "", "AI provider names must be non-empty strings")
+  assert(type(name) == "string" and name ~= "", "ai provider names must be non-empty strings")
 
-  assert(type(enabled) == "boolean", string.format("AI provider configuration for '%s' must be boolean", name))
+  assert(type(enabled) == "boolean", string.format("ai provider configuration for '%s' must be boolean", name))
 end
 
 if ai.enabled then
@@ -191,58 +191,58 @@ if ai.enabled then
 end
 
 -- ============================================================
--- General Configuration
+-- general configuration
 -- ============================================================
 
--- Load centralized keymaps after their required plugins.
+-- load centralized keymaps after their required plugins.
 require("config.keymaps")
 
--- Configure native LSP behavior and buffer-local integrations.
+-- configure native lsp behavior and buffer-local integrations.
 require("config.lsp")
 require("plugins.illuminate")
 
--- Configure CMake workflows.
+-- configure cmake workflows.
 require("config.cmake").setup()
 
 -- ============================================================
--- Shared LSP Integrations
+-- shared lsp integrations
 -- ============================================================
 
 require("lsp.servers.emmet").setup()
 
 -- ============================================================
--- Language Packs
+-- language packs
 -- ============================================================
 
--- Activate explicitly enabled language packs.
+-- activate explicitly enabled language packs.
 require("langs").setup()
 
 -- ============================================================
--- Rust and Cargo
+-- rust and cargo
 -- ============================================================
 
--- Configure native Rust and Cargo workflows only when
--- the Rust language pack is enabled.
+-- configure native rust and cargo workflows only when
+-- the rust language pack is enabled.
 if require("config.languages").packs.rust then
   require("config.rust").setup()
 end
 
 -- ============================================================
--- Formatting
+-- formatting
 -- ============================================================
 
--- Conform reads formatter metadata from the activated language packs.
+-- conform reads formatter metadata from the activated language packs.
 require("plugins.conform")
 require("config.format").setup()
 
 -- ============================================================
--- Autocommands
+-- autocommands
 -- ============================================================
 
 require("config.autocmds")
 
 -- ============================================================
--- Git and Sessions
+-- git and sessions
 -- ============================================================
 
 require("plugins.gitsigns")
@@ -252,16 +252,16 @@ require("plugins.octo")
 require("plugins.project")
 require("plugins.mini-sessions")
 
--- UI plugins.
+-- ui plugins.
 require("plugins.lualine")
 -- require("plugins.bufferline")
-require("plugins.zen-mode")
+-- require("plugins.zen-mode")
 -- require("plugins.noice")
 
 -- ============================================================
--- Keymap Discovery
+-- keymap discovery
 -- ============================================================
 
--- Configure keymap discovery after plugin and workflow mappings
+-- configure keymap discovery after plugin and workflow mappings
 -- have been registered.
 require("plugins.which-key")

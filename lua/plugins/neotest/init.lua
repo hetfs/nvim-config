@@ -1,206 +1,56 @@
--- Neotest
--- Native test orchestration and result presentation.
+vim.pack.add({
+  -- Core dependencies
+  "https://github.com/nvim-lua/plenary.nvim",
+  "https://github.com/nvim-neotest/nvim-nio",
+  "https://github.com/nvim-neotest/neotest",
 
-local M = {}
+  -- Language adapters
+  "https://github.com/nvim-neotest/neotest-python",
+  "https://github.com/nvim-neotest/neotest-jest",
+  "https://github.com/marilari88/neotest-vitest",
+  "https://github.com/nvim-neotest/neotest-go",
+  "https://github.com/rouge8/neotest-rust",
+  "https://github.com/nvim-neotest/neotest-plenary",
+  "https://github.com/MisanthropicBit/neotest-busted",
+  "https://github.com/orjangj/neotest-ctest",
+  "https://github.com/rcasia/neotest-bash",
+})
 
-local function install()
-  require("plugins.neotest.install").install()
+-- Build adapters
+local adapters = require("plugins.neotest.adapters").build()
+
+-- Initialize Neotest
+local neotest = require("neotest")
+
+neotest.setup({
+  adapters = adapters,
+})
+
+-- ============================================================
+-- Windows path normalization
+-- ============================================================
+
+local is_windows = package.config:sub(1, 1) == "\\"
+
+local function normalize_path(path)
+  if is_windows and type(path) == "string" then
+    return path:gsub("/", "\\")
+  end
+
+  return path
 end
 
-local function configure()
-  local neotest = require("neotest")
+-- Normalize paths before Neotest execution.
+local original_run = neotest.run.run
 
-  neotest.setup({
-    -- Adapter and project ownership.
-    -- Adapters are registered by the project adapter registry.
-    adapters = {},
-    consumers = {},
-    projects = {},
+neotest.run.run = function(args, ...)
+  if type(args) == "string" then
+    args = normalize_path(args)
+  elseif type(args) == "table" and type(args[1]) == "string" then
+    args[1] = normalize_path(args[1])
+  elseif args == nil then
+    args = { normalize_path(vim.api.nvim_buf_get_name(0)) }
+  end
 
-    -- Test discovery.
-    discovery = {
-      enabled = true,
-      concurrent = 0,
-    },
-
-    -- Test execution.
-    default_strategy = "integrated",
-
-    running = {
-      concurrent = true,
-    },
-
-    run = {
-      enabled = true,
-    },
-
-    strategies = {
-      integrated = {
-        width = 120,
-        height = 40,
-      },
-    },
-
-    -- Automatic test dependency watching.
-    -- Neotest's built-in language queries remain inherited.
-    watch = {
-      enabled = true,
-    },
-
-    -- Diagnostics.
-    diagnostic = {
-      enabled = true,
-      severity = vim.diagnostic.severity.ERROR,
-    },
-
-    -- Test status presentation.
-    status = {
-      enabled = true,
-      signs = true,
-      virtual_text = false,
-    },
-
-    state = {
-      enabled = true,
-    },
-
-    -- Test navigation.
-    jump = {
-      enabled = true,
-    },
-
-    -- Performance measurement.
-    benchmark = {
-      enabled = true,
-    },
-
-    -- Icons.
-    icons = {
-      child_indent = "│",
-      child_prefix = "├",
-      collapsed = "─",
-      dir = "▸",
-      expanded = "╮",
-      failed = "✗",
-      file = "▸",
-      final_child_indent = " ",
-      final_child_prefix = "╰",
-      namespace = "▸",
-      non_collapsible = "─",
-      notify = "!",
-      passed = "✓",
-      running = "●",
-      skipped = "○",
-      test = "◆",
-      unknown = "?",
-      watching = "◉",
-
-      running_animated = {
-        "⠋",
-        "⠙",
-        "⠹",
-        "⠸",
-        "⠼",
-        "⠴",
-        "⠦",
-        "⠧",
-      },
-    },
-
-    -- Highlights.
-    highlights = {
-      adapter_name = "NeotestAdapterName",
-      border = "NeotestBorder",
-      dir = "NeotestDir",
-      expand_marker = "NeotestExpandMarker",
-      failed = "NeotestFailed",
-      file = "NeotestFile",
-      focused = "NeotestFocused",
-      indent = "NeotestIndent",
-      marked = "NeotestMarked",
-      namespace = "NeotestNamespace",
-      passed = "NeotestPassed",
-      running = "NeotestRunning",
-      select_win = "NeotestWinSelect",
-      skipped = "NeotestSkipped",
-      target = "NeotestTarget",
-      test = "NeotestTest",
-      unknown = "NeotestUnknown",
-      watching = "NeotestWatching",
-    },
-
-    -- Individual test output.
-    output = {
-      enabled = true,
-      open_on_run = false,
-    },
-
-    -- Dedicated output panel.
-    output_panel = {
-      enabled = true,
-      open = "botright split | resize 15",
-    },
-
-    -- Test summary.
-    summary = {
-      enabled = true,
-      animated = true,
-      count = true,
-      expand_errors = true,
-      follow = true,
-      open = "botright vsplit | vertical resize 50",
-
-      mappings = {
-        attach = "a",
-        clear_marked = "M",
-        clear_target = "T",
-        debug = "d",
-        debug_marked = "D",
-        expand = { "<CR>", "<2-LeftMouse>" },
-        expand_all = "e",
-        help = "?",
-        jumpto = "i",
-        mark = "m",
-        next_failed = "J",
-        next_sibling = ">",
-        output = "o",
-        parent = "P",
-        prev_failed = "K",
-        prev_sibling = "<",
-        run = "r",
-        run_marked = "R",
-        short = "O",
-        stop = "u",
-        target = "t",
-        watch = "w",
-      },
-    },
-
-    -- Quickfix integration.
-    quickfix = {
-      enabled = true,
-      open = false,
-    },
-
-    -- Floating windows.
-    floating = {
-      border = "rounded",
-      max_height = 0.6,
-      max_width = 0.6,
-      options = {},
-    },
-
-    -- Logging.
-    log_level = vim.log.levels.WARN,
-  })
-
-  -- Register project-specific adapters after Neotest setup.
-  require("plugins.neotest.adapters").setup_autocmds()
+  return original_run(args, ...)
 end
-
-function M.setup()
-  install()
-  configure()
-end
-
-return M

@@ -4,30 +4,86 @@ A native-first, modular Neovim configuration built incrementally around Neovim's
 
 > **Minimum installation. Compose the rest.**
 
-The project prioritizes a minimal installation, explicit plugin evaluation, reproducible setup, and stage-by-stage validation.
+The project prioritizes minimal installation, explicit plugin evaluation, reproducible setup, and stage-by-stage validation. It uses Neovim's native plugin manager and APIs wherever practical, introducing external plugins only when they provide a clear architectural benefit.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Language Support](#language-support)
+- [Architecture and Design Principles](#architecture-and-design-principles)
+- [Core Workflows](#core-workflows)
+- [Roadmap and Project Status](#roadmap-and-project-status)
+- [Validation](#validation)
+- [Plugin Policy](#plugin-policy)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Overview
+
+`nvim-config` is a standalone Neovim configuration designed around a modular, native-first architecture.
+
+Its primary objectives are:
+
+- Minimize external dependencies.
+- Prefer built-in Neovim functionality.
+- Keep configuration modules focused and maintainable.
+- Introduce plugins through explicit architectural evaluation.
+- Separate Neovim plugins from external executables.
+- Validate features through automated and interactive testing.
+- Maintain clear implementation and acceptance criteria.
+
+The configuration uses Neovim's native `vim.pack` for plugin management rather than traditional plugin managers such as `lazy.nvim`.
 
 ## Requirements
 
+### Core requirements
+
 - [Neovim](https://neovim.io/doc/install/) 0.12.0 or later.
 - [Git](https://git-scm.com/).
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for content-search workflows.
 - [fd](https://github.com/sharkdp/fd) for file and directory discovery.
 - [fzf](https://github.com/junegunn/fzf) for the independent `fzf-lua` fuzzy-finding workflow.
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for content-search workflows.
 
-Additional requirements depend on the implemented workflows:
+### External tools
 
-- **Tree-sitter:** Tree-sitter CLI, GNU tar, cURL, and a compatible C compiler for parser-related installation and compilation workflows.
-- **LSP:** `lua-language-server` for the Lua language-server integration and `ty` for the Python language-server workflow.
-- **Formatting:** [StyLua](https://github.com/JohnnyMorganz/StyLua) for Lua formatting, [Ruff](https://docs.astral.sh/ruff/) for Python formatting and linting, and Prettier for the data-language workflows. Conform provides the Neovim-side formatting interface; it does not install formatter executables.
-- **Optional Lua linting:** [LuaCheck](https://github.com/lunarmodules/luacheck) for standalone Lua linting. It is not a Neovim diagnostics integration or a startup dependency.
-- **Data language packs:** YAML Language Server, JSON Language Server, Prettier, `jq`, and Taplo for the implemented YAML, JSON, JSONC, JSON5, jq, and TOML workflows. `jq-lsp` is optional.
-- **Optional Git interface:** [Lazygit](https://github.com/jesseduffield/lazygit), if you choose to use the external terminal application. It is not a core dependency.
+Additional executables depend on the language packs and workflows being used.
 
-On Windows, `scripts/win-depend.ps1` uses WinGet to install and verify the dependencies within its defined scope. It checks the Tree-sitter CLI and configures the WinLibs GCC/G++ toolchain for the current PowerShell process. It does not install every external tool mentioned in this document; LuaLS and optional Lazygit must be managed separately.
+Examples include:
 
-The data-language pack has a dedicated Windows installation entry point at `scripts/install/windows/data-pack.ps1`. It orchestrates the individual YAML, JSON, jq-lsp, and TOML installers. The `jq` executable is installed separately and checked by the data-pack installer.
+| Category | Dependencies |
+|---|---|
+| Data formats | YAML Language Server, JSON Language Server, Prettier, `jq`, and Taplo. `jq-lsp` is optional. |
+| Lua | Lua Language Server and StyLua |
+| Python | `ty` and Ruff |
+| Tree-sitter | Tree-sitter CLI, GNU tar, cURL, and a compatible C compiler |
+| Other languages | Language servers, formatters, linters, runtimes, and debuggers required by the corresponding language packs |
 
-See [Dependencies](docs/dependencies.md) for dependency policy, setup, and verification details.
+Neovim plugins do not automatically install these external executables. Manage them separately using the documented installation procedures.
+
+### Windows dependencies
+
+`scripts/win-depend.ps1` installs and verifies dependencies within its defined scope.
+
+It also:
+
+- Checks the Tree-sitter CLI.
+- Configures the WinLibs GCC/G++ toolchain for the current PowerShell process.
+- Verifies the dependencies covered by the script.
+
+It does not install every external executable used by the configuration.
+
+The data-language pack has a dedicated Windows installation entry point:
+
+```powershell
+.\scripts\install\windows\data-pack.ps1
+```
+
+This orchestrates the YAML, JSON, optional jq-lsp, and TOML installers. The `jq` executable is installed separately and checked by the orchestrator.
+
+See [Dependencies](docs/dependencies.md) for installation policies, dependency details, and verification procedures.
 
 ## Installation
 
@@ -35,312 +91,272 @@ See [Dependencies](docs/dependencies.md) for dependency policy, setup, and verif
 
 ### Windows
 
-For dependency setup, configuration installation, backups, and optional settings, follow the [Windows installation guide](docs/win-install.md).
+Follow the [Windows installation guide](docs/win-install.md) for:
+
+- Dependency installation.
+- Configuration setup.
+- Backup procedures.
+- Optional settings.
+- Installation verification.
 
 ### Linux and macOS
 
-Installation and validation instructions for Linux and macOS have not yet been documented. The Windows guide is not a cross-platform installation procedure.
+Installation and validation procedures for Linux and macOS have not yet been documented.
 
-## Design principles
+The Windows installation guide is not a cross-platform installation procedure.
 
-- **Native-first:** Prefer Neovim's built-in capabilities before adding plugins.
+## Language Support
+
+Stage 13 organizes language-specific configuration into focused packs under `lua/langs/`.
+
+Each pack contributes language metadata through the existing language registry.
+
+The current implementation includes **18 language and tooling integrations**:
+
+- 13 core language groups.
+- 5 additional integrations.
+- 4 future language candidates tracked separately.
+
+### Core languages
+
+The following languages form the core language baseline.
+
+| Language | Classification |
+|---|---|
+| C | Core |
+| HTML | Core |
+| JavaScript/TypeScript | Core |
+| JSON | Core |
+| Lua | Core |
+| Markdown | Core |
+| PowerShell | Core |
+| Python | Core |
+| Rust | Core |
+| Shell | Core |
+| TOML | Core |
+| YAML | Core |
+
+**Note:** The current core-language count is 12 based on the listed integrations.
+
+### Additional integrations
+
+| Language or format | Classification |
+|---|---|
+| C++ | Additional |
+| Docker | Additional |
+| Go | Additional |
+| MDX | Additional |
+| SQL | Additional |
+
+C++ remains separate from the core C language integration. MDX is also tracked separately from Markdown.
+
+### Future language support
+
+The following languages are candidates for future implementation:
+
+- Java
+- Kotlin
+- Swift
+- Zig
+
+These candidates are not implemented integrations and are excluded from the Stage 13 completion count.
+
+Each candidate requires an independent evaluation covering:
+
+- Language-server support.
+- Formatting and linting tools.
+- Tree-sitter parser availability.
+- External dependencies.
+- Platform compatibility.
+- Architectural fit.
+- Validation requirements.
+
+### Language pack architecture
+
+Language packs reuse the existing Neovim configuration architecture. They do not introduce a separate language-server manager or install external tools during Neovim startup.
+
+The implementation follows these principles:
+
+- Use Neovim's native LSP APIs for configuration and activation.
+- Keep language-specific settings and tooling metadata within their respective packs.
+- Aggregate pack metadata through the existing language registry.
+- Keep formatting and diagnostics as separate workflows.
+- Manage external tools independently from Neovim plugins.
+- Validate actual language-server attachment, diagnostics, formatting, parser behavior, and interactive workflows.
+
+Stage 13 is complete for its defined scope. Future language candidates do not reopen or extend that acceptance.
+
+### Language documentation
+
+- [Data Language Pack](docs/data-pack.md)
+- [JSON Support](docs/json-support.md)
+- [jq Support](docs/jq-support.md)
+- [Python Support](docs/python-support.md)
+- [TOML Support](docs/toml-support.md)
+- [YAML Support](docs/yaml-support.md)
+
+## Architecture and Design Principles
+
+The configuration follows a modular architecture that prioritizes native Neovim capabilities and explicit integration boundaries.
+
+### Design principles
+
+- **Native-first:** Prefer Neovim's built-in capabilities before introducing plugins.
 - **Native plugin management:** Use Neovim's built-in `vim.pack`, not `lazy.nvim`.
 - **Modularity:** Keep configuration modules focused and maintainable.
 - **Explicit plugin admission:** Evaluate necessity, dependencies, maintenance, and native alternatives before accepting a plugin.
-- **Stage-aware implementation:** Introduce features at their assigned roadmap stage.
+- **Stage-aware implementation:** Introduce features within their assigned roadmap stages.
 - **Reproducibility:** Document requirements, dependencies, and architectural decisions.
-- **Testability:** Validate each implementation and preserve regression coverage.
+- **Testability:** Validate implementations and maintain regression coverage.
 - **Replaceability:** Retire or replace plugins when evidence justifies the change.
 - **Explicit activation:** Installing a shared plugin repository does not automatically enable every module it provides.
 - **Direct loading:** Keep configuration module loading explicit in the root `init.lua`.
-- **External dependency separation:** Plugins do not automatically install the external executables or language servers they use.
+- **External dependency separation:** Plugins do not automatically install the executables or language servers they use.
 - **Explicit state changes:** Keep session operations deliberate and distinguish project root detection from automatic working-directory changes.
 - **Behavior-based verification:** Distinguish successful registration and configuration checks from verified interactive behavior.
 
-## Current status
+### Configuration architecture
 
-The project follows a 17-stage roadmap. Stages 05, 06, 08, 09, and 11 have completed implementation and their defined automated validation. Stage 07's navigation and editing workflows have also been interactively tested.
+The configuration uses focused modules and explicit integration boundaries.
 
-**Stage 04 remains in progress** because native commenting is unresolved. **Stage 10's interactive verification remains in progress:** completion behavior has been tested, but snippet discovery and expansion, placeholder navigation, the complete automatic-pairing workflow, and related mapping regressions still require explicit verification.
+Language-specific configuration lives under `lua/langs/`, while shared functionality remains within the existing configuration modules.
 
-**Stage 12 is in progress.** Gitsigns, `project.nvim`, and `mini.sessions` are implemented. Interactive checks for Git workflows, project navigation, and session save/restore have passed, as have the Stage 12 smoke-test checks on Neovim 0.12.6. Documentation alignment, dependency and keymap references, and remaining closeout requirements are still outstanding.
+The architecture avoids introducing duplicate frameworks for functionality already provided by Neovim or existing project modules.
 
-**Stage 13 is in progress.** The Lua and Python language packs are validated against their defined acceptance criteria. The data-language pack implements YAML, JSON, JSONC, JSON5, jq, and TOML support, and its external tools have been installed and verified on Windows. Remaining baseline language packs and outstanding language-specific validation are tracked separately. Implementation alone does not constitute completion.
+## Core Workflows
 
-Later stages may be developed and validated independently without treating unfinished earlier stages as complete.
+### Native LSP
 
-### Stage summary
+The configuration uses Neovim's native:
+
+- `vim.lsp.config()`
+- `vim.lsp.enable()`
+
+APIs for language-server configuration and activation.
+
+Shared attachment behavior is maintained separately from language-specific server settings.
+
+`nvim-lspconfig` and `lazydev.nvim` provide supporting integration where required. Language-server executables remain external dependencies.
+
+### Completion and snippets
+
+The completion workflow uses:
+
+| Component | Responsibility |
+|---|---|
+| `blink.cmp` | Completion |
+| `friendly-snippets` | Snippet definitions |
+| `mini.pairs` | Automatic bracket and quote pairing |
+| Native `vim.snippet` | Snippet expansion and placeholder navigation |
+
+The configuration avoids LuaSnip, nvim-cmp, and Mason.
+
+### Formatting
+
+[Conform.nvim](https://github.com/stevearc/conform.nvim) provides the Neovim-side formatting interface.
+
+Formatting is explicit and manual by default:
+
+- `:Format` formats the current buffer.
+- `<leader>cf` invokes the same workflow.
+- Formatter metadata is declared by language packs.
+- Missing formatter executables produce warnings.
+- LSP formatting is explicitly disabled.
+- Format-on-save is not configured.
+
+### Git, projects, and sessions
+
+| Component | Responsibility |
+|---|---|
+| Gitsigns | Git change indicators and hunk workflows |
+| Lazygit | Optional external terminal application |
+| `mini.sessions` | Explicit session save, restore, and delete operations |
+| `project.nvim` | Project root detection and navigation |
+
+Project root detection does not automatically change Neovim's working directory under the current configuration.
+
+Session reads and writes are explicit rather than automatic.
+
+## Roadmap and Project Status
+
+The project follows a **31-stage roadmap**.
+
+Implementation, validation, and formal stage acceptance are tracked separately. A feature being implemented or loading successfully does not automatically mean its stage is complete.
+
+### Roadmap overview
 
 | Stage | Scope | Status |
 |---|---|---|
-| 01 | First Init | Complete |
-| 02 | Keymaps and Autocommands | Complete |
-| 03 | Modules | Complete |
-| 04 | Native Workflows | In progress — native commenting unresolved |
-| 05 | Native Plugin Management and Colorscheme | Complete |
-| 06 | Keymap Discovery and Icons | Complete |
-| 07 | Navigation and Editing Workflows | Implementation validated; interactive checks reported passed |
-| 08 | Tree-sitter | Complete |
-| 09 | LSP and lazydev | Complete |
-| 10 | Completion and Snippets | Interactive verification in progress |
+| 01–03 | Foundation and modular configuration | Complete |
+| 04 | Native Workflows | In progress |
+| 05–09 | Plugin management, discovery, navigation, Tree-sitter, and LSP | Complete |
+| 10 | Completion and Snippets | Implementation complete; interactive verification outstanding |
 | 11 | Manual Formatting | Complete |
-| 12 | Git, Root, and Sessions | In progress — implementation and initial validation passed; closeout outstanding |
-| 13 | Language Packs | In progress — Lua and Python validated; data pack implemented; remaining language validation outstanding |
-| 14 | Debugging | Planned |
-| 15 | UI Polish | Planned |
-| 16 | Performance | Planned |
-| 17 | Hardening | Planned |
+| 12 | Git, Root, and Sessions | In progress; closeout outstanding |
+| 13 | Language Packs | Complete |
+| 14 | Debugging (DAP) | Planned |
+| 15 | Development Workflows | Configuration complete; formal acceptance pending |
+| 16 | Reserved | Scope undefined |
+| 17–20 | Later roadmap stages | Implemented; behavioral/runtime acceptance outstanding |
+| 21–22 | Later roadmap stages | Complete |
+| 23–26 | Later roadmap stages | Implemented; behavioral/visual acceptance outstanding |
+| 27–28 | Later roadmap stages | Complete |
+| 29–31 | Later roadmap stages | Planned |
 
-Stage status reflects implementation and available validation evidence. A stage must satisfy its acceptance criteria before it is marked complete.
+See [Roadmap](docs/roadmap.md) for complete stage definitions, dependencies, implementation progress, and acceptance criteria.
 
-## Stage 04 — Native Workflows
+### Outstanding work
 
-Stage 04 prioritizes Neovim's built-in capabilities before introducing plugins. Its scope includes native search and quickfix integration, commenting, a built-in statusline, a diagnostics baseline, a terminal workflow, regression tests, and documentation.
+#### Stage 04 — Native Workflows
 
-Native commenting mappings are:
+Native commenting remains unresolved.
 
-- `gcc` — toggle commenting on the current line.
-- `gc` followed by a motion — toggle commenting over the motion.
-- Visual selection followed by `gc` — toggle commenting on the selection.
+Mapping registration and smoke-test assertions are not sufficient evidence that commenting works correctly in the configured session.
 
-Testing found that `gcc` worked in `nvim --clean` but left a line unchanged in the configured session. Visual-mode commenting also behaved unexpectedly, and the root cause has not been established. The terminal-mode Escape workflow has been interactively verified. Do not mark commenting functional based only on mapping registration or smoke-test assertions.
+The root cause and interactive behavior must be resolved before the stage can close.
 
-See [Native Keymap and Interactive Workflow Testing](docs/Keymap-test.md) for the testing procedure and diagnostic findings.
+#### Stage 10 — Completion and Snippets
 
-## Stage 07 — Navigation and Editing Workflows
+Implementation is complete.
 
-The implemented workflow includes:
+Interactive verification remains outstanding for:
 
-- **Snacks.nvim:** Picker and Explorer for file discovery, content search, buffer selection, and directory navigation.
-- **fzf-lua:** An independent fuzzy-finding workflow with its own configuration and keymaps.
-- **flash.nvim:** Enhanced motion and search navigation.
-- **Selected `mini.nvim` modules:** `mini.ai`, `mini.surround`, and `mini.move`.
-- **dial.nvim:** Increment and decrement operations for supported values and selections.
-- **which-key.nvim:** Keymap discovery.
+- Snippet discovery and expansion.
+- Placeholder navigation.
+- The complete automatic-pairing workflow.
+- Related mapping regressions.
 
-Snacks Picker and `fzf-lua` configuration and mappings remain independent. The Snacks dashboard is deferred to Stage 15. External navigation dependencies include `fd`, `fzf`, and `rg` for the workflows that use them. On Windows, the installation and verification of these tools are handled by `scripts/win-depend.ps1`.
+#### Stage 12 — Git, Root, and Sessions
 
-The reported interactive checks passed. Plugins introduced before Stage 16 remain eagerly loaded; lazy-loading is not part of Stage 07.
+Gitsigns, `project.nvim`, and `mini.sessions` are implemented.
 
-## Stage 08 — Tree-sitter
+Interactive Git workflows, project navigation, and session save/restore have passed validation. Stage 12 smoke tests also pass on Neovim 0.12.6.
 
-Stage 08 installs `nvim-treesitter` through `vim.pack`, configures parser and query storage under Neovim's data directory, and enables native Tree-sitter highlighting through `vim.treesitter.start()` and an explicit `FileType` autocommand.
+Outstanding closeout requirements include:
 
-On Windows, parser-related workflows require GNU tar, a compatible GCC/G++ toolchain, the Tree-sitter CLI (version 0.26.1 or later under the current setup policy), and cURL. The setup script changes `PATH` and `CC` for the current PowerShell process and its child processes; those changes are not persisted as Windows environment settings.
+- Documentation updates.
+- Dependency references.
+- Keymap references.
+- Remaining stage acceptance requirements.
+- Investigation of a headless `project.nvim` history-write warning observed during exit.
 
-Tree-sitter highlighting does not automatically enable Tree-sitter indentation, folding, LSP, completion, formatting, or linting.
+#### Stage 15 — Development Workflows
 
-## Stage 09 — LSP and lazydev
+The CodeCompanion configuration work is complete.
 
-Stage 09 integrates Neovim's native LSP client with LuaLS. It uses `nvim-lspconfig` and `lazydev.nvim`, while configuration and activation use Neovim's native `vim.lsp.config()` and `vim.lsp.enable()` APIs.
+Formal acceptance remains pending, including validation of the configured provider and relevant development workflows.
 
-Shared attachment behavior lives in `lua/config/lsp.lua`; LuaLS settings live in `lua/langs/lua.lua`. The externally installed `lua-language-server` is used instead of Mason. LuaLS recognizes `vim` as a global, disables third-party workspace prompts, and disables telemetry.
+### Stage acceptance policy
 
-Automated tests verify the configuration contract. Interactive testing confirmed LuaLS attachment, definition navigation, and hover. Declaration navigation did not work in the tested case; that result depends on the symbol and server response and does not prove all declaration requests fail. Diagnostics and non-LSP buffer isolation remain separate verification items.
+Later stages can be implemented and validated independently. Their progress does not satisfy unfinished requirements in earlier stages.
 
-The LSP configuration does not imply that the language-server executable is installed by the Neovim plugin manager.
-
-## Stage 10 — Completion and Snippets
-
-Stage 10 includes:
-
-- **blink.cmp:** Completion engine installed through `vim.pack`.
-- **friendly-snippets:** Snippet definitions.
-- **Native `vim.snippet`:** Snippet expansion and navigation.
-- **mini.pairs:** Automatic bracket and quote pairing, activated from the existing `mini.nvim` installation.
-
-Blink's configured sources are LSP, filesystem paths, snippets, and words from the current buffer. The implementation uses Blink's Lua fuzzy-search implementation and default keymap preset; completion documentation is not shown automatically.
-
-The project deliberately avoids LuaSnip, nvim-cmp, and Mason. All plugins continue to load eagerly; lazy-loading remains deferred to Stage 16. Automated validation and interactive completion candidate display, navigation, and acceptance have passed. Snippet discovery and expansion, placeholder navigation, complete automatic-pairing behavior, and related mapping regressions still need explicit interactive verification.
-
-## Stage 11 — Manual Formatting
-
-Stage 11 adds [Conform.nvim](https://github.com/stevearc/conform.nvim) as the Neovim-side formatting interface and StyLua as the Lua formatter. Conform is installed with `vim.pack`; the StyLua executable is managed separately.
-
-The implementation:
-
-- Declares formatter metadata in language packs and aggregates it through `require("langs").collect("formatters")`.
-- Registers `:Format` and the `<leader>cf` mapping for manual formatting.
-- Warns when a buffer has no configured formatter or the required formatter executable is unavailable.
-- Disables LSP formatting explicitly.
-- Does not configure format-on-save.
-- Does not add a linter or Mason.
-
-Validation passed on Neovim 0.12.6, including StyLua formatting checks, Lua syntax checks, the configured smoke test, formatter registration and command/keymap checks, manual StyLua formatting, missing-executable warning behavior, and checks confirming that formatting is not triggered on save.
-
-Stage 11 is complete for its defined manual-formatting scope. Linting is not included in this stage.
-
-## Stage 12 — Git, Root, and Sessions
-
-Stage 12 adds Git integration, project root detection and navigation, and explicit session management.
-
-- **Gitsigns:** Git change indicators and hunk workflows, including stage, reset, preview, blame, and diff actions. Git remains an external dependency; Gitsigns does not install it.
-- **project.nvim:** Project root detection and project navigation. Root detection does not automatically change Neovim's working directory under the current configuration.
-- **mini.sessions:** Explicit session save, restore, and delete operations using the existing shared `mini.nvim` installation. Automatic session reads and writes are disabled.
-- **Lazygit:** An optional external terminal application, not a Neovim plugin or a core dependency.
-
-User-facing mappings remain centralized in `lua/config/keymaps.lua`. Gitsigns mappings are buffer-local. Session mappings invoke explicit operations, and the existing fzf-lua `<leader>pr` resume mapping remains independent of project navigation.
-
-Interactive checks for Git workflows, project navigation, and session save/restore have passed. The Stage 12 smoke-test checks also pass on Neovim 0.12.6.
-
-The stage remains in progress until documentation, dependency and keymap references, automated checks, and remaining closeout requirements are reconciled. A headless `project.nvim` history-write warning has also been observed during exit and must be investigated before closeout; it should not be treated as resolved merely because the smoke test passes.
-
-See [Architecture](docs/architecture.md), [Dependencies](docs/dependencies.md), and [Keymaps](docs/keymaps.md) for the corresponding design and workflow references.
-
-## Stage 13 — Language Packs
-
-Stage 13 organizes language-specific configuration into focused packs under `lua/langs/`. Each pack contributes filetype, formatter, parser, and language-server metadata through the existing language registry.
-
-The baseline implementation order is:
-
-1. Lua
-2. Python
-3. YAML
-4. JSON
-5. Shell
-6. PowerShell
-7. HTML
-8. CSS
-9. JavaScript/TypeScript
-10. Markdown
-11. Rust
-
-The language packs use the existing Neovim configuration architecture. They do not introduce a separate language-server manager or install external tools during Neovim startup.
-
-### Implemented packs
-
-**Lua**
-
-The Lua pack configures LuaLS, StyLua formatting, and Lua-specific language settings. LuaLS is configured through Neovim's native LSP API. The Lua pack is complete. Repository-wide Lua syntax validation passed for 33 files, and standalone LuaCheck reported zero warnings and zero errors across those files. LuaCheck remains an optional CLI tool; it is not integrated into Neovim's LSP or diagnostics workflow.
-
-**Python**
-
-The Python pack uses `ty` for language-server functionality and Ruff for formatting and linting. Python support is validated against its defined Stage 13 scope.
-
-The validated workflow includes the `uv` project workflow, Ty language-server functionality and diagnostics, Ruff CLI linting, Ruff editor diagnostics, Ty and Ruff coexistence, fresh-start attachment, Ruff formatting through Conform, automatic completion, and Tree-sitter highlighting. Formatting remains separate from LSP diagnostics.
-
-Python-specific smoke tests are intentionally skipped. Manual completion shortcut configuration belongs to Stage 10.
-
-See [Python Support](docs/python-support.md) for the Python architecture, tooling, dependencies, configuration, and validation details.
-
-**Data formats**
-
-The data-language pack supports YAML, JSON, JSONC, JSON5, jq, and TOML in `lua/langs/data.lua`.
-
-| Format | Language server | Formatter |
-|---|---|---|
-| YAML | YAML Language Server | Prettier |
-| JSON | JSON Language Server | Prettier |
-| JSONC | JSON Language Server | Prettier |
-| JSON5 | Not configured | Prettier |
-| jq | Optional `jq-lsp` | None |
-| TOML | Taplo | Taplo |
-
-The JSON Language Server handles JSON and JSONC. JSON5 deliberately uses Tree-sitter and Prettier without JSON Language Server attachment. jq execution uses Neovim's native `vim.system()` API.
-
-The data-pack external tools have been installed and verified on Windows. This confirms executable installation and discovery, not every language server's attachment or each format's interactive behavior. The installation entry point is:
-
-```powershell
-.\scripts\install\windows\data-pack.ps1
-```
-
-The script orchestrates the individual YAML, JSON, jq-lsp, and TOML installers. The `jq` executable is installed separately and checked by the orchestrator.
-
-See [Data Language Pack](docs/data-pack.md) for the architecture, supported formats, dependencies, installation, and validation details.
-
-Format-specific documentation:
-
-- [YAML support](docs/yaml-support.md)
-- [JSON support](docs/json-support.md)
-- [jq support](docs/jq-support.md)
-- [TOML support](docs/toml-support.md)
-
-### Remaining baseline work
-
-The remaining baseline language packs are pending implementation and validation. HTML and CSS are part of the core baseline. YAML and the other data formats are already represented in the shared data-language pack, but each format must still satisfy its documented validation criteria before its support is treated as complete. The remaining baseline will follow the documented implementation order.
-
-A language pack is not considered complete solely because its configuration loads. Its external dependencies, language-server attachment, diagnostics, formatting, parser behavior, and relevant interactive workflows must be validated before its support is marked complete.
-
-## Repository structure
-
-The main configuration and plugin modules are organized by responsibility:
-
-```text
-nvim-config/
-├── init.lua
-├── .editorconfig
-├── .gitattributes
-├── stylua.toml
-├── README.md
-├── LICENSE
-├── docs/
-│   ├── win-install.md
-│   ├── dependencies.md
-│   ├── Keymap-test.md
-│   ├── architecture.md
-│   ├── roadmap.md
-│   ├── plugin-inventory.md
-│   ├── plugin-admission-policy.md
-│   ├── keymaps.md
-│   ├── python-support.md
-│   ├── data-pack.md
-│   ├── yaml-support.md
-│   ├── json-support.md
-│   ├── jq-support.md
-│   ├── toml-support.md
-│   └── decisions/
-├── lua/
-│   ├── config/
-│   │   ├── options.lua
-│   │   ├── keymaps.lua
-│   │   ├── autocmds.lua
-│   │   ├── lsp.lua
-│   │   └── format.lua
-│   ├── langs/
-│   │   ├── init.lua
-│   │   ├── lua.lua
-│   │   ├── python.lua
-│   │   └── data.lua
-│   └── plugins/
-│       ├── colorscheme.lua
-│       ├── icons.lua
-│       ├── which-key.lua
-│       ├── snacks.lua
-│       ├── fzf-lua.lua
-│       ├── flash.lua
-│       ├── mini-ai.lua
-│       ├── mini-surround.lua
-│       ├── mini-move.lua
-│       ├── dial.lua
-│       ├── treesitter.lua
-│       ├── lsp.lua
-│       ├── lazydev.lua
-│       ├── blink-cmp.lua
-│       ├── friendly-snippets.lua
-│       ├── mini-pairs.lua
-│       ├── conform.lua
-│       ├── gitsigns.lua
-│       ├── project.lua
-│       └── mini-sessions.lua
-└── scripts/
-    ├── check-syntax.lua
-    ├── smoke.lua
-    ├── win-depend.ps1
-    ├── winsetup.ps1
-    └── install/
-        └── windows/
-            ├── data-pack.ps1
-            ├── yaml.ps1
-            ├── json.ps1
-            ├── jq-lsp.ps1
-            └── toml.ps1
-```
-
-This tree shows the main source layout, not an exhaustive listing of every file. Consult the current checkout for the complete set of configuration modules and documentation.
+A stage should only be marked complete when its defined requirements and acceptance criteria have been satisfied.
 
 ## Validation
 
-Run these commands from the repository root. The examples use PowerShell, matching the documented Windows setup.
+Run validation commands from the repository root.
+
+The examples below use PowerShell, matching the documented Windows setup.
 
 ### Check Lua syntax
 
@@ -348,11 +364,13 @@ Run these commands from the repository root. The examples use PowerShell, matchi
 nvim --headless -u NONE -l scripts/check-syntax.lua
 ```
 
-The checker compiles discovered Lua files without executing their contents. It exits with status `0` when all checked files compile successfully and a nonzero status when syntax errors are found.
+The checker compiles discovered Lua files without executing their contents.
 
-### Check Lua lint
+It exits with status `0` when all checked files compile successfully and a nonzero status when syntax errors are found.
 
-LuaCheck is optional. If it is installed, run the repository-wide check from the repository root:
+### Run Lua lint
+
+LuaCheck is optional. If installed, run the repository-wide check:
 
 ```powershell
 $LuaFiles = Get-ChildItem -Path . -Recurse -Filter "*.lua" -File |
@@ -371,7 +389,9 @@ luacheck `
     $LuaFiles
 ```
 
-The command uses the LuaJIT standard because Neovim embeds LuaJIT. `vim` and `Snacks` are declared globals used by this configuration. LuaCheck is a standalone repository check; it does not run automatically at startup or provide Neovim diagnostics.
+This uses the LuaJIT standard because Neovim embeds LuaJIT.
+
+LuaCheck is a standalone repository check, not a Neovim startup dependency or diagnostics integration.
 
 ### Run the smoke test
 
@@ -379,11 +399,19 @@ The command uses the LuaJIT standard because Neovim embeds LuaJIT. `vim` and `Sn
 nvim --headless -u init.lua -c "luafile scripts/smoke.lua"
 ```
 
-The smoke test checks the Neovim version, representative options, leader keys, module loading, keymaps, autocommand registration, and the configuration and workflow assertions implemented in the test suite.
+The smoke test checks:
 
-A passing smoke test does not establish that every workflow behaves correctly during interactive use. In particular, Stage 04 commenting and Stage 10 snippet expansion, placeholder navigation, and pairing behavior require their own interactive verification.
+- Neovim version.
+- Representative options.
+- Leader keys.
+- Module loading.
+- Keymaps.
+- Autocommand registration.
+- Configuration and workflow assertions implemented in the test suite.
 
-Use the `-c "luafile scripts/smoke.lua"` invocation shown above. Do not substitute `-l scripts/smoke.lua` for this smoke-test command; the startup behavior differs and can produce misleading option-check failures.
+A passing smoke test does not establish that every workflow behaves correctly during interactive use. Test interactive behavior separately before accepting a stage.
+
+**Important:** Use the `-c "luafile scripts/smoke.lua"` invocation shown above. Do not substitute `-l scripts/smoke.lua` for this smoke-test command. Startup behavior differs and can produce misleading option-check failures.
 
 ### Verify the colorscheme
 
@@ -409,19 +437,36 @@ tar --version
 $env:CC
 ```
 
-Then open a Lua file in Neovim and inspect a syntax token with `:Inspect`. The Lua parser must be installed; external dependency checks alone do not prove parser installation and highlighting work.
+Then open a supported file in Neovim and inspect a syntax token with:
+
+```vim
+:Inspect
+```
+
+External dependency checks alone do not prove that a parser is installed or highlighting works.
 
 ### Verify LSP
+
+For LuaLS:
 
 ```powershell
 Get-Command lua-language-server
 ```
 
-Open a Lua file and verify that LuaLS attaches. Test definition navigation, hover, diagnostics, and buffer-local mapping behavior as described in [Native Keymap and Interactive Workflow Testing](docs/Keymap-test.md). A registered LSP configuration does not prove that the server started or attached successfully.
+Open a Lua file and verify that LuaLS attaches.
+
+Test:
+
+- Definition navigation.
+- Hover.
+- Diagnostics.
+- Buffer-local mapping behavior.
+
+A registered LSP configuration does not prove that the server started or attached successfully.
 
 ### Verify data-pack executables
 
-After running the Windows data-pack installer, open Neovim and execute:
+After running the Windows data-pack installer, execute:
 
 ```vim
 :lua print(vim.fn.executable("yaml-language-server"))
@@ -432,19 +477,23 @@ After running the Windows data-pack installer, open Neovim and execute:
 :lua print(vim.fn.executable("jq"))
 ```
 
-Each command should return `1`. A return value of `1` means Neovim can find the executable through its `PATH`; `0` means it cannot.
+Each command should return `1` when the executable is available through Neovim's `PATH`.
 
-This check verifies executable discovery only. Language-server attachment and feature behavior must be validated separately inside Neovim.
+A return value of `0` means Neovim cannot find it.
+
+This verifies executable discovery only. Language-server attachment and feature behavior must be tested separately.
 
 ### Check formatting
 
-Install [StyLua](https://github.com/JohnnyMorganz/StyLua) separately, then run the repository formatting check:
+Install [StyLua](https://github.com/JohnnyMorganz/StyLua) separately.
+
+Check formatting:
 
 ```powershell
 stylua --check .
 ```
 
-To apply StyLua formatting to the repository:
+Apply formatting:
 
 ```powershell
 stylua .
@@ -463,27 +512,70 @@ git diff --cached --check
 git diff --cached --stat
 ```
 
-`git diff --check` checks unstaged tracked changes; `git diff --cached --check` checks staged changes. Neither includes untracked files until they are staged. Review new files and the complete staged diff before committing. Distinguish line-ending warnings from whitespace errors; `.gitattributes` defines repository line-ending behavior.
+`git diff --check` checks unstaged tracked changes.
 
-Run syntax, smoke, formatting, and diff checks after changes. Test new interactive workflows in a real Neovim session before marking their stage complete.
+`git diff --cached --check` checks staged changes.
 
-## Plugin policy
+Neither includes untracked files until they are staged. Review new files and the complete staged diff before committing.
 
-A plugin is not accepted merely because it is popular or appears in another Neovim distribution. Candidates are evaluated for:
+### Validation expectations
 
-- Necessity and native alternatives.
-- Maintenance and compatibility.
-- Dependencies and external executables.
+Run syntax, smoke, formatting, and diff checks after changes.
+
+Test new interactive workflows in a real Neovim session before marking their corresponding roadmap stages complete.
+
+## Plugin Policy
+
+A plugin is not accepted merely because it is popular or appears in another Neovim distribution.
+
+Candidates are evaluated against the following criteria:
+
 - Architectural fit.
 - Configuration complexity and replaceability.
+- Dependencies and external executables.
+- Maintenance and compatibility.
+- Necessity and availability of native alternatives.
 
-Accepted plugins may be deferred to their assigned stage. Plugins may be retired or replaced when evidence justifies the change.
+Accepted plugins may be deferred to their assigned roadmap stages.
 
-The project uses Neovim's native `vim.pack` for plugin management. Lazy-loading is deferred to Stage 16 and must be validated against the minimum supported Neovim version before adoption. Plugin installation, module activation, and feature configuration are explicit decisions.
+Plugins may also be retired or replaced when evidence justifies the change.
+
+The project uses Neovim's native `vim.pack` for plugin management.
+
+Plugin installation, module activation, and feature configuration are explicit decisions.
+
+Lazy-loading is deferred to its assigned roadmap stage and must be validated against the minimum supported Neovim version before adoption.
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [Architecture](docs/architecture.md) | Configuration architecture and design boundaries |
+| [Dependencies](docs/dependencies.md) | External dependency policy and setup |
+| [Keymaps](docs/keymaps.md) | Keymap reference |
+| [Plugin Admission Policy](docs/plugin-admission-policy.md) | Plugin evaluation and acceptance |
+| [Plugin Inventory](docs/plugin-inventory.md) | Plugin inventory |
+| [Roadmap](docs/roadmap.md) | Stage definitions, progress, and acceptance criteria |
+| [Native Workflow Testing](docs/Keymap-test.md) | Interactive workflow testing and diagnostics |
+| [Windows Installation](docs/win-install.md) | Windows setup and installation |
+
+Additional language-specific documentation is available in the [Language Support](#language-support) section.
 
 ## Contributing
 
-Contributions should respect the architecture, roadmap, plugin admission policy, and testing requirements. Keep changes focused, document relevant decisions, run appropriate automated checks, and verify interactive behavior before marking a stage complete.
+Contributions should respect the project's architecture, roadmap, plugin admission policy, and testing requirements.
+
+When contributing:
+
+- Keep changes focused.
+- Document relevant architectural decisions.
+- Follow existing module boundaries.
+- Evaluate native alternatives before introducing plugins.
+- Run appropriate automated checks.
+- Verify interactive behavior before marking a stage complete.
+- Preserve the distinction between implementation, configuration loading, and behavioral acceptance.
+
+Do not treat implementation, successful module loading, or mapping registration as proof of behavioral acceptance.
 
 ## License
 
