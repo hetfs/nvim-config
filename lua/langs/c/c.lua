@@ -14,6 +14,8 @@ local M = {
 
 function M.setup()
   require("lsp.servers.clangd").setup()
+  require("langs.c.dap").setup()
 end
 
 return M
+

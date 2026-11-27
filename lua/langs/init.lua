@@ -2,6 +2,10 @@
 -- Discover language packs from this configuration only.
 -- Stage 11: Aggregate metadata from enabled language packs.
 -- Activation is controlled by lua/config/languages.lua.
+--
+-- Supported layouts:
+--   lua/langs/name.lua
+--   lua/langs/name/name.lua
 
 local M = {}
 
@@ -18,22 +22,38 @@ function M.root()
   return config_root
 end
 
+-- Discover language packs and resolve their module paths.
 local function discover_packs()
-  local files = vim.fn.globpath(langs_root, "*.lua", false, true)
-
   local packs = {}
+  local modules = {}
 
-  table.sort(files)
+  for name, entry_type in vim.fs.dir(langs_root) do
+    if entry_type == "file" and name:match("%.lua$") then
+      local pack_name = name:gsub("%.lua$", "")
 
-  for _, file in ipairs(files) do
-    local name = vim.fn.fnamemodify(file, ":t:r")
+      if pack_name ~= "init" then
+        assert(modules[pack_name] == nil, string.format("Duplicate language-pack entry point '%s'", pack_name))
 
-    if name ~= "init" then
-      packs[#packs + 1] = name
+        modules[pack_name] = "langs." .. pack_name
+      end
+    elseif entry_type == "directory" then
+      local nested_entry = vim.fs.joinpath(langs_root, name, name .. ".lua")
+
+      if vim.fn.filereadable(nested_entry) == 1 then
+        assert(modules[name] == nil, string.format("Duplicate language-pack entry point '%s'", name))
+
+        modules[name] = "langs." .. name .. "." .. name
+      end
     end
   end
 
-  return packs
+  for name in pairs(modules) do
+    packs[#packs + 1] = name
+  end
+
+  table.sort(packs)
+
+  return packs, modules
 end
 
 local function get_enabled_packs()
@@ -43,7 +63,7 @@ local function get_enabled_packs()
 
   assert(type(config.packs) == "table", "Language configuration must define a 'packs' table")
 
-  local discovered = discover_packs()
+  local discovered, modules = discover_packs()
   local known = {}
 
   for _, name in ipairs(discovered) do
@@ -68,7 +88,7 @@ local function get_enabled_packs()
     end
   end
 
-  return packs
+  return packs, modules
 end
 
 -- Check whether a language pack is enabled.
@@ -87,13 +107,15 @@ end
 -- Run optional setup functions from enabled language packs.
 -- Metadata-only packs do not need to implement setup().
 function M.setup()
-  for _, name in ipairs(get_enabled_packs()) do
-    local pack = require("langs." .. name)
+  local packs, modules = get_enabled_packs()
 
-    assert(type(pack) == "table", string.format("Language pack 'langs.%s' must return a table", name))
+  for _, name in ipairs(packs) do
+    local pack = require(modules[name])
+
+    assert(type(pack) == "table", string.format("Language pack '%s' must return a table", modules[name]))
 
     if pack.setup ~= nil then
-      assert(type(pack.setup) == "function", string.format("Language pack 'langs.%s': setup must be a function", name))
+      assert(type(pack.setup) == "function", string.format("Language pack '%s': setup must be a function", modules[name]))
 
       pack.setup()
     end
@@ -107,19 +129,20 @@ function M.collect(field)
   assert(type(field) == "string" and field ~= "", "field must be a non-empty string")
 
   local merged = {}
+  local packs, modules = get_enabled_packs()
 
-  for _, name in ipairs(get_enabled_packs()) do
-    local pack = require("langs." .. name)
+  for _, name in ipairs(packs) do
+    local pack = require(modules[name])
 
-    assert(type(pack) == "table", string.format("Language pack 'langs.%s' must return a table", name))
+    assert(type(pack) == "table", string.format("Language pack '%s' must return a table", modules[name]))
 
     local metadata = pack[field]
 
     if metadata ~= nil then
-      assert(type(metadata) == "table", string.format("Language pack 'langs.%s': '%s' must be a table", name, field))
+      assert(type(metadata) == "table", string.format("Language pack '%s': '%s' must be a table", modules[name], field))
 
       for key, value in pairs(metadata) do
-        assert(type(key) == "string" and key ~= "", string.format("Language pack 'langs.%s': '%s' keys must be non-empty strings", name, field))
+        assert(type(key) == "string" and key ~= "", string.format("Language pack '%s': '%s' keys must be non-empty strings", modules[name], field))
 
         assert(rawget(merged, key) == nil, string.format("Language packs define '%s' for '%s' more than once", field, key))
 

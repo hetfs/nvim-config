@@ -129,7 +129,7 @@ The implementation must account for:
 
 The upstream project documents LuaJIT support, and its underlying debugger core provides build options for Lua 5.1 through 5.5 and LuaJIT. These build options do not guarantee that every prebuilt executable and native module combination is available or compatible.
 
-Therefore, validate the exact release artifacts and runtime combination before declaring the integration functional.
+Therjkefore, validate the exact release artifacts and runtime combination before declaring the integration functional.
 
 The application being debugged must load `emmy_core` and initialize its debugging connection. The documented API includes `tcpListen`, with optional `waitIDE` and `breakHere` calls.
 

@@ -98,8 +98,11 @@ end
 
 require("config.options")
 require("config.filetypes")
+
+-- Declare DAP plugins before registering debugger adapters.
 require("plugins.dap")
 require("config.dap.setup").setup()
+
 require("plugins.colorscheme")
 require("plugins.icons")
 require("plugins.trouble")
@@ -217,6 +220,8 @@ require("lsp.servers.emmet").setup()
 -- ============================================================
 
 -- Activate explicitly enabled language packs.
+-- Each language pack owns its language-specific tooling,
+-- metadata, and optional integrations such as DAP.
 require("langs").setup()
 
 -- ============================================================
