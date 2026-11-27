@@ -98,6 +98,8 @@ end
 
 require("config.options")
 require("config.filetypes")
+require("plugins.dap")
+require("config.dap.setup").setup()
 require("plugins.colorscheme")
 require("plugins.icons")
 require("plugins.trouble")
@@ -156,7 +158,7 @@ require("plugins.lazydev")
 require("plugins.neotest")
 
 -- ============================================================
--- completion and snippets
+-- Completion and Snippets
 -- ============================================================
 
 require("plugins.blink-cmp")
@@ -164,10 +166,10 @@ require("plugins.friendly-snippets")
 require("plugins.mini-pairs")
 
 -- ============================================================
--- optional ai integrations
+-- Optional AI Integrations
 -- ============================================================
 
--- ai activation is independent of language-pack activation.
+-- AI activation is independent of language-pack activation.
 local ai = require("config.ai")
 
 assert(type(ai.enabled) == "boolean", "ai configuration 'enabled' must be boolean")
@@ -191,58 +193,58 @@ if ai.enabled then
 end
 
 -- ============================================================
--- general configuration
+-- General Configuration
 -- ============================================================
 
--- load centralized keymaps after their required plugins.
+-- Load centralized keymaps after their required plugins.
 require("config.keymaps")
 
--- configure native lsp behavior and buffer-local integrations.
+-- Configure native LSP behavior and buffer-local integrations.
 require("config.lsp")
 require("plugins.illuminate")
 
--- configure cmake workflows.
+-- Configure CMake workflows.
 require("config.cmake").setup()
 
 -- ============================================================
--- shared lsp integrations
+-- Shared LSP Integrations
 -- ============================================================
 
 require("lsp.servers.emmet").setup()
 
 -- ============================================================
--- language packs
+-- Language Packs
 -- ============================================================
 
--- activate explicitly enabled language packs.
+-- Activate explicitly enabled language packs.
 require("langs").setup()
 
 -- ============================================================
--- rust and cargo
+-- Rust and Cargo
 -- ============================================================
 
--- configure native rust and cargo workflows only when
--- the rust language pack is enabled.
+-- Configure native Rust and Cargo workflows only when
+-- the Rust language pack is enabled.
 if require("config.languages").packs.rust then
   require("config.rust").setup()
 end
 
 -- ============================================================
--- formatting
+-- Formatting
 -- ============================================================
 
--- conform reads formatter metadata from the activated language packs.
+-- Conform reads formatter metadata from the activated language packs.
 require("plugins.conform")
 require("config.format").setup()
 
 -- ============================================================
--- autocommands
+-- Autocommands
 -- ============================================================
 
 require("config.autocmds")
 
 -- ============================================================
--- git and sessions
+-- Git and Sessions
 -- ============================================================
 
 require("plugins.gitsigns")
@@ -252,16 +254,19 @@ require("plugins.octo")
 require("plugins.project")
 require("plugins.mini-sessions")
 
--- ui plugins.
+-- ============================================================
+-- UI Plugins
+-- ============================================================
+
 require("plugins.lualine")
 -- require("plugins.bufferline")
 -- require("plugins.zen-mode")
 -- require("plugins.noice")
 
 -- ============================================================
--- keymap discovery
+-- Keymap Discovery
 -- ============================================================
 
--- configure keymap discovery after plugin and workflow mappings
+-- Configure keymap discovery after plugin and workflow mappings
 -- have been registered.
 require("plugins.which-key")

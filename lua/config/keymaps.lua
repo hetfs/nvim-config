@@ -1928,4 +1928,61 @@ map("n", "<leader>tw", function()
 end, {
   desc = "Test: Toggle watch",
 })
+
+-- ============================================================
+-- Debugging (DAP)
+-- ============================================================
+
+map("n", "<leader>d", "<Nop>", {
+  desc = "+debug",
+})
+
+map("n", "<leader>db", function()
+  require("dap").toggle_breakpoint()
+end, {
+  desc = "Debug: Toggle breakpoint",
+})
+
+map("n", "<leader>dB", function()
+  require("dap").set_breakpoint(vim.fn.input("Breakpoint condition: "))
+end, {
+  desc = "Debug: Set conditional breakpoint",
+})
+
+map("n", "<leader>dc", function()
+  require("dap").continue()
+end, {
+  desc = "Debug: Continue",
+})
+
+map("n", "<leader>di", function()
+  require("dap").step_into()
+end, {
+  desc = "Debug: Step into",
+})
+
+map("n", "<leader>do", function()
+  require("dap").step_over()
+end, {
+  desc = "Debug: Step over",
+})
+
+map("n", "<leader>du", function()
+  require("dap").step_out()
+end, {
+  desc = "Debug: Step out",
+})
+
+map("n", "<leader>dr", function()
+  require("dap").run_last()
+end, {
+  desc = "Debug: Run last configuration",
+})
+
+map("n", "<leader>ds", function()
+  require("dap").terminate()
+end, {
+  desc = "Debug: Terminate session",
+})
+
 return M
