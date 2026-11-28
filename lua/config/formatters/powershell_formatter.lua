@@ -1,3 +1,8 @@
+-- PowerShell formatting through PSScriptAnalyzer.
+--
+-- Uses PowerShell 7 and the PSScriptAnalyzer Invoke-Formatter command.
+-- Reads the buffer from stdin and returns formatted PowerShell to stdout.
+
 return {
   command = "pwsh",
 
@@ -7,14 +12,21 @@ return {
     "-NonInteractive",
     "-Command",
     [[
-      Import-Module PSScriptAnalyzer -ErrorAction Stop
+      $ErrorActionPreference = "Stop"
 
-      $source = [Console]::In.ReadToEnd()
-      $source = $source -replace "`r`n|`r|`n", "`r`n"
+      try {
+        Import-Module PSScriptAnalyzer -ErrorAction Stop
 
-      $result = Invoke-Formatter -ScriptDefinition $source
+        $source = [Console]::In.ReadToEnd()
 
-      [Console]::Out.Write($result)
+        $result = Invoke-Formatter -ScriptDefinition $source -ErrorAction Stop
+
+        [Console]::Out.Write($result)
+      }
+      catch {
+        [Console]::Error.WriteLine($_.ToString())
+        exit 1
+      }
     ]],
   },
 

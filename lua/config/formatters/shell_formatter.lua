@@ -1,4 +1,3 @@
-
 -- Stage 11: Shell formatting through shfmt.
 --
 -- Use project .editorconfig settings when available.
@@ -10,11 +9,13 @@ local M = {}
 --- Return shfmt fallback arguments when no ancestor .editorconfig exists.
 ---
 --- Project .editorconfig files take precedence over fallback arguments.
---- stop limits the upward search for isolated tests.
+--- `stop` limits the upward search for isolated tests.
 function M.shfmt_args(filename, stop)
   if type(filename) ~= "string" or filename == "" then
     error("shfmt_args requires a non-empty filename", 2)
   end
+
+  filename = vim.fs.normalize(filename)
 
   local found = vim.fs.find(".editorconfig", {
     path = vim.fs.dirname(filename),
@@ -34,21 +35,15 @@ function M.shfmt_args(filename, stop)
   }
 end
 
---- Resolve shfmt arguments for the current formatting request.
-local function get_args(self, ctx)
-  return M.shfmt_args(ctx.filename)
-end
-
 return {
   inherit = false,
 
   command = "shfmt",
 
-  args = function(self, ctx)
-    local args = get_args(self, ctx)
-
-    return args
+  args = function(_, ctx)
+    return M.shfmt_args(ctx.filename)
   end,
 
   stdin = true,
 }
+

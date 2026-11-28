@@ -1,5 +1,17 @@
 -- Stage 07: Snacks navigation.
 -- Enable Picker, Explorer, and Dashboard.
+--
+-- Dependencies:
+--   - mini.sessions: session management
+--   - project.nvim: project root detection and history
+--   - fd: fast file discovery
+--   - ripgrep: content searching
+--   - Nerd Font: dashboard and picker icons (optional)
+--
+-- Compatibility:
+--   - Uses vim.pack, not lazy.nvim.
+--   - Does not use the Lazy.nvim-dependent dashboard startup section.
+--   - Restores sessions directly through MiniSessions.
 
 vim.pack.add({
   {
@@ -8,40 +20,91 @@ vim.pack.add({
   },
 })
 
--- Configure Snacks.
-require("snacks").setup({
-  -- ============================================================
+local snacks = require("snacks")
+
+-- ============================================================
+-- Session integration
+-- ============================================================
+
+local function restore_session()
+  local sessions = rawget(_G, "MiniSessions")
+
+  if type(sessions) ~= "table" or type(sessions.select) ~= "function" then
+    vim.notify(
+      "mini.sessions is not configured or loaded",
+      vim.log.levels.WARN,
+      { title = "Snacks Dashboard" }
+    )
+    return
+  end
+
+  local ok, err = pcall(sessions.select, "read")
+
+  if not ok then
+    vim.notify(
+      "Unable to open the session selector:\n" .. tostring(err),
+      vim.log.levels.ERROR,
+      { title = "Snacks Dashboard" }
+    )
+  end
+end
+
+-- ============================================================
+-- Snacks configuration
+-- ============================================================
+
+snacks.setup({
+  -- ==========================================================
   -- Picker
-  -- ============================================================
+  -- ==========================================================
 
   picker = {
     enabled = true,
 
+    prompt = " ",
+
+    layout = {
+      preset = "default",
+    },
+
+    -- Optional project parent directories.
+    --
+    -- Configure these if you want Snacks to discover projects
+    -- outside the Git roots of your recent files.
+    --
     -- sources = {
     --   projects = {
     --     dev = {
-    --       "D:\\workspace", -- Replace with your project parent directories.
+    --       "D:/workspace",
+    --       "D:/projects",
     --     },
+    --     recent = true,
     --   },
     -- },
   },
 
-  -- ============================================================
+  -- ==========================================================
   -- Explorer
-  -- ============================================================
+  -- ==========================================================
 
   explorer = {
     enabled = true,
+
+    -- Replace Neovim's built-in netrw directory browser.
     replace_netrw = true,
+
+    -- Move deleted files to the system trash.
+    trash = true,
   },
 
-  -- ============================================================
+  -- ==========================================================
   -- Dashboard
-  -- ============================================================
+  -- ==========================================================
 
   dashboard = {
     enabled = true,
 
+    -- Dashboard shortcuts.
     preset = {
       keys = {
         {
@@ -50,36 +113,49 @@ require("snacks").setup({
           desc = "Find File",
           action = ":lua Snacks.dashboard.pick('files')",
         },
+
         {
           icon = " ",
           key = "n",
           desc = "New File",
           action = ":ene | startinsert",
         },
+
         {
           icon = " ",
           key = "g",
           desc = "Find Text",
           action = ":lua Snacks.dashboard.pick('live_grep')",
         },
+
         {
           icon = " ",
           key = "r",
           desc = "Recent Files",
           action = ":lua Snacks.dashboard.pick('oldfiles')",
         },
+
+        {
+          icon = " ",
+          key = "p",
+          desc = "Projects",
+          action = ":lua Snacks.picker.projects()",
+        },
+
         {
           icon = " ",
           key = "c",
           desc = "Config",
           action = ":lua Snacks.dashboard.pick('files', {cwd = vim.fn.stdpath('config')})",
         },
+
         {
           icon = " ",
           key = "s",
           desc = "Restore Session",
-          action = [[:lua if type(MiniSessions) == "table" and type(MiniSessions.read) == "function" then MiniSessions.read() else vim.notify("Mini Sessions is not configured", vim.log.levels.WARN) end]],
+          action = restore_session,
         },
+
         {
           icon = " ",
           key = "q",
@@ -90,9 +166,7 @@ require("snacks").setup({
 
       -- HETFS ASCII banner.
       -- https://github.com/hetfs
-
-
-header = [[
+      header = [[
 ██╗  ██╗ ███████╗ ████████╗ ███████╗ ███████╗
 ██║  ██║ ██╔════╝ ╚══██╔══╝ ██╔════╝ ██╔════╝
 ███████║ █████╗      ██║    █████╗   ███████╗
@@ -101,71 +175,62 @@ header = [[
 ╚═╝  ╚═╝ ╚══════╝    ╚═╝    ╚═╝      ╚══════╝
 
        [ HEALTH  /  EDUCATION  /  TECHNOLOGY ]
+
            [ FARMING  /  STARTUPS ]
 
-          > CODE FOR A BRIGHTER FUTURE_
+         > CODE FOR A BRIGHTER FUTURE_
 ]],
     },
 
     -- ==========================================================
-    -- Dashboard item formatters
+    -- Dashboard formatting
     -- ==========================================================
 
     formats = {
-      icon = function(item)
-        if item.file and (item.icon == "file" or item.icon == "directory") then
-          return Snacks.dashboard.icon(item.file, item.icon)
+      file = function(item, ctx)
+        if not item.file then
+          return {}
         end
 
-        return {
-          item.icon,
-          width = 2,
-          hl = "icon",
-        }
-      end,
-
-      footer = {
-        "%s",
-        align = "center",
-      },
-
-      header = {
-        "%s",
-        align = "center",
-      },
-
-      file = function(item, ctx)
-        local fname = vim.fn.fnamemodify(item.file, ":~")
+        local filename = vim.fn.fnamemodify(item.file, ":~")
         local width = ctx.width
 
-        if width and #fname > width then
-          fname = vim.fn.pathshorten(fname)
+        if width and vim.fn.strdisplaywidth(filename) > width then
+          filename = vim.fn.pathshorten(filename)
         end
 
-        if width and #fname > width then
-          local dir = vim.fn.fnamemodify(fname, ":h")
-          local file = vim.fn.fnamemodify(fname, ":t")
-          local available = width - #dir - 2
+        if width and vim.fn.strdisplaywidth(filename) > width then
+          local directory = vim.fn.fnamemodify(filename, ":h")
+          local basename = vim.fn.fnamemodify(filename, ":t")
+
+          local available = width - vim.fn.strdisplaywidth(directory) - 2
 
           if available > 0 then
-            file = file:sub(-available)
-            fname = dir .. "/…" .. file
+            basename = vim.fn.strcharpart(
+              basename,
+              math.max(0, vim.fn.strchars(basename) - available)
+            )
+
+            filename = directory .. "/…" .. basename
           else
-            fname = file:sub(-width)
+            filename = vim.fn.strcharpart(
+              filename,
+              math.max(0, vim.fn.strchars(filename) - width)
+            )
           end
         end
 
-        local dir, file = fname:match("^(.*)/(.+)$")
+        local directory, basename = filename:match("^(.*)/(.+)$")
 
-        if dir then
+        if directory then
           return {
-            { dir .. "/", hl = "dir" },
-            { file, hl = "file" },
+            { directory .. "/", hl = "dir" },
+            { basename, hl = "file" },
           }
         end
 
         return {
-          { fname, hl = "file" },
+          { filename, hl = "file" },
         }
       end,
     },
@@ -174,9 +239,37 @@ header = [[
     -- Dashboard layout
     -- ==========================================================
 
+    -- Explicitly define the sections.
+    -- Do not add { section = "startup" } here:
+    -- that section calls require("lazy.stats").
     sections = {
-      { section = "header" },
-      { section = "keys", gap = 1, padding = 1 },
+      {
+        section = "header",
+      },
+
+      {
+        section = "keys",
+        gap = 1,
+        padding = 1,
+      },
+
+      {
+        section = "recent_files",
+        title = "Recent Files",
+        icon = " ",
+        limit = 5,
+        indent = 2,
+        padding = 1,
+      },
+
+      {
+        section = "projects",
+        title = "Recent Projects",
+        icon = " ",
+        limit = 5,
+        indent = 2,
+        padding = 1,
+      },
     },
   },
 })
@@ -188,17 +281,7 @@ header = [[
 require("config.snacks").setup()
 
 -- ============================================================
--- Snacks Picker workspace
--- ============================================================
-
-vim.keymap.set("n", "<leader>fp", function()
-  Snacks.picker.projects()
-end, {
-  desc = "Projects",
-})
-
--- ============================================================
--- Snacks Navigation
+-- Snacks Picker
 -- ============================================================
 
 vim.keymap.set("n", "<leader>ff", function()
@@ -219,9 +302,57 @@ end, {
   desc = "Find buffers",
 })
 
+vim.keymap.set("n", "<leader>fr", function()
+  Snacks.picker.oldfiles()
+end, {
+  desc = "Recent files",
+})
+
+vim.keymap.set("n", "<leader>fp", function()
+  Snacks.picker.projects()
+end, {
+  desc = "Find projects",
+})
+
+vim.keymap.set("n", "<leader>fc", function()
+  Snacks.picker.files({
+    cwd = vim.fn.stdpath("config"),
+  })
+end, {
+  desc = "Find Neovim config files",
+})
+
+-- ============================================================
+-- Snacks Explorer
+-- ============================================================
+
 vim.keymap.set("n", "<leader>fe", function()
   Snacks.explorer.open()
 end, {
   desc = "Open file explorer",
+})
+
+vim.keymap.set("n", "<leader>fE", function()
+  Snacks.explorer.reveal()
+end, {
+  desc = "Reveal current file",
+})
+
+-- ============================================================
+-- Snacks Dashboard
+-- ============================================================
+
+vim.keymap.set("n", "<leader>fd", function()
+  Snacks.dashboard()
+end, {
+  desc = "Open dashboard",
+})
+
+-- ============================================================
+-- Session management
+-- ============================================================
+
+vim.keymap.set("n", "<leader>fs", restore_session, {
+  desc = "Restore session",
 })
 

@@ -1,18 +1,39 @@
 -- Native autocommands.
+-- Neovim 0.12+
 
-local group = vim.api.nvim_create_augroup("nvim_config", {
+local api = vim.api
+
+local group = api.nvim_create_augroup("nvim_config", {
   clear = true,
 })
+
+-- ============================================================
+-- Helpers
+-- ============================================================
+
+---@param width integer
+local function set_indentation(width)
+  vim.opt_local.shiftwidth = width
+  vim.opt_local.tabstop = width
+  vim.opt_local.softtabstop = width
+  vim.opt_local.expandtab = true
+end
+
+local function enable_treesitter_folding()
+  vim.opt_local.foldmethod = "expr"
+  vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+end
 
 -- ============================================================
 -- Yank Highlighting
 -- ============================================================
 
-vim.api.nvim_create_autocmd("TextYankPost", {
+api.nvim_create_autocmd("TextYankPost", {
   group = group,
   desc = "Highlight yanked text",
   callback = function()
     vim.hl.on_yank({
+      higroup = "IncSearch",
       timeout = 200,
     })
   end,
@@ -22,7 +43,7 @@ vim.api.nvim_create_autocmd("TextYankPost", {
 -- External File Changes
 -- ============================================================
 
-vim.api.nvim_create_autocmd({
+api.nvim_create_autocmd({
   "FocusGained",
   "TermClose",
   "TermLeave",
@@ -30,7 +51,9 @@ vim.api.nvim_create_autocmd({
   group = group,
   desc = "Reload files changed outside Neovim",
   callback = function()
-    vim.cmd("checktime")
+    if vim.bo.buftype == "" then
+      vim.cmd.checktime()
+    end
   end,
 })
 
@@ -38,7 +61,7 @@ vim.api.nvim_create_autocmd({
 -- Cursor Position Restoration
 -- ============================================================
 
-vim.api.nvim_create_autocmd("BufReadPost", {
+api.nvim_create_autocmd("BufReadPost", {
   group = group,
   desc = "Restore previous cursor position",
   callback = function(event)
@@ -49,17 +72,30 @@ vim.api.nvim_create_autocmd("BufReadPost", {
       return
     end
 
-    local mark = vim.api.nvim_buf_get_mark(buf, '"')
-    local line_count = vim.api.nvim_buf_line_count(buf)
+    local mark = api.nvim_buf_get_mark(buf, '"')
+    local line_count = api.nvim_buf_line_count(buf)
 
     if mark[1] < 1 or mark[1] > line_count then
       return
     end
 
-    -- Restore the position in a window displaying this buffer.
+    -- Restore the cursor in a window displaying this buffer.
     for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-      if vim.api.nvim_win_is_valid(win) then
-        pcall(vim.api.nvim_win_set_cursor, win, mark)
+      if api.nvim_win_is_valid(win) then
+        local line = mark[1]
+        local col = mark[2]
+
+        -- Clamp the column to the target line's length.
+        local line_text = api.nvim_buf_get_lines(
+          buf,
+          line - 1,
+          line,
+          false
+        )[1] or ""
+
+        col = math.min(col, #line_text)
+
+        pcall(api.nvim_win_set_cursor, win, { line, col })
         break
       end
     end
@@ -70,11 +106,11 @@ vim.api.nvim_create_autocmd("BufReadPost", {
 -- Window Management
 -- ============================================================
 
-vim.api.nvim_create_autocmd("VimResized", {
+api.nvim_create_autocmd("VimResized", {
   group = group,
   desc = "Rebalance windows after resize",
   callback = function()
-    vim.cmd("tabdo wincmd =")
+    vim.cmd.tabdo("wincmd =")
   end,
 })
 
@@ -82,9 +118,9 @@ vim.api.nvim_create_autocmd("VimResized", {
 -- Help and Utility Windows
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
-  desc = "Close help-like windows with q",
+  desc = "Close help and utility windows with q",
   pattern = {
     "help",
     "qf",
@@ -96,6 +132,7 @@ vim.api.nvim_create_autocmd("FileType", {
 
     vim.keymap.set("n", "q", "<cmd>close<CR>", {
       buffer = event.buf,
+      silent = true,
       desc = "Close window",
     })
   end,
@@ -105,7 +142,7 @@ vim.api.nvim_create_autocmd("FileType", {
 -- Writing and Prose
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure prose buffers",
   pattern = {
@@ -123,7 +160,7 @@ vim.api.nvim_create_autocmd("FileType", {
 -- Markdown
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure Markdown buffers",
   pattern = "markdown",
@@ -133,10 +170,7 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.breakindent = true
 
     -- Consistent Markdown indentation.
-    vim.opt_local.shiftwidth = 2
-    vim.opt_local.tabstop = 2
-    vim.opt_local.softtabstop = 2
-    vim.opt_local.expandtab = true
+    set_indentation(2)
 
     -- Register Markdown workflow mappings.
     require("config.keymaps").markdown(event.buf)
@@ -147,7 +181,7 @@ vim.api.nvim_create_autocmd("FileType", {
 -- Shell
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure Shell buffers",
   pattern = {
@@ -155,13 +189,8 @@ vim.api.nvim_create_autocmd("FileType", {
     "bash",
   },
   callback = function()
-    vim.opt_local.shiftwidth = 4
-    vim.opt_local.tabstop = 4
-    vim.opt_local.softtabstop = 4
-    vim.opt_local.expandtab = true
-
-    vim.opt_local.foldmethod = "expr"
-    vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+    set_indentation(4)
+    enable_treesitter_folding()
   end,
 })
 
@@ -169,18 +198,21 @@ vim.api.nvim_create_autocmd("FileType", {
 -- File Saving
 -- ============================================================
 
-vim.api.nvim_create_autocmd("BufWritePre", {
+api.nvim_create_autocmd("BufWritePre", {
   group = group,
   desc = "Create missing parent directories before saving",
   callback = function(event)
-    local file = event.file
+    local buf = event.buf
 
-    -- Ignore URI-based buffers.
-    if file:match("^%a[%w+.-]*://") then
+    -- Ignore special buffers.
+    if vim.bo[buf].buftype ~= "" then
       return
     end
 
-    if file == "" then
+    local file = event.file
+
+    -- Ignore empty filenames and URI-based buffers.
+    if file == "" or file:match("^%a[%w+.-]*://") then
       return
     end
 
@@ -202,7 +234,7 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 -- Lua
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure Lua buffers",
   pattern = "lua",
@@ -215,7 +247,7 @@ vim.api.nvim_create_autocmd("FileType", {
 -- C and C++
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure C and C++ buffers",
   pattern = {
@@ -231,7 +263,7 @@ vim.api.nvim_create_autocmd("FileType", {
 -- Python
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure Python buffers",
   pattern = "python",
@@ -244,18 +276,13 @@ vim.api.nvim_create_autocmd("FileType", {
 -- Rust
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure Rust buffers",
   pattern = "rust",
   callback = function(event)
-    vim.opt_local.shiftwidth = 4
-    vim.opt_local.tabstop = 4
-    vim.opt_local.softtabstop = 4
-    vim.opt_local.expandtab = true
-
-    vim.opt_local.foldmethod = "expr"
-    vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+    set_indentation(4)
+    enable_treesitter_folding()
 
     require("config.keymaps").rust(event.buf)
   end,
@@ -265,25 +292,22 @@ vim.api.nvim_create_autocmd("FileType", {
 -- Go
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure Go buffers",
   pattern = "go",
   callback = function(event)
-    vim.opt_local.shiftwidth = 4
-    vim.opt_local.tabstop = 4
-    vim.opt_local.softtabstop = 4
-    vim.opt_local.expandtab = true
+    set_indentation(4)
 
     require("config.keymaps").go(event.buf)
   end,
 })
 
 -- ============================================================
--- javascript
+-- JavaScript and TypeScript
 -- ============================================================
 
-vim.api.nvim_create_autocmd("FileType", {
+api.nvim_create_autocmd("FileType", {
   group = group,
   desc = "Configure JavaScript and TypeScript workflows",
   pattern = {

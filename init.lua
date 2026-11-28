@@ -13,9 +13,20 @@ vim.g.loaded_ruby_provider = 0
 -- Enforce the minimum supported Neovim version.
 if vim.fn.has("nvim-0.12") ~= 1 then
   local version = vim.version()
-  local detected = string.format("%d.%d.%d", version.major, version.minor, version.patch)
+  local detected = string.format(
+    "%d.%d.%d",
+    version.major,
+    version.minor,
+    version.patch
+  )
 
-  error(string.format("nvim-config requires Neovim >= 0.12.0; detected %s.", detected), 0)
+  error(
+    string.format(
+      "nvim-config requires Neovim >= 0.12.0; detected %s.",
+      detected
+    ),
+    0
+  )
 end
 
 -- ============================================================
@@ -160,6 +171,9 @@ require("plugins.shell").setup()
 require("plugins.lazydev")
 require("plugins.neotest")
 
+-- Configure Tailwind CSS support.
+require("plugins.tailwind")
+
 -- ============================================================
 -- Completion and Snippets
 -- ============================================================
@@ -175,14 +189,29 @@ require("plugins.mini-pairs")
 -- AI activation is independent of language-pack activation.
 local ai = require("config.ai")
 
-assert(type(ai.enabled) == "boolean", "ai configuration 'enabled' must be boolean")
+assert(
+  type(ai.enabled) == "boolean",
+  "ai configuration 'enabled' must be boolean"
+)
 
-assert(type(ai.providers) == "table", "ai configuration must define a 'providers' table")
+assert(
+  type(ai.providers) == "table",
+  "ai configuration must define a 'providers' table"
+)
 
 for name, enabled in pairs(ai.providers) do
-  assert(type(name) == "string" and name ~= "", "ai provider names must be non-empty strings")
+  assert(
+    type(name) == "string" and name ~= "",
+    "ai provider names must be non-empty strings"
+  )
 
-  assert(type(enabled) == "boolean", string.format("ai provider configuration for '%s' must be boolean", name))
+  assert(
+    type(enabled) == "boolean",
+    string.format(
+      "ai provider configuration for '%s' must be boolean",
+      name
+    )
+  )
 end
 
 if ai.enabled then
@@ -265,7 +294,10 @@ require("plugins.mini-sessions")
 
 require("plugins.lualine")
 -- require("plugins.bufferline")
--- require("plugins.zen-mode")
+
+require("plugins.twilight")
+require("plugins.zen-mode")
+require("plugins.better-escape")
 -- require("plugins.noice")
 
 -- ============================================================
@@ -275,3 +307,4 @@ require("plugins.lualine")
 -- Configure keymap discovery after plugin and workflow mappings
 -- have been registered.
 require("plugins.which-key")
+

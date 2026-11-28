@@ -1,4 +1,4 @@
-# Stage 14 — Debugging (DAP)
+# Debugging (DAP)
 
 ## Status
 

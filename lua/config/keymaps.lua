@@ -205,13 +205,19 @@ map("n", "N", "Nzzzv", {
 -- Editing
 -- ============================================================
 
-map("i", "jk", "<Esc>", {
-  desc = "Exit insert mode",
+-- Better Escape owns the Insert-mode `jk` mapping.
+-- It is enabled only for explicitly configured filetypes.
+-- See plugins.better-escape.
+
+-- Yanky handles yank operations in normal and visual mode.
+map({ "n", "x" }, "y", "<Plug>(YankyYank)", {
+  desc = "Yank text",
 })
 
--- Preserve the unnamed register when replacing visual selections.
+-- Preserve the unnamed register and Yanky history when replacing
+-- visual selections.
 map("x", "p", '"_dP', {
-  desc = "Paste without overwriting clipboard",
+  desc = "Paste without overwriting yank history",
 })
 
 map("x", "<", "<gv", {
@@ -227,7 +233,7 @@ map("n", "<leader>e", "$", {
 })
 
 -- Yanky handles normal-mode put operations.
--- Keep visual-mode p unchanged to preserve clipboard contents.
+-- Keep visual-mode p unchanged to preserve yank history.
 map("n", "p", "<Plug>(YankyPutAfter)", {
   desc = "Put after cursor",
 })
@@ -1776,7 +1782,10 @@ for i = 1, 4 do
   })
 end
 
--- Bufferline navigation.
+-- ============================================================
+-- Bufferline
+-- ============================================================
+
 map("n", "<leader>bn", "<cmd>BufferLineCycleNext<CR>", {
   desc = "Buffer: Next",
 })
@@ -1808,6 +1817,10 @@ map("n", "<leader>b3", "<cmd>BufferLineGoToBuffer 3<CR>", {
 map("n", "<leader>b4", "<cmd>BufferLineGoToBuffer 4<CR>", {
   desc = "Buffer: Select 4",
 })
+
+-- ============================================================
+-- UI
+-- ============================================================
 
 -- Zen Mode.
 map("n", "<leader>uz", "<cmd>ZenMode<CR>", {
@@ -1854,7 +1867,6 @@ map("n", "<leader>up", function()
 end, {
   desc = "LSP: Previous symbol reference",
 })
-
 
 -- ============================================================
 -- Neotest
@@ -1986,3 +1998,4 @@ end, {
 })
 
 return M
+
